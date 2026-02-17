@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { useStore } from "../stores/store";
+import { useStore } from "@/stores/store";
 
 export function useTextSelection(containerRef: React.RefObject<HTMLDivElement | null>) {
   const setSelection = useStore((s) => s.setSelection);

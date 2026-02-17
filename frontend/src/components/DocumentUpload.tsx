@@ -1,8 +1,8 @@
 import { useState, useCallback } from "react";
 import { useDropzone } from "react-dropzone";
 import { Upload, FileText } from "lucide-react";
-import { useStore } from "../stores/store";
-import * as api from "../api/client";
+import { useStore } from "@/stores/store";
+import * as api from "@/api/client";
 
 export default function DocumentUpload() {
   const {
@@ -34,7 +34,6 @@ export default function DocumentUpload() {
           setUploadCount((c) => c + 1);
         }
         await loadDocuments();
-        // Navigate to the last uploaded document
         if (lastId) {
           setActiveDocument(lastId);
           loadSegments(lastId);
@@ -83,10 +82,12 @@ export default function DocumentUpload() {
   };
 
   return (
-    <div className="max-w-3xl mx-auto space-y-8">
+    <div className="max-w-3xl mx-auto space-y-8 py-10 px-6">
       <div className="text-center">
-        <h2 className="text-2xl font-bold text-slate-700">Add Documents</h2>
-        <p className="text-sm text-slate-500 mt-1">
+        <h2 className="text-2xl font-bold text-surface-700 dark:text-surface-100">
+          Add Documents
+        </h2>
+        <p className="text-sm text-surface-500 dark:text-surface-400 mt-1">
           Upload a document or paste text to begin qualitative coding.
         </p>
       </div>
@@ -97,26 +98,26 @@ export default function DocumentUpload() {
         className={`border-2 border-dashed rounded-xl p-12 text-center cursor-pointer transition
           ${
             isDragActive
-              ? "border-blue-400 bg-blue-50"
-              : "border-slate-300 hover:border-slate-400 hover:bg-slate-50"
+              ? "border-brand-400 bg-brand-50 dark:bg-brand-700/20"
+              : "border-surface-300 dark:border-surface-600 hover:border-surface-400 dark:hover:border-surface-500 hover:bg-surface-50 dark:hover:bg-surface-800"
           }`}
       >
         <input {...getInputProps()} />
-        <Upload className="mx-auto text-slate-400 mb-3" size={36} />
+        <Upload className="mx-auto text-surface-400 dark:text-surface-500 mb-3" size={36} />
         {uploading ? (
-          <p className="text-sm text-blue-600 font-medium">
+          <p className="text-sm text-brand-600 dark:text-brand-400 font-medium">
             Uploading {uploadCount} of {uploadTotal}...
           </p>
         ) : isDragActive ? (
-          <p className="text-sm text-blue-600 font-medium">
+          <p className="text-sm text-brand-600 dark:text-brand-400 font-medium">
             Drop the file(s) here
           </p>
         ) : (
           <>
-            <p className="text-sm text-slate-600 font-medium">
+            <p className="text-sm text-surface-600 dark:text-surface-300 font-medium">
               Drag &amp; drop files here, or click to browse
             </p>
-            <p className="text-xs text-slate-400 mt-1">
+            <p className="text-xs text-surface-400 dark:text-surface-500 mt-1">
               TXT, DOCX, PDF supported · Multiple files allowed
             </p>
           </>
@@ -124,11 +125,11 @@ export default function DocumentUpload() {
       </div>
 
       <div className="flex items-center gap-4">
-        <div className="flex-1 h-px bg-slate-200" />
-        <span className="text-xs text-slate-400 uppercase tracking-wider">
+        <div className="flex-1 h-px bg-surface-200 dark:bg-surface-700" />
+        <span className="text-xs text-surface-400 uppercase tracking-wider">
           or paste text
         </span>
-        <div className="flex-1 h-px bg-slate-200" />
+        <div className="flex-1 h-px bg-surface-200 dark:bg-surface-700" />
       </div>
 
       <div className="space-y-3">
@@ -136,19 +137,19 @@ export default function DocumentUpload() {
           value={pasteTitle}
           onChange={(e) => setPasteTitle(e.target.value)}
           placeholder="Document title..."
-          className="w-full rounded border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+          className="w-full rounded-lg border border-surface-200 dark:border-surface-600 bg-white dark:bg-surface-800 px-3 py-2 text-sm text-surface-800 dark:text-surface-100 placeholder:text-surface-400 focus:outline-none focus:ring-2 focus:ring-brand-300 dark:focus:ring-brand-600"
         />
         <textarea
           value={pasteText}
           onChange={(e) => setPasteText(e.target.value)}
           placeholder="Paste your transcript, poem, essay, interview, etc..."
           rows={8}
-          className="w-full rounded border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 resize-y"
+          className="w-full rounded-lg border border-surface-200 dark:border-surface-600 bg-white dark:bg-surface-800 px-3 py-2 text-sm text-surface-800 dark:text-surface-100 placeholder:text-surface-400 focus:outline-none focus:ring-2 focus:ring-brand-300 dark:focus:ring-brand-600 resize-y"
         />
         <button
           onClick={handlePaste}
           disabled={!pasteTitle.trim() || !pasteText.trim()}
-          className="flex items-center gap-2 rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-40"
+          className="flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-40 transition"
         >
           <FileText size={14} />
           Import Text

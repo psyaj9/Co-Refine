@@ -1,9 +1,9 @@
-import { useStore } from "../stores/store";
+import { useStore } from "@/stores/store";
 import { Tag, Check, X, Trash2, GripHorizontal } from "lucide-react";
 import { useState, useRef, useCallback, useEffect } from "react";
 
 interface Props {
-  containerRef: React.RefObject<HTMLDivElement | null>;
+  containerRef?: React.RefObject<HTMLDivElement | null>;
 }
 
 function useDraggable(initialX: number, initialY: number) {
@@ -33,7 +33,7 @@ function useDraggable(initialX: number, initialY: number) {
   return { pos, onPointerDown, onPointerMove, onPointerUp };
 }
 
-export default function HighlightPopover({ containerRef }: Props) {
+export default function HighlightPopover({ containerRef }: Props = {}) {
   const selection = useStore((s) => s.selection);
   const clickedSegments = useStore((s) => s.clickedSegments);
   const codes = useStore((s) => s.codes);
@@ -60,7 +60,7 @@ export default function HighlightPopover({ containerRef }: Props) {
     }
     // Vertically align with the top of the selection
     defaultY = selection.rect.top;
-  } else if (containerRef.current) {
+  } else if (containerRef?.current) {
     const cRect = containerRef.current.getBoundingClientRect();
     defaultX = cRect.right - popoverWidth;
     defaultY = cRect.top + 16;
@@ -80,7 +80,7 @@ export default function HighlightPopover({ containerRef }: Props) {
   const dragHandle = (
     <div
       onPointerDown={onPointerDown}
-      className="flex items-center justify-center gap-1 cursor-grab active:cursor-grabbing py-1 -mt-1 mb-1 text-slate-300 hover:text-slate-400 select-none"
+      className="flex items-center justify-center gap-1 cursor-grab active:cursor-grabbing py-1 -mt-1 mb-1 text-surface-300 dark:text-surface-600 hover:text-surface-400 dark:hover:text-surface-500 select-none"
     >
       <GripHorizontal size={14} />
     </div>
@@ -93,29 +93,29 @@ export default function HighlightPopover({ containerRef }: Props) {
       <div
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
-        className="popover-enter fixed z-50 bg-white rounded-xl shadow-xl border border-slate-200 p-3 w-72"
+        className="popover-enter fixed z-50 bg-white dark:bg-surface-800 rounded-xl shadow-xl border border-surface-200 dark:border-surface-700 p-3 w-72"
         style={{ left: pos.x, top: pos.y }}
       >
         {dragHandle}
         <div className="mb-2">
-          <p className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">
+          <p className="text-[10px] uppercase tracking-wider text-surface-400 mb-1">
             Coded segment
           </p>
-          <p className="text-xs text-slate-600 bg-slate-50 rounded p-2 max-h-20 overflow-auto line-clamp-4">
+          <p className="text-xs text-surface-600 dark:text-surface-300 bg-surface-50 dark:bg-surface-900 rounded p-2 max-h-20 overflow-auto line-clamp-4">
             "{segText}"
           </p>
         </div>
 
-        <p className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">
+        <p className="text-[10px] uppercase tracking-wider text-surface-400 mb-1">
           Applied codes
         </p>
         <ul className="space-y-0.5 mb-2">
           {clickedSegments.map((seg) => (
             <li
               key={seg.id}
-              className="flex items-center justify-between rounded px-2 py-1.5 hover:bg-slate-50 transition"
+              className="flex items-center justify-between rounded px-2 py-1.5 hover:bg-surface-50 dark:hover:bg-surface-700 transition"
             >
-              <span className="flex items-center gap-2 text-xs text-slate-700">
+              <span className="flex items-center gap-2 text-xs text-surface-700 dark:text-surface-200">
                 <span
                   className="w-2.5 h-2.5 rounded-full flex-shrink-0"
                   style={{ backgroundColor: seg.code_colour }}
@@ -124,7 +124,7 @@ export default function HighlightPopover({ containerRef }: Props) {
               </span>
               <button
                 onClick={() => removeSegment(seg.id)}
-                className="text-slate-300 hover:text-red-500 transition"
+                className="text-surface-300 dark:text-surface-600 hover:text-red-500 transition"
                 title="Remove this code"
               >
                 <Trash2 size={13} />
@@ -135,7 +135,7 @@ export default function HighlightPopover({ containerRef }: Props) {
 
         <button
           onClick={handleDismiss}
-          className="mt-1 w-full text-center text-xs text-slate-400 hover:text-slate-600 flex items-center justify-center gap-1"
+          className="mt-1 w-full text-center text-xs text-surface-400 hover:text-surface-600 dark:hover:text-surface-300 flex items-center justify-center gap-1"
         >
           <X size={12} />
           Done
@@ -173,22 +173,22 @@ export default function HighlightPopover({ containerRef }: Props) {
     <div
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
-      className="popover-enter fixed z-50 bg-white rounded-xl shadow-xl border border-slate-200 p-3 w-72"
+      className="popover-enter fixed z-50 bg-white dark:bg-surface-800 rounded-xl shadow-xl border border-surface-200 dark:border-surface-700 p-3 w-72"
       style={{ left: pos.x, top: pos.y }}
     >
       {dragHandle}
       <div className="mb-2">
-        <p className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">
+        <p className="text-[10px] uppercase tracking-wider text-surface-400 mb-1">
           Selected text
         </p>
-        <p className="text-xs text-slate-600 bg-slate-50 rounded p-2 max-h-20 overflow-auto line-clamp-4">
+        <p className="text-xs text-surface-600 dark:text-surface-300 bg-surface-50 dark:bg-surface-900 rounded p-2 max-h-20 overflow-auto line-clamp-4">
           "{selection.text}"
         </p>
       </div>
 
       {appliedCodes.length > 0 && (
         <div className="mb-2">
-          <p className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">
+          <p className="text-[10px] uppercase tracking-wider text-surface-400 mb-1">
             Applied codes
           </p>
           <div className="flex flex-wrap gap-1">
@@ -219,7 +219,7 @@ export default function HighlightPopover({ containerRef }: Props) {
 
       {availableCodes.filter((c) => c.id !== activeCodeId).length > 0 && (
         <>
-          <p className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">
+          <p className="text-[10px] uppercase tracking-wider text-surface-400 mb-1">
             {appliedCodes.length > 0 ? "Add another code" : "Choose a code"}
           </p>
           <ul className="max-h-40 overflow-auto space-y-0.5">
@@ -229,7 +229,7 @@ export default function HighlightPopover({ containerRef }: Props) {
                 <li key={code.id}>
                   <button
                     onClick={() => handleApply(code.id)}
-                    className="w-full flex items-center gap-2 rounded px-2 py-1.5 text-xs text-slate-700 hover:bg-slate-50 transition"
+                    className="w-full flex items-center gap-2 rounded px-2 py-1.5 text-xs text-surface-700 dark:text-surface-200 hover:bg-surface-50 dark:hover:bg-surface-700 transition"
                   >
                     <span
                       className="w-2.5 h-2.5 rounded-full flex-shrink-0"
@@ -251,7 +251,7 @@ export default function HighlightPopover({ containerRef }: Props) {
 
       <button
         onClick={handleDismiss}
-        className="mt-2 w-full text-center text-xs text-slate-400 hover:text-slate-600 flex items-center justify-center gap-1"
+        className="mt-2 w-full text-center text-xs text-surface-400 hover:text-surface-600 dark:hover:text-surface-300 flex items-center justify-center gap-1"
       >
         <X size={12} />
         Done

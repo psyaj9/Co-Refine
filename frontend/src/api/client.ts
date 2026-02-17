@@ -5,7 +5,7 @@ import type {
   SegmentOut,
   AnalysisOut,
   AlertOut,
-} from "../types";
+} from "@/types";
 
 const BASE = "/api";
 

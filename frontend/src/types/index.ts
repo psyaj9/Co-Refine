@@ -76,3 +76,23 @@ export interface TextSelection {
   endIndex: number;
   rect?: { top: number; left: number; bottom: number; right: number; width: number; height: number };
 }
+
+// New types for the redesign
+
+export type ViewMode = "document" | "visualisation";
+export type VisTab = "frequencies" | "crosstab" | "analytics";
+export type RightPanelTab = "alerts" | "segments" | "definitions" | "chat";
+export type ThemeMode = "light" | "dark";
+
+export interface Memo {
+  id: string;
+  title: string;
+  content: string;
+  linked_code_id?: string | null;
+  linked_document_id?: string | null;
+  linked_segment_id?: string | null;
+  project_id: string;
+  created_at: string;
+  updated_at: string;
+}
+

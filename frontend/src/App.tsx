@@ -1,16 +1,30 @@
 import { useEffect } from "react";
-import { useStore } from "./stores/store";
-import { useWebSocket } from "./hooks/useWebSocket";
+import { useStore } from "@/stores/store";
+import { useWebSocket } from "@/hooks/useWebSocket";
+import {
+  Panel,
+  Group,
+  Separator,
+} from "react-resizable-panels";
 
-import Sidebar from "./components/Sidebar";
-import DocumentUpload from "./components/DocumentUpload";
-import DocumentViewer from "./components/DocumentViewer";
-import AlertPanel from "./components/AlertPanel";
+import Toolbar from "@/components/Toolbar";
+import StatusBar from "@/components/StatusBar";
+import ProjectExplorer from "@/components/ProjectExplorer";
+import DocumentUpload from "@/components/DocumentUpload";
+import DocumentViewerNew from "@/components/DocumentViewerNew";
+import Visualisations from "@/components/Visualisations";
+import RightPanel from "@/components/RightPanel";
+import HighlightPopover from "@/components/HighlightPopover";
+
+function ResizeHandle() {
+  return <Separator />;
+}
 
 export default function App() {
   const activeProjectId = useStore((s) => s.activeProjectId);
   const activeDocumentId = useStore((s) => s.activeDocumentId);
   const showUploadPage = useStore((s) => s.showUploadPage);
+  const viewMode = useStore((s) => s.viewMode);
   const loadProjects = useStore((s) => s.loadProjects);
 
   useWebSocket();
@@ -19,56 +33,65 @@ export default function App() {
     loadProjects();
   }, []);
 
-  if (!activeProjectId) {
-    return (
-      <div className="flex h-screen overflow-hidden">
-        <Sidebar />
-        <main className="flex-1 flex flex-col overflow-hidden">
-          <header className="flex items-center justify-between border-b border-slate-200 bg-white px-6 py-3">
-            <h1 className="text-xl font-bold text-slate-800">
-              The Inductive Lens
-            </h1>
-            <span className="text-xs text-slate-400">
-              Qualitative coding with AI-assisted analysis
-            </span>
-          </header>
-          <div className="flex-1 flex items-center justify-center p-6">
-            <div className="text-center">
-              <h2 className="text-2xl font-bold text-slate-300 mb-2">
-                Select or create a project
-              </h2>
-              <p className="text-sm text-slate-400">
-                Use the sidebar to create a new project, or open an existing one.
-              </p>
-            </div>
-          </div>
-        </main>
-      </div>
-    );
-  }
-
-  const showUpload = showUploadPage || !activeDocumentId;
+  const showUpload = !activeProjectId || showUploadPage || !activeDocumentId;
+  const showRightPanel = !!(activeProjectId && activeDocumentId && !showUploadPage);
 
   return (
-    <div className="flex h-screen overflow-hidden">
-      <Sidebar />
+    <div className="flex flex-col h-screen overflow-hidden bg-surface-50 dark:bg-surface-900 text-surface-800 dark:text-surface-100">
+      <Toolbar />
 
-      <main className="flex-1 flex flex-col overflow-hidden">
-        <header className="flex items-center justify-between border-b border-slate-200 bg-white px-6 py-3">
-          <h1 className="text-xl font-bold text-slate-800">
-            The Inductive Lens
-          </h1>
-          <span className="text-xs text-slate-400">
-            Highlight text → Assign code → AI watches for drift
-          </span>
-        </header>
+      <Group orientation="horizontal" className="flex-1 min-h-0">
+        {/* ── Left: Project Explorer ── */}
+        <Panel defaultSize="14%" minSize="10%" maxSize="25%">
+          <ProjectExplorer />
+        </Panel>
 
-        <div className="flex-1 overflow-auto p-6">
-          {showUpload ? <DocumentUpload /> : <DocumentViewer />}
-        </div>
-      </main>
+        <ResizeHandle />
 
-      <AlertPanel />
+        {/* ── Centre: Document / Visualisations ── */}
+        <Panel defaultSize={showRightPanel ? "68%" : "86%"} minSize="30%">
+          <div className="h-full w-full overflow-auto panel-bg">
+            {!activeProjectId ? (
+              /* Welcome screen when no project is selected */
+              <div className="h-full flex items-center justify-center p-6">
+                <div className="text-center space-y-3">
+                  <div className="mx-auto w-16 h-16 rounded-2xl bg-brand-100 dark:bg-brand-700/30 flex items-center justify-center">
+                    <span className="text-3xl">📁</span>
+                  </div>
+                  <h2 className="text-2xl font-bold text-surface-400 dark:text-surface-500">
+                    Select or create a project
+                  </h2>
+                  <p className="text-sm text-surface-400 dark:text-surface-500 max-w-sm">
+                    Use the left panel to create a new project or select an
+                    existing one to get started.
+                  </p>
+                </div>
+              </div>
+            ) : viewMode === "visualisation" ? (
+              <Visualisations />
+            ) : showUpload ? (
+              <DocumentUpload />
+            ) : (
+              <DocumentViewerNew />
+            )}
+          </div>
+        </Panel>
+
+        {/* ── Right: Alerts / Segments / Definitions / Chat (only when coding a document) ── */}
+        {showRightPanel && (
+          <>
+            <ResizeHandle />
+            <Panel defaultSize="18%" minSize="12%" maxSize="35%">
+              <RightPanel />
+            </Panel>
+          </>
+        )}
+      </Group>
+
+      <StatusBar />
+
+      {/* Floating popover for coding */}
+      <HighlightPopover />
     </div>
   );
 }

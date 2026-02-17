@@ -2,22 +2,81 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ---- Base styles ---- */
 body {
-  @apply bg-slate-50 text-slate-800 antialiased;
+  @apply bg-surface-50 text-surface-800 antialiased;
   font-family: "Inter", system-ui, -apple-system, sans-serif;
 }
+.dark body,
+body.dark {
+  @apply bg-surface-950 text-surface-200;
+}
+html.dark {
+  @apply bg-surface-950;
+  color-scheme: dark;
+}
 
+/* ---- Resizable panels (react-resizable-panels v4) ---- */
+[data-panel] {
+  overflow: hidden;
+}
+[data-separator] {
+  @apply flex-shrink-0 bg-surface-200 dark:bg-surface-700 transition-colors;
+  cursor: col-resize;
+  width: 6px;
+}
+[data-separator]:hover,
+[data-separator="active"] {
+  @apply bg-brand-400 dark:bg-brand-500;
+}
+
+/* ---- Document highlights — per-code colour via inline style ---- */
 mark[data-start] {
-  background-color: #D5E5F6;
   padding: 1px 0;
   cursor: pointer;
-  transition: background-color 0.15s;
+  transition: filter 0.15s;
   color: inherit;
+  border-radius: 2px;
 }
 mark[data-start]:hover {
-  background-color: #C4D8ED;
+  filter: brightness(0.92);
 }
 
+/* ---- Line numbers gutter ---- */
+.line-number {
+  @apply text-2xs text-surface-400 dark:text-surface-600 select-none w-8 text-right pr-2 flex-shrink-0;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Margin area code pills ---- */
+.margin-pill {
+  @apply text-2xs px-1.5 py-0.5 rounded-full font-medium cursor-pointer truncate max-w-[120px];
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+}
+.margin-pill:hover {
+  transform: scale(1.05);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+}
+
+/* ---- Pill group wrapper ---- */
+.pill-group {
+  border-left: 2.5px solid;
+  padding-left: 0;
+  padding-top: 1px;
+  padding-bottom: 1px;
+  border-radius: 0 0 0 3px;
+}
+
+/* ---- Overflow / collapse button ---- */
+.pill-overflow-btn {
+  @apply text-2xs px-1.5 py-0.5 rounded-full font-medium cursor-pointer;
+  @apply text-surface-500 dark:text-surface-400;
+  @apply bg-surface-100 dark:bg-surface-800;
+  @apply hover:bg-surface-200 dark:hover:bg-surface-700;
+  transition: background-color 0.15s ease;
+}
+
+/* ---- Popover ---- */
 .popover-enter {
   animation: popIn 0.15s ease-out;
 }
@@ -26,7 +85,7 @@ mark[data-start]:hover {
   to   { opacity: 1; transform: translateY(0) scale(1); }
 }
 
-/* Alert toast slide-in */
+/* ---- Alert slide-in ---- */
 .alert-slide {
   animation: slideIn 0.3s ease-out;
 }
@@ -34,3 +93,42 @@ mark[data-start]:hover {
   from { opacity: 0; transform: translateX(100%); }
   to   { opacity: 1; transform: translateX(0); }
 }
+
+/* ---- Scrollbar styling ---- */
+.thin-scrollbar::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+.thin-scrollbar::-webkit-scrollbar-track {
+  @apply bg-transparent;
+}
+.thin-scrollbar::-webkit-scrollbar-thumb {
+  @apply bg-surface-300 dark:bg-surface-700 rounded-full;
+}
+.thin-scrollbar::-webkit-scrollbar-thumb:hover {
+  @apply bg-surface-400 dark:bg-surface-600;
+}
+
+/* ---- Bubble canvas ---- */
+.bubble-circle {
+  cursor: grab;
+  transition: filter 0.15s;
+}
+.bubble-circle:hover {
+  filter: brightness(1.15);
+}
+.bubble-circle:active {
+  cursor: grabbing;
+}
+
+/* ---- Panel backgrounds ---- */
+.panel-bg {
+  @apply bg-white dark:bg-panel-dark;
+}
+.panel-border {
+  @apply border-surface-200 dark:border-panel-border-dark;
+}
+.panel-hover {
+  @apply hover:bg-surface-50 dark:hover:bg-panel-dark-hover;
+}
+

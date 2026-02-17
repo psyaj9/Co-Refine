@@ -7,6 +7,9 @@ import type {
   AnalysisOut,
   AlertPayload,
   TextSelection,
+  ViewMode,
+  RightPanelTab,
+  ThemeMode,
 } from "../types";
 import * as api from "../api/client";
 
@@ -15,9 +18,20 @@ const CURRENT_USER = "default";
 interface AppState {
   currentUser: string;
 
+  // Theme
+  theme: ThemeMode;
+  toggleTheme: () => void;
+
+  // View modes
+  viewMode: ViewMode;
+  setViewMode: (v: ViewMode) => void;
+  rightPanelTab: RightPanelTab;
+  setRightPanelTab: (t: RightPanelTab) => void;
+
   showUploadPage: boolean;
   setShowUploadPage: (v: boolean) => void;
 
+  // Projects
   projects: ProjectOut[];
   activeProjectId: string | null;
   loadProjects: () => Promise<void>;
@@ -25,12 +39,14 @@ interface AppState {
   createProject: (name: string) => Promise<ProjectOut>;
   deleteProject: (id: string) => Promise<void>;
 
+  // Documents
   documents: DocumentOut[];
   activeDocumentId: string | null;
   loadDocuments: () => Promise<void>;
   setActiveDocument: (id: string) => void;
   deleteDocument: (id: string) => Promise<void>;
 
+  // Codes
   codes: CodeOut[];
   activeCodeId: string | null;
   loadCodes: () => Promise<void>;
@@ -38,33 +54,79 @@ interface AppState {
   addCode: (label: string, colour: string, definition?: string) => Promise<void>;
   deleteCode: (id: string) => Promise<void>;
   updateCodeDefinition: (id: string, definition: string) => Promise<void>;
+  updateCode: (id: string, patch: { label?: string; colour?: string; definition?: string }) => Promise<void>;
 
+  // Segments
   segments: SegmentOut[];
   loadSegments: (docId?: string) => Promise<void>;
   applyCode: (sel: TextSelection, codeId?: string) => Promise<void>;
 
+  // Retrieved segments (for code-based retrieval panel)
+  retrievedSegments: SegmentOut[];
+  retrievedCodeId: string | null;
+  loadRetrievedSegments: (codeId: string) => Promise<void>;
+  clearRetrievedSegments: () => void;
+
+  // Selection
   selection: TextSelection | null;
   setSelection: (s: TextSelection | null) => void;
-
   clickedSegments: SegmentOut[] | null;
   setClickedSegments: (segs: SegmentOut[] | null) => void;
   removeSegment: (segmentId: string) => Promise<void>;
 
+  // Analyses
   analyses: AnalysisOut[];
   loadAnalyses: () => Promise<void>;
 
+  // Alerts
   alerts: AlertPayload[];
   agentsRunning: boolean;
   pushAlert: (a: AlertPayload) => void;
   dismissAlert: (idx: number) => void;
   clearThinkingAlerts: () => void;
+
+  // Search
+  codeSearchQuery: string;
+  setCodeSearchQuery: (q: string) => void;
+  docSearchQuery: string;
+  setDocSearchQuery: (q: string) => void;
+}
+
+function getInitialTheme(): ThemeMode {
+  if (typeof window !== "undefined") {
+    const stored = localStorage.getItem("theme") as ThemeMode | null;
+    if (stored) return stored;
+    if (window.matchMedia("(prefers-color-scheme: dark)").matches) return "dark";
+  }
+  return "light";
 }
 
 export const useStore = create<AppState>((set, get) => ({
   currentUser: CURRENT_USER,
 
+  // Theme
+  theme: getInitialTheme(),
+  toggleTheme: () => {
+    const next = get().theme === "light" ? "dark" : "light";
+    localStorage.setItem("theme", next);
+    document.documentElement.classList.toggle("dark", next === "dark");
+    set({ theme: next });
+  },
+
+  // View modes
+  viewMode: "document",
+  setViewMode: (v) => set({ viewMode: v }),
+  rightPanelTab: "alerts",
+  setRightPanelTab: (t) => set({ rightPanelTab: t }),
+
   showUploadPage: false,
   setShowUploadPage: (v) => set({ showUploadPage: v }),
+
+  // Search
+  codeSearchQuery: "",
+  setCodeSearchQuery: (q) => set({ codeSearchQuery: q }),
+  docSearchQuery: "",
+  setDocSearchQuery: (q) => set({ docSearchQuery: q }),
 
   projects: [],
   activeProjectId: null,
@@ -170,12 +232,27 @@ export const useStore = create<AppState>((set, get) => ({
     await api.updateCode(id, { definition });
     await get().loadCodes();
   },
+  updateCode: async (id, patch) => {
+    await api.updateCode(id, patch);
+    await get().loadCodes();
+  },
 
   segments: [],
   loadSegments: async (docId) => {
     const segs = await api.fetchSegments(docId);
     set({ segments: segs });
   },
+
+  // Retrieved segments for code-based retrieval
+  retrievedSegments: [],
+  retrievedCodeId: null,
+  loadRetrievedSegments: async (codeId: string) => {
+    // Fetch ALL segments across all docs, then filter by code
+    const allSegs = await api.fetchSegments(undefined, CURRENT_USER);
+    const forCode = allSegs.filter((s) => s.code_id === codeId);
+    set({ retrievedSegments: forCode, retrievedCodeId: codeId, rightPanelTab: "segments" });
+  },
+  clearRetrievedSegments: () => set({ retrievedSegments: [], retrievedCodeId: null }),
   applyCode: async (sel, codeId) => {
     const { activeDocumentId, activeCodeId } = get();
     const resolvedCodeId = codeId || activeCodeId;
