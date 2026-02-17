@@ -1,0 +1,36 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  @apply bg-slate-50 text-slate-800 antialiased;
+  font-family: "Inter", system-ui, -apple-system, sans-serif;
+}
+
+mark[data-start] {
+  background-color: #D5E5F6;
+  padding: 1px 0;
+  cursor: pointer;
+  transition: background-color 0.15s;
+  color: inherit;
+}
+mark[data-start]:hover {
+  background-color: #C4D8ED;
+}
+
+.popover-enter {
+  animation: popIn 0.15s ease-out;
+}
+@keyframes popIn {
+  from { opacity: 0; transform: translateY(4px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Alert toast slide-in */
+.alert-slide {
+  animation: slideIn 0.3s ease-out;
+}
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(100%); }
+  to   { opacity: 1; transform: translateX(0); }
+}

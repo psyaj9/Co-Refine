@@ -1,0 +1,50 @@
+ANALYSIS_PROMPT_TEMPLATE = """
+Role: You are an expert Qualitative Researcher specialising in thematic analysis and codebook development.
+
+Task: Review the following quotes that the user has tagged with the code: '{code_label}'.
+
+{user_definition_section}
+
+Quotes:
+{formatted_quotes}
+
+Your analysis should:
+1. Identify the latent theme connecting these quotes
+2. Infer the operational definition the user is implicitly applying based on their coding patterns
+3. Compare your inferred definition with the researcher's own definition (if provided) — note any divergence, emergent sub-themes, or drift
+4. Explain the "Interpretive Lens" — why did they include these specific quotes?
+
+Return your analysis in JSON format:
+{{
+    "definition": "A precise, operational definition of the code based on the patterns observed. If the researcher supplied a definition, note where practice aligns or diverges from it.",
+    "lens": "The interpretive framework or perspective the researcher appears to be using",
+    "reasoning": "Your step-by-step reasoning explaining how you arrived at this definition and lens"
+}}
+"""
+
+
+def build_analysis_prompt(
+    code_label: str,
+    quotes: list[str],
+    user_definition: str | None = None,
+) -> str:
+    formatted_quotes = "\n".join([f'- "{q}"' for q in quotes])
+
+    if user_definition:
+        user_definition_section = (
+            f"The researcher's own definition for this code:\n"
+            f'"{user_definition}"\n\n'
+            f"Use this as the baseline — your analysis should supplement it by\n"
+            f"identifying how their actual coding patterns align with, extend, or\n"
+            f"diverge from this stated definition."
+        )
+    else:
+        user_definition_section = (
+            "(No researcher-supplied definition. Infer the definition entirely from the coding patterns.)"
+        )
+
+    return ANALYSIS_PROMPT_TEMPLATE.format(
+        code_label=code_label,
+        user_definition_section=user_definition_section,
+        formatted_quotes=formatted_quotes,
+    )

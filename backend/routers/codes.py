@@ -1,0 +1,106 @@
+"""
+Code management API routes.
+
+Create, list, update, and delete qualitative codes.
+Codes are scoped to a project — all documents in a project share the same codes.
+"""
+
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+import uuid
+
+from database import get_db, Code, CodedSegment, AnalysisResult, AgentAlert
+from models import CodeCreate, CodeOut, CodeUpdate
+from services.vector_store import delete_segment_embedding
+
+router = APIRouter(prefix="/api/codes", tags=["codes"])
+
+CURRENT_USER = "default"
+
+
+def _code_to_out(code: Code, db: Session) -> CodeOut:
+    count = db.query(CodedSegment).filter(CodedSegment.code_id == code.id).count()
+    return CodeOut(
+        id=code.id,
+        label=code.label,
+        definition=code.definition,
+        colour=code.colour,
+        created_by=code.created_by,
+        project_id=code.project_id,
+        segment_count=count,
+    )
+
+
+@router.post("/", response_model=CodeOut)
+def create_code(body: CodeCreate, db: Session = Depends(get_db)):
+    existing = (
+        db.query(Code)
+        .filter(Code.label == body.label, Code.project_id == body.project_id)
+        .first()
+    )
+    if existing:
+        raise HTTPException(status_code=409, detail="Code label already exists in this project")
+
+    code = Code(
+        id=str(uuid.uuid4()),
+        label=body.label,
+        definition=body.definition,
+        colour=body.colour or "#FFEB3B",
+        created_by=body.user_id,
+        project_id=body.project_id,
+    )
+    db.add(code)
+    db.commit()
+    db.refresh(code)
+    return _code_to_out(code, db)
+
+
+@router.get("/", response_model=list[CodeOut])
+def list_codes(project_id: str = "", db: Session = Depends(get_db)):
+    query = db.query(Code)
+    if project_id:
+        query = query.filter(Code.project_id == project_id)
+    codes = query.order_by(Code.label).all()
+    return [_code_to_out(c, db) for c in codes]
+
+
+@router.patch("/{code_id}", response_model=CodeOut)
+def update_code(code_id: str, body: CodeUpdate, db: Session = Depends(get_db)):
+    code = db.query(Code).filter(Code.id == code_id).first()
+    if not code:
+        raise HTTPException(status_code=404, detail="Code not found")
+    if body.label is not None:
+        code.label = body.label
+    if body.definition is not None:
+        code.definition = body.definition
+    if body.colour is not None:
+        code.colour = body.colour
+    db.commit()
+    db.refresh(code)
+    return _code_to_out(code, db)
+
+
+@router.delete("/{code_id}")
+def delete_code(code_id: str, db: Session = Depends(get_db)):
+    """
+    Delete a code and ALL associated data:
+    - coded segments (+ their vector embeddings)
+    - analysis results
+    - agent alerts linked to those segments
+    This prevents orphaned "?" labels in the UI.
+    """
+    code = db.query(Code).filter(Code.id == code_id).first()
+    if not code:
+        raise HTTPException(status_code=404, detail="Code not found")
+
+    segments = db.query(CodedSegment).filter(CodedSegment.code_id == code_id).all()
+    for seg in segments:
+        delete_segment_embedding(CURRENT_USER, seg.id)
+        db.query(AgentAlert).filter(AgentAlert.segment_id == seg.id).delete()
+
+    db.query(CodedSegment).filter(CodedSegment.code_id == code_id).delete()
+    db.query(AnalysisResult).filter(AnalysisResult.code_id == code_id).delete()
+
+    db.delete(code)
+    db.commit()
+    return {"status": "deleted"}
