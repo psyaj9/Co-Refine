@@ -285,7 +285,7 @@ export default function ProjectExplorer() {
         >
           {codesExpanded ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
           <Hash size={10} />
-          Code System
+          Codebook
           <span className="ml-auto text-surface-300 dark:text-surface-600 font-normal normal-case">
             {codes.length}
           </span>
@@ -365,16 +365,6 @@ export default function ProjectExplorer() {
                       <span className="flex-1 truncate text-surface-700 dark:text-surface-200">
                         {code.label}
                       </span>
-                      {/* Frequency bar */}
-                      <div className="w-8 h-1.5 rounded-full bg-surface-200 dark:bg-surface-700 overflow-hidden flex-shrink-0" title={`${code.segment_count} segments`}>
-                        <div
-                          className="h-full rounded-full"
-                          style={{
-                            backgroundColor: code.colour,
-                            width: `${Math.min(100, (code.segment_count / Math.max(1, ...codes.map(c => c.segment_count))) * 100)}%`,
-                          }}
-                        />
-                      </div>
                       <span className="text-2xs text-surface-400 font-mono w-4 text-right flex-shrink-0">
                         {code.segment_count}
                       </span>

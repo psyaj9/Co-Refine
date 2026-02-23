@@ -1,12 +1,23 @@
 from fastapi import WebSocket
 from typing import Any
-import json
 import asyncio
 
 
 class ConnectionManager:
     def __init__(self) -> None:
         self._connections: dict[str, set[WebSocket]] = {}
+        self._loop: asyncio.AbstractEventLoop | None = None
+
+    def set_loop(self, loop: asyncio.AbstractEventLoop) -> None:
+        """Register the main event loop so background threads can send safely."""
+        self._loop = loop
+
+    def send_alert_threadsafe(self, user_id: str, payload: dict[str, Any]) -> None:
+        """Send from a background thread without asyncio.run() conflicts."""
+        if self._loop and self._loop.is_running():
+            asyncio.run_coroutine_threadsafe(
+                self.send_alert(user_id, payload), self._loop
+            )
 
     async def connect(self, websocket: WebSocket, user_id: str) -> None:
         await websocket.accept()
@@ -31,19 +42,6 @@ class ConnectionManager:
                 dead.append(ws)
         for ws in dead:
             conns.discard(ws)
-
-    async def send_stream_token(self, user_id: str, token: str, stream_id: str) -> None:
-        await self.send_alert(user_id, {
-            "type": "ghost_thinking",
-            "stream_id": stream_id,
-            "token": token,
-        })
-
-    async def send_stream_end(self, user_id: str, stream_id: str) -> None:
-        await self.send_alert(user_id, {
-            "type": "ghost_thinking_done",
-            "stream_id": stream_id,
-        })
 
     async def broadcast(self, alert: dict[str, Any]) -> None:
         for user_id in list(self._connections.keys()):

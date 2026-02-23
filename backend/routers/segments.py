@@ -1,7 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
 import uuid
-import asyncio
 
 from database import get_db, CodedSegment, Code, Document, AnalysisResult, AgentAlert
 from models import SegmentCreate, SegmentOut, AnalysisOut, AnalysisTrigger, AlertOut
@@ -13,6 +12,7 @@ from services.vector_store import (
 )
 from services.ws_manager import ws_manager
 from config import settings
+from utils import PARSE_FAILED_SENTINEL
 
 router = APIRouter(prefix="/api/segments", tags=["segments"])
 
@@ -64,7 +64,7 @@ async def create_segment(
     db.commit()
     db.refresh(segment)
 
-    if settings.openrouter_api_key:
+    if settings.gemini_api_key:
         context_window = _extract_window(doc.full_text, body.start_index, body.end_index)
         background_tasks.add_task(
             _run_background_agents,
@@ -97,17 +97,16 @@ def list_segments(
     user_id: str = "",
     db: Session = Depends(get_db),
 ):
-    query = db.query(CodedSegment)
+    # Single JOIN query — avoids N+1 (one query per segment to fetch its code).
+    query = db.query(CodedSegment, Code).outerjoin(Code, CodedSegment.code_id == Code.id)
     if document_id:
         query = query.filter(CodedSegment.document_id == document_id)
     if user_id:
         query = query.filter(CodedSegment.user_id == user_id)
-    segments = query.order_by(CodedSegment.created_at).all()
+    rows = query.order_by(CodedSegment.created_at).all()
 
-    out: list[SegmentOut] = []
-    for s in segments:
-        code = db.query(Code).filter(Code.id == s.code_id).first()
-        out.append(SegmentOut(
+    return [
+        SegmentOut(
             id=s.id,
             document_id=s.document_id,
             text=s.text,
@@ -118,8 +117,9 @@ def list_segments(
             code_colour=code.colour if code else "#ccc",
             user_id=s.user_id,
             created_at=s.created_at,
-        ))
-    return out
+        )
+        for s, code in rows
+    ]
 
 
 @router.delete("/{segment_id}")
@@ -133,45 +133,33 @@ def delete_segment(segment_id: str, user_id: str = "default", db: Session = Depe
     return {"status": "deleted"}
 
 
-@router.post("/analyze", response_model=AnalysisOut)
-def trigger_analysis(
+@router.post("/analyze")
+async def trigger_analysis(
     body: AnalysisTrigger,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ):
     code = db.query(Code).filter(Code.id == body.code_id).first()
     if not code:
         raise HTTPException(status_code=404, detail="Code not found")
 
-    segments = (
+    segment_count = (
         db.query(CodedSegment)
         .filter(CodedSegment.code_id == body.code_id, CodedSegment.user_id == body.user_id)
-        .all()
+        .count()
     )
-    quotes = [s.text for s in segments]
-    if len(quotes) < 2:
+    if segment_count < 2:
         raise HTTPException(status_code=400, detail="Need at least 2 segments to analyse")
 
-    result = analyze_quotes(code.label, quotes, user_definition=code.definition)
-
-    analysis = AnalysisResult(
-        id=str(uuid.uuid4()),
-        code_id=body.code_id,
-        definition=result.get("definition"),
-        lens=result.get("lens"),
-        reasoning=result.get("reasoning"),
-        segment_count_at_analysis=len(quotes),
-    )
-    db.merge(analysis)
-    db.commit()
-
-    return AnalysisOut(
+    background_tasks.add_task(
+        _run_analysis_background,
         code_id=body.code_id,
         code_label=code.label,
-        definition=result.get("definition"),
-        lens=result.get("lens"),
-        reasoning=result.get("reasoning"),
-        segment_count=len(quotes),
+        user_id=body.user_id,
+        user_definition=code.definition,
     )
+
+    return {"status": "analysis_started", "code_id": body.code_id}
 
 
 @router.get("/analyses", response_model=list[AnalysisOut])
@@ -227,11 +215,80 @@ def mark_alert_read(alert_id: str, db: Session = Depends(get_db)):
 
 
 def _ws_send(user_id: str, payload: dict):
-    """Helper: fire-and-forget send via the shared event loop or a new one."""
+    """Fire-and-forget send from a background thread via the main event loop."""
+    ws_manager.send_alert_threadsafe(user_id, payload)
+
+
+def _run_analysis_background(
+    *,
+    code_id: str,
+    code_label: str,
+    user_id: str,
+    user_definition: str | None,
+):
+    """Background task for manual definition rerun — uses the same WS pipeline."""
+    from database import SessionLocal
+    db = SessionLocal()
+
+    _ws_send(user_id, {
+        "type": "agents_started",
+        "data": {"source": "manual_analysis"},
+    })
+    _ws_send(user_id, {
+        "type": "agent_thinking",
+        "agent": "analysis",
+        "data": {},
+    })
+
     try:
-        asyncio.run(ws_manager.send_alert(user_id, payload))
-    except Exception:
-        pass  # WebSocket may be disconnected; not fatal
+        all_quotes = [
+            s.text
+            for s in db.query(CodedSegment)
+            .filter(CodedSegment.code_id == code_id, CodedSegment.user_id == user_id)
+            .all()
+        ]
+        analysis_result = analyze_quotes(code_label, all_quotes, user_definition=user_definition)
+
+        # Don't persist parse failures — keep the old analysis intact
+        if analysis_result.get("definition") == PARSE_FAILED_SENTINEL:
+            print(f"[Agent] Analysis parse failure for code {code_label}")
+            _ws_send(user_id, {
+                "type": "agent_error",
+                "agent": "analysis",
+                "data": {"message": "AI could not generate a definition — please try again."},
+            })
+        else:
+            existing = db.query(AnalysisResult).filter(AnalysisResult.code_id == code_id).first()
+            analysis = AnalysisResult(
+                id=existing.id if existing else str(uuid.uuid4()),
+                code_id=code_id,
+                definition=analysis_result.get("definition"),
+                lens=analysis_result.get("lens"),
+                reasoning=analysis_result.get("reasoning"),
+                segment_count_at_analysis=len(all_quotes),
+            )
+            db.merge(analysis)
+            db.commit()
+
+            _ws_send(user_id, {
+                "type": "analysis_updated",
+                "code_id": code_id,
+                "code_label": code_label,
+                "data": analysis_result,
+            })
+    except Exception as e:
+        print(f"[Agent] Manual analysis error: {e}")
+        _ws_send(user_id, {
+            "type": "agent_error",
+            "agent": "analysis",
+            "data": {"message": str(e)},
+        })
+    finally:
+        _ws_send(user_id, {
+            "type": "agents_done",
+            "data": {},
+        })
+        db.close()
 
 
 def _run_background_agents(
@@ -385,6 +442,15 @@ def _run_background_agents(
                     "is_conflict": is_conflict,
                     "data": ghost_result,
                 })
+            else:
+                # Not enough history — send a non-conflict result so the UI
+                # clears the thinking placeholder instead of hanging.
+                _ws_send(user_id, {
+                    "type": "ghost_partner",
+                    "segment_id": segment_id,
+                    "is_conflict": False,
+                    "data": {"reasoning": "Not enough coded segments yet for ghost partner comparison.", "skipped": True},
+                })
         except Exception as e:
             print(f"[Agent] Ghost partner error: {e}")
             _ws_send(user_id, {
@@ -423,23 +489,34 @@ def _run_background_agents(
                 ]
                 current_code_def = current_code.definition if current_code else None
                 analysis_result = analyze_quotes(code_label, all_quotes, user_definition=current_code_def)
-                analysis = AnalysisResult(
-                    id=existing_analysis.id if existing_analysis else str(uuid.uuid4()),
-                    code_id=code_id,
-                    definition=analysis_result.get("definition"),
-                    lens=analysis_result.get("lens"),
-                    reasoning=analysis_result.get("reasoning"),
-                    segment_count_at_analysis=code_segment_count,
-                )
-                db.merge(analysis)
-                db.commit()
 
-                _ws_send(user_id, {
-                    "type": "analysis_updated",
-                    "code_id": code_id,
-                    "code_label": code_label,
-                    "data": analysis_result,
-                })
+                # Don't persist parse failures — keep old analysis intact
+                if analysis_result.get("definition") == PARSE_FAILED_SENTINEL:
+                    print(f"[Agent] Auto-analysis parse failure for code {code_label}")
+                    _ws_send(user_id, {
+                        "type": "agent_error",
+                        "agent": "analysis",
+                        "segment_id": segment_id,
+                        "data": {"message": "AI could not generate a definition — will retry next time."},
+                    })
+                else:
+                    analysis = AnalysisResult(
+                        id=existing_analysis.id if existing_analysis else str(uuid.uuid4()),
+                        code_id=code_id,
+                        definition=analysis_result.get("definition"),
+                        lens=analysis_result.get("lens"),
+                        reasoning=analysis_result.get("reasoning"),
+                        segment_count_at_analysis=code_segment_count,
+                    )
+                    db.merge(analysis)
+                    db.commit()
+
+                    _ws_send(user_id, {
+                        "type": "analysis_updated",
+                        "code_id": code_id,
+                        "code_label": code_label,
+                        "data": analysis_result,
+                    })
             except Exception as e:
                 print(f"[Agent] Auto-analysis error: {e}")
                 _ws_send(user_id, {

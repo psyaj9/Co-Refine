@@ -12,6 +12,7 @@ import {
   ChevronRight,
   Pencil,
   Check,
+  Loader2,
 } from "lucide-react";
 import * as api from "../api/client";
 
@@ -40,7 +41,7 @@ export default function Sidebar() {
     updateCodeDefinition,
     documents, activeDocumentId, setActiveDocument, loadSegments,
     deleteDocument,
-    analyses, loadAnalyses,
+    loadAnalyses,
     setShowUploadPage,
   } = useStore();
 
@@ -51,6 +52,7 @@ export default function Sidebar() {
   const [expandedCodeId, setExpandedCodeId] = useState<string | null>(null);
   const [editingDefCodeId, setEditingDefCodeId] = useState<string | null>(null);
   const [editDefText, setEditDefText] = useState("");
+  const [analysingCodeId, setAnalysingCodeId] = useState<string | null>(null);
 
   const handleCreateProject = async () => {
     if (!newProjectName.trim()) return;
@@ -80,11 +82,14 @@ export default function Sidebar() {
   };
 
   const handleAnalyse = async (codeId: string) => {
+    setAnalysingCodeId(codeId);
     try {
       await api.triggerAnalysis(codeId, currentUser);
-      await loadAnalyses();
+      // Analysis now runs in background via WS — no need to await loadAnalyses
     } catch (e: any) {
       alert(e.message);
+    } finally {
+      setAnalysingCodeId(null);
     }
   };
 
@@ -283,7 +288,6 @@ export default function Sidebar() {
 
         <ul className="space-y-1">
           {codes.map((code) => {
-            const analysis = analyses.find((a) => a.code_id === code.id);
             const isExpanded = expandedCodeId === code.id;
             const isEditingDef = editingDefCodeId === code.id;
             return (
@@ -322,10 +326,15 @@ export default function Sidebar() {
                       e.stopPropagation();
                       handleAnalyse(code.id);
                     }}
-                    className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-blue-600"
-                    title="Run Inductive Lens analysis"
+                    disabled={analysingCodeId === code.id}
+                    className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-blue-600 disabled:opacity-100"
+                    title="Run analysis"
                   >
-                    <BookOpen size={12} />
+                    {analysingCodeId === code.id ? (
+                      <Loader2 size={12} className="animate-spin text-blue-500" />
+                    ) : (
+                      <BookOpen size={12} />
+                    )}
                   </button>
                   <button
                     onClick={(e) => handleDeleteCode(e, code.id)}
@@ -395,27 +404,7 @@ export default function Sidebar() {
                       )}
                     </div>
 
-                    {/* AI-inferred definition (if available) */}
-                    {analysis && (
-                      <div className="rounded bg-blue-50 p-2">
-                        <p className="text-[10px] uppercase tracking-wider text-blue-400 font-semibold mb-1">
-                          AI-Inferred Definition
-                        </p>
-                        <p className="text-xs text-slate-500 line-clamp-3">
-                          {analysis.definition || "Not yet analysed"}
-                        </p>
-                        {analysis.lens && (
-                          <>
-                            <p className="text-[10px] uppercase tracking-wider text-blue-400 font-semibold mt-1.5 mb-0.5">
-                              Interpretive Lens
-                            </p>
-                            <p className="text-xs text-slate-500 line-clamp-2">
-                              {analysis.lens}
-                            </p>
-                          </>
-                        )}
-                      </div>
-                    )}
+
                   </div>
                 )}
               </li>

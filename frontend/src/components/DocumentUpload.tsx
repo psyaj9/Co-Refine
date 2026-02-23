@@ -92,7 +92,6 @@ export default function DocumentUpload() {
         </p>
       </div>
 
-      {/* Drag-and-drop zone */}
       <div
         {...getRootProps()}
         className={`border-2 border-dashed rounded-xl p-12 text-center cursor-pointer transition
@@ -122,38 +121,6 @@ export default function DocumentUpload() {
             </p>
           </>
         )}
-      </div>
-
-      <div className="flex items-center gap-4">
-        <div className="flex-1 h-px bg-surface-200 dark:bg-surface-700" />
-        <span className="text-xs text-surface-400 uppercase tracking-wider">
-          or paste text
-        </span>
-        <div className="flex-1 h-px bg-surface-200 dark:bg-surface-700" />
-      </div>
-
-      <div className="space-y-3">
-        <input
-          value={pasteTitle}
-          onChange={(e) => setPasteTitle(e.target.value)}
-          placeholder="Document title..."
-          className="w-full rounded-lg border border-surface-200 dark:border-surface-600 bg-white dark:bg-surface-800 px-3 py-2 text-sm text-surface-800 dark:text-surface-100 placeholder:text-surface-400 focus:outline-none focus:ring-2 focus:ring-brand-300 dark:focus:ring-brand-600"
-        />
-        <textarea
-          value={pasteText}
-          onChange={(e) => setPasteText(e.target.value)}
-          placeholder="Paste your transcript, poem, essay, interview, etc..."
-          rows={8}
-          className="w-full rounded-lg border border-surface-200 dark:border-surface-600 bg-white dark:bg-surface-800 px-3 py-2 text-sm text-surface-800 dark:text-surface-100 placeholder:text-surface-400 focus:outline-none focus:ring-2 focus:ring-brand-300 dark:focus:ring-brand-600 resize-y"
-        />
-        <button
-          onClick={handlePaste}
-          disabled={!pasteTitle.trim() || !pasteText.trim()}
-          className="flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-40 transition"
-        >
-          <FileText size={14} />
-          Import Text
-        </button>
       </div>
     </div>
   );

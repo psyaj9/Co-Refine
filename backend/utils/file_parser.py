@@ -12,9 +12,9 @@ except ImportError:
     DocxDocument = None
 
 try:
-    import PyPDF2
+    import pypdf
 except ImportError:
-    PyPDF2 = None
+    pypdf = None
 
 try:
     import mammoth
@@ -55,10 +55,10 @@ def _extract_docx_text(content: bytes) -> Optional[str]:
 
 
 def _extract_pdf_text(content: bytes) -> Optional[str]:
-    if PyPDF2 is None:
+    if pypdf is None:
         return None
     try:
-        reader = PyPDF2.PdfReader(io.BytesIO(content))
+        reader = pypdf.PdfReader(io.BytesIO(content))
         pages = [page.extract_text() or "" for page in reader.pages]
         return "\n".join(pages)
     except Exception:

@@ -49,14 +49,14 @@ export interface AnalysisOut {
 }
 
 export interface AlertPayload {
-  type: "consistency" | "ghost_partner" | "analysis_updated" | "ghost_thinking" | "ghost_thinking_done" | "agents_started" | "agent_thinking" | "agents_done" | "agent_error";
+  type: "consistency" | "ghost_partner" | "analysis_updated" | "agents_started" | "agent_thinking" | "agents_done" | "agent_error" | "chat_stream_start" | "chat_token" | "chat_done" | "chat_error";
   segment_id?: string;
   code_id?: string;
   code_label?: string;
   is_consistent?: boolean;
   is_conflict?: boolean;
   token?: string;
-  stream_id?: string;
+  conversation_id?: string;
   agent?: string;
   data: Record<string, unknown>;
 }
@@ -94,5 +94,19 @@ export interface Memo {
   project_id: string;
   created_at: string;
   updated_at: string;
+}
+
+export interface ChatMessageOut {
+  id: string;
+  conversation_id: string;
+  role: "user" | "assistant";
+  content: string;
+  created_at: string;
+}
+
+export interface ConversationPreview {
+  conversation_id: string;
+  preview: string;
+  started_at: string | null;
 }
 

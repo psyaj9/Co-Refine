@@ -1,9 +1,3 @@
-"""
-Project management API routes.
-
-Create, list, and delete projects.  Each project groups documents + codes.
-"""
-
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 import uuid
@@ -13,8 +7,6 @@ from models import ProjectCreate, ProjectOut
 from services.vector_store import delete_segment_embedding
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
-
-CURRENT_USER = "default"
 
 
 def _project_to_out(project: Project, db: Session) -> ProjectOut:
@@ -56,7 +48,7 @@ def get_project(project_id: str, db: Session = Depends(get_db)):
 
 
 @router.delete("/{project_id}")
-def delete_project(project_id: str, db: Session = Depends(get_db)):
+def delete_project(project_id: str, user_id: str = "default", db: Session = Depends(get_db)):
     """Delete a project and ALL its documents, codes, segments, analyses, alerts."""
     project = db.query(Project).filter(Project.id == project_id).first()
     if not project:
@@ -66,7 +58,7 @@ def delete_project(project_id: str, db: Session = Depends(get_db)):
     for doc in docs:
         segments = db.query(CodedSegment).filter(CodedSegment.document_id == doc.id).all()
         for seg in segments:
-            delete_segment_embedding(CURRENT_USER, seg.id)
+            delete_segment_embedding(user_id, seg.id)
 
     db.delete(project)
     db.commit()

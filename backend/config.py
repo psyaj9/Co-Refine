@@ -1,12 +1,14 @@
 from pydantic_settings import BaseSettings
+from pydantic import ConfigDict
 
 
 class Settings(BaseSettings):
-    app_title: str = "The Inductive Lens"
-    openrouter_api_key: str = ""
+    app_title: str = "Co-Refine"
+    gemini_api_key: str = ""
+    gemini_api_base: str = "https://generativelanguage.googleapis.com/v1beta/openai/"
 
-    fast_model: str = "meta-llama/llama-4-maverick:free"
-    reasoning_model: str = "qwen/qwen3-235b-a22b:free"
+    fast_model: str = "gemini-2.5-flash-lite"
+    reasoning_model: str = "gemini-2.5-flash"
     embedding_model: str = "local"
 
     min_segments_for_consistency: int = 3
@@ -17,9 +19,11 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./inductive_lens.db"
     chroma_persist_dir: str = "./chroma_data"
 
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
+    model_config = ConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="allow",
+    )
 
 
 settings = Settings()

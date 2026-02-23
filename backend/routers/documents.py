@@ -1,10 +1,3 @@
-"""
-Document management API routes.
-
-Upload, list, retrieve, and delete source documents.
-Documents belong to a project.
-"""
-
 from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException
 from sqlalchemy.orm import Session
 import uuid
@@ -16,8 +9,6 @@ from services.vector_store import delete_segment_embedding
 
 router = APIRouter(prefix="/api/documents", tags=["documents"])
 
-CURRENT_USER = "default"
-
 
 @router.post("/upload", response_model=DocumentUploadResponse)
 async def upload_document(
@@ -27,7 +18,6 @@ async def upload_document(
     project_id: str = Form(...),
     db: Session = Depends(get_db),
 ):
-    """Upload a TXT, DOCX, or PDF file into a project."""
     content = await file.read()
     text = extract_text(file.filename or "file.txt", content)
     if not text:
@@ -116,15 +106,14 @@ def get_document(doc_id: str, db: Session = Depends(get_db)):
 
 
 @router.delete("/{doc_id}")
-def delete_document(doc_id: str, db: Session = Depends(get_db)):
-    """Delete a document and clean up its segments, alerts, and vector embeddings."""
+def delete_document(doc_id: str, user_id: str = "default", db: Session = Depends(get_db)):
     doc = db.query(Document).filter(Document.id == doc_id).first()
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
 
     segments = db.query(CodedSegment).filter(CodedSegment.document_id == doc_id).all()
     for seg in segments:
-        delete_segment_embedding(CURRENT_USER, seg.id)
+        delete_segment_embedding(user_id, seg.id)
         db.query(AgentAlert).filter(AgentAlert.segment_id == seg.id).delete()
 
     db.delete(doc)

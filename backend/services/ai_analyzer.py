@@ -1,4 +1,5 @@
 import json
+from typing import Generator
 from openai import OpenAI
 
 from config import settings
@@ -7,34 +8,42 @@ from prompts import (
     build_ghost_partner_prompt,
     build_self_consistency_prompt,
 )
-from utils import parse_json_response
+from utils import parse_json_response, PARSE_FAILED_SENTINEL
+
+_client: OpenAI | None = None
 
 
 def _get_client() -> OpenAI:
-    return OpenAI(
-        base_url="https://openrouter.ai/api/v1",
-        api_key=settings.openrouter_api_key,
-    )
+    global _client
+    if _client is None:
+        _client = OpenAI(
+            base_url=settings.gemini_api_base,
+            api_key=settings.gemini_api_key,
+        )
+    return _client
 
 
-def _call_llm(prompt: str, model: str | None = None) -> dict:
+def _call_llm(prompt: str, model: str | None = None, retries: int = 1) -> dict:
     client = _get_client()
-    response = client.chat.completions.create(
-        model=model or settings.fast_model,
-        messages=[{"role": "user", "content": prompt}],
-        response_format={"type": "json_object"},
-    )
-    return parse_json_response(response.choices[0].message.content or "")
+    use_model = model or settings.fast_model
 
+    for attempt in range(1 + retries):
+        response = client.chat.completions.create(
+            model=use_model,
+            messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"},
+        )
+        raw = response.choices[0].message.content or ""
+        result = parse_json_response(raw)
 
-def _call_llm_stream(prompt: str, model: str | None = None):
-    client = _get_client()
-    return client.chat.completions.create(
-        model=model or settings.fast_model,
-        messages=[{"role": "user", "content": prompt}],
-        response_format={"type": "json_object"},
-        stream=True,
-    )
+        if result.get("definition") != PARSE_FAILED_SENTINEL:
+            return result
+
+        # Log the failed parse for debugging
+        print(f"[LLM] Parse failure (attempt {attempt + 1}) — raw response: {raw[:500]}")
+
+    # All retries exhausted — return the error dict
+    return result
 
 
 def analyze_quotes(code_label: str, quotes: list[str], user_definition: str | None = None) -> dict:
@@ -83,3 +92,47 @@ def check_self_consistency(
         result = _call_llm(prompt, model=settings.reasoning_model)
 
     return result
+
+
+def stream_chat_response(
+    messages: list[dict],
+    model: str | None = None,
+) -> Generator[str, None, None]:
+    """Stream chat tokens from Gemini. Yields text chunks as they arrive.
+    Strips any leading <think>...</think> block automatically."""
+    client = _get_client()
+    response = client.chat.completions.create(
+        model=model or settings.fast_model,
+        messages=messages,
+        stream=True,
+    )
+
+    in_think_block = False
+    think_ended = False
+
+    for chunk in response:
+        delta = chunk.choices[0].delta if chunk.choices else None
+        if not delta or not delta.content:
+            continue
+        token = delta.content
+
+        # Strip <think>...</think> blocks from Gemini 2.5
+        if not think_ended:
+            if "<think>" in token:
+                in_think_block = True
+                # Remove the <think> tag from the token
+                token = token.split("<think>", 1)[0]
+                if token:
+                    yield token
+                continue
+            if in_think_block:
+                if "</think>" in token:
+                    in_think_block = False
+                    think_ended = True
+                    # Yield any text after </think>
+                    after = token.split("</think>", 1)[1]
+                    if after:
+                        yield after
+                continue
+
+        yield token

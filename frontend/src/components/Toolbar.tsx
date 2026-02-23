@@ -33,7 +33,7 @@ export default function Toolbar() {
       <div className="flex items-center gap-2 justify-self-start">
         <Sparkles size={16} className="text-brand-500" />
         <h1 className="text-sm font-bold text-surface-800 dark:text-surface-100 tracking-tight">
-          The Inductive Lens
+          Co-Refine
         </h1>
         <span className="hidden sm:inline text-2xs text-surface-400 dark:text-surface-500 border-l pl-2 ml-1 panel-border">
           AI-assisted qualitative analysis

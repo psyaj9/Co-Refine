@@ -5,6 +5,8 @@ import type {
   SegmentOut,
   AnalysisOut,
   AlertOut,
+  ChatMessageOut,
+  ConversationPreview,
 } from "@/types";
 
 const BASE = "/api";
@@ -158,7 +160,7 @@ export async function deleteSegment(id: string) {
 }
 
 export async function triggerAnalysis(codeId: string, userId: string) {
-  return json<AnalysisOut>(
+  return json<{ status: string; code_id: string }>(
     await fetch(`${BASE}/segments/analyze`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -196,4 +198,43 @@ export async function fetchSettings() {
     reasoning_model: string;
     embedding_model: string;
   }>(await fetch(`${BASE}/settings`));
+}
+
+// ========== Chat ==========
+
+export async function sendChatMessage(
+  message: string,
+  projectId: string,
+  userId: string,
+  conversationId?: string | null,
+) {
+  return json<{ conversation_id: string; status: string }>(
+    await fetch(`${BASE}/chat/`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message,
+        project_id: projectId,
+        user_id: userId,
+        ...(conversationId ? { conversation_id: conversationId } : {}),
+      }),
+    })
+  );
+}
+
+export async function fetchChatHistory(conversationId: string) {
+  return json<ChatMessageOut[]>(
+    await fetch(`${BASE}/chat/history/${conversationId}`)
+  );
+}
+
+export async function fetchConversations(projectId: string, userId: string) {
+  const params = new URLSearchParams({ project_id: projectId, user_id: userId });
+  return json<ConversationPreview[]>(
+    await fetch(`${BASE}/chat/conversations?${params.toString()}`)
+  );
+}
+
+export async function deleteConversation(conversationId: string) {
+  await fetch(`${BASE}/chat/conversations/${conversationId}`, { method: "DELETE" });
 }

@@ -1,6 +1,6 @@
-# Backend Architecture — The Inductive Lens
+# Co-Refine Backend Architecture
 
-This document describes the backend's agentic AI architecture, the model selection rationale, and suggested improvements.
+An agentic qualitative coding system powered by Google Gemini models via the OpenAI-compatible API. Three AI agents provide real-time feedback on researcher coding decisions: consistency checking, inter-rater simulation, and automated inductive analysis.
 
 ---
 
@@ -11,47 +11,46 @@ This document describes the backend's agentic AI architecture, the model selecti
   - [Agent 1: Self-Consistency Checker](#agent-1-self-consistency-checker)
   - [Agent 2: Ghost Partner](#agent-2-ghost-partner)
   - [Agent 3: Inductive Analysis](#agent-3-inductive-analysis)
-  - [Agent 4: Mediation (Unused)](#agent-4-mediation-unused)
-- [Tiered Inference](#tiered-inference)
-- [Embedding Strategy](#embedding-strategy)
+- [Model Selection & Tiering](#model-selection--tiering)
+- [API Integration](#api-integration)
+- [Embedding & Vector Search](#embedding--vector-search)
 - [Windowed Context](#windowed-context)
-- [Model Options](#model-options)
-  - [Free Models](#free-models)
-  - [Cheap Models ($0.01-0.30/M tokens)](#cheap-models)
-  - [Premium Models](#premium-models)
-- [OpenRouter Integration](#openrouter-integration)
+- [Data Flow](#data-flow)
+- [Key Optimizations](#key-optimizations)
 - [Suggested Improvements](#suggested-improvements)
+- [File Reference](#file-reference)
 
 ---
 
 ## System Overview
 
 ```
-User codes a segment
+User highlights & codes a segment
         │
         ▼
-┌─ POST /api/segments/ ──────────────────────────────┐
-│  1. Save segment to SQLite                         │
-│  2. Schedule 3 BackgroundTasks:                     │
-│     ├─ embed + self-consistency check              │
-│     ├─ ghost partner prediction                    │
-│     └─ auto-analysis (if threshold met)            │
-│  3. Return segment immediately (non-blocking)      │
-└────────────────────────────────────────────────────┘
+┌──── POST /api/segments/ ──────────────────────────────────┐
+│  1. Save segment to SQLite                               │
+│  2. If GEMINI_API_KEY is set:                            │
+│     Schedule background agents asynchronously:           │
+│     ├─ Embed segment → ChromaDB                          │
+│     ├─ Self-Consistency check (if ≥3 segments exist)    │
+│     ├─ Ghost Partner simulation                          │
+│     └─ Auto-Analysis (if threshold met)                 │
+│  3. Return segment_id immediately (non-blocking)         │
+└─────────────────────────────────────────────────────────┘
         │
-        ▼  (background, async)
-┌────────────────────────────────────────────────────┐
-│  Each agent:                                       │
-│  1. Gathers context (vector search, DB queries)    │
-│  2. Builds a structured prompt                     │
-│  3. Calls OpenRouter LLM (fast or reasoning tier)  │
-│  4. Parses JSON response                           │
-│  5. Persists alert to DB                           │
-│  6. Pushes alert via WebSocket                     │
-└────────────────────────────────────────────────────┘
+        ▼  (background, in thread pool)
+┌─────────────────────────────────────────────────────────┐
+│  Each agent runs sequentially, WebSocket alerts stream  │
+│  in real-time. Agents emit:                             │
+│  • agents_started                                        │
+│  • agent_thinking (per agent)                           │
+│  • consistency / ghost_partner / analysis_updated       │
+│  • agents_done                                          │
+└─────────────────────────────────────────────────────────┘
 ```
 
-The backend uses **FastAPI BackgroundTasks** rather than a task queue (Celery, etc.) for simplicity. Each agent runs sequentially within its background task but all three tasks run concurrently.
+**Key detail**: Background agents run in FastAPI's thread pool (not async), but WebSocket messages are sent safely from the background thread to the main event loop via `asyncio.run_coroutine_threadsafe()`. This avoids the `RuntimeError: This event loop is already running` crash.
 
 ---
 
@@ -59,43 +58,45 @@ The backend uses **FastAPI BackgroundTasks** rather than a task queue (Celery, e
 
 ### Agent 1: Self-Consistency Checker
 
-**Purpose**: Detect when a new coding deviates from the user's established patterns.
+**Purpose**: Flag when a new coding decision deviates from the researcher's established patterns.
 
-**Flow**:
-1. Embed the new segment text into ChromaDB
-2. Retrieve top-K (default 8) most similar prior segments via cosine similarity
-3. Load existing analysis definitions for context
-4. Build a prompt with the segment, similar segments, and definitions
-5. Call the **fast model** to assess consistency
-6. If `consistency_score` < threshold (0.7), **escalate** to the reasoning model
-7. Push a `consistency` alert with the score, reasoning, and any suggestions
+**Process**:
+1. Query ChromaDB for the top-8 most similar segments (by cosine similarity)
+2. Load AI-inferred code definitions from prior analyses
+3. Build a prompt with the new segment, similar history, and existing definitions
+4. Call `gemini-2.0-flash` (fast model, 1500 free req/day)
+5. If consistency score < 0.7, **escalate** to `gemini-2.5-flash` (reasoning model, 500 free req/day)
+6. Persist alert to `agent_alerts` table
+7. Push `consistency` WebSocket message with partial/full reasoning
 
-**Prompt** ([prompts/self_consistency_prompt.py](backend/prompts/self_consistency_prompt.py)):
-- Includes prior coding history grouped by code label
-- Asks for a JSON response: `{consistency_score, is_consistent, reasoning, suggestion, drift_warning}`
+**Prompt** ([backend/prompts/self_consistency_prompt.py](backend/prompts/self_consistency_prompt.py)):
+- Two-tier definitions: researcher-supplied (canonical) + AI-inferred (supplementary)
+- Similar segments with their codes and text
+- Request: `{is_consistent, consistency_score, reasoning, definition_match, lens_alignment, alternative_codes, drift_warning, suggestion}`
 
-**When it triggers**: Only when the user has ≥3 existing segments (configurable via `MIN_SEGMENTS_FOR_CONSISTENCY`).
+**Trigger condition**: Only when user has ≥3 existing segments (configurable: `MIN_SEGMENTS_FOR_CONSISTENCY`). Prevents noise during initial coding.
 
 ---
 
 ### Agent 2: Ghost Partner
 
-**Purpose**: Simulate a second coder who independently assesses the highlighted text.
+**Purpose**: Simulate an independent second coder to detect inter-rater conflicts.
 
-**Flow**:
-1. Receive windowed document context (~2 sentences before/after the highlight)
-2. Receive the user's coding history (from vector search)
-3. Build a prompt asking the "ghost" to predict the correct code
-4. Call the **fast model**
-5. Compare the ghost's prediction with the user's actual code
-6. Push a `ghost_partner` alert (agree or conflict)
+**Process**:
+1. Retrieve top-8 similar segments from the user's own history (vector search)
+2. Extract windowed document context (~2 sentences before/after highlight)
+3. Build prompt with document context, the highlighted text, and the user's prior codings
+4. Call `gemini-2.0-flash` to predict what an independent coder would choose
+5. Compare prediction vs. actual code; if mismatch, flag as conflict
+6. Persist alert; push `ghost_partner` WebSocket message
 
-**Prompt** ([prompts/ghost_partner_prompt.py](backend/prompts/ghost_partner_prompt.py)):
-- Document context uses `>>>` markers around the highlighted span
-- Includes all available codes with their existing segment counts
-- Asks for JSON: `{predicted_code, confidence, reasoning, is_conflict, conflict_explanation}`
+**Prompt** ([backend/prompts/ghost_partner_prompt.py](backend/prompts/ghost_partner_prompt.py)):
+- Full codebook with existing segment counts per code
+- Highlighted text marked with `>>>...<<<` delimiters
+- Document context above/below
+- Request: `{predicted_code, confidence, is_conflict, reasoning, conflict_explanation}`
 
-**Known limitation**: The ghost receives the same user's coding history, making true independence impossible. See [improvements](#suggested-improvements).
+**Known limitation**: The ghost receives the same researcher's own history, not a truly independent second coder. See [Suggested Improvements](#suggested-improvements) for solutions.
 
 ---
 
@@ -103,158 +104,234 @@ The backend uses **FastAPI BackgroundTasks** rather than a task queue (Celery, e
 
 **Purpose**: Synthesise a grounded definition and interpretive lens from all segments under a code.
 
-**Flow**:
-1. Gather all segment texts for the given code
-2. Call the **reasoning model** with the full list of quotes
-3. Parse the response into definition, lens, and reasoning
-4. Upsert the analysis result in the DB
-5. Push an `analysis_updated` alert
+**Process**:
+1. Gather all segment texts for a given code
+2. Call `gemini-2.5-flash` (reasoning model) with structured prompt
+3. Parse response into definition, lens, and reasoning
+4. Upsert `analysis_results` with the same ID if this is an update, else new UUID
+5. Push `analysis_updated` WebSocket message
 
-**Prompt** ([prompts/analysis_prompt.py](backend/prompts/analysis_prompt.py)):
-- Presents all quotes numbered for reference
-- Asks for JSON: `{definition, lens, reasoning}`
-- The "lens" describes the interpretive framework the coder appears to be using
+**Prompt** ([backend/prompts/analysis_prompt.py](backend/prompts/analysis_prompt.py)):
+- All quotes numbered for reference
+- Researcher's own code definition (if provided) to detect drift
+- Request: `{definition, lens, reasoning}`
 
-**When it triggers**: Automatically when a code reaches `AUTO_ANALYSIS_THRESHOLD` (3) segments and has at least 2 new segments since the last analysis. Also triggerable manually via the UI.
+The "lens" describes the interpretive framework — e.g. "power dynamics" or "narrative repair strategies" — that the researcher's coding appears to be revealing.
 
----
-
-### Agent 4: Mediation (Unused)
-
-**Purpose**: Resolve conflicts between two coders who coded the same text differently.
-
-**Prompt** ([prompts/mediation_prompt.py](backend/prompts/mediation_prompt.py)):
-- Takes two users' codings of the same text plus their coding histories
-- Asks for a nuanced resolution
-- Currently wired in `ai_analyzer.py` but not called from any endpoint
+**Trigger**:
+- **Automatic**: When code reaches 3 segments AND has ≥2 new segments since last analysis
+- **Manual**: POST `/api/segments/analyze` (requires ≥2 segments)
 
 ---
 
-## Tiered Inference
+## Model Selection & Tiering
 
-The system uses two model tiers accessed through OpenRouter:
+### Why Google Gemini?
 
-| Tier | Config Key | Default Model | Use Cases |
-|------|-----------|---------------|-----------|
-| **Fast** | `FAST_MODEL` | `meta-llama/llama-4-maverick:free` | Self-consistency (first pass), ghost partner |
-| **Reasoning** | `REASONING_MODEL` | `qwen/qwen3-235b-a22b:free` | Analysis, mediation, escalated consistency |
+| Criterion | OpenRouter (old) | Google Gemini (new) |
+|-----------|------------------|-------------------|
+| Fast model | Llama 4 Maverick:free (unreliable JSON, rate-limited) | `gemini-2.0-flash` (1500 req/day free, strong JSON mode) |
+| Reasoning model | Qwen3-235B:free (token limits, slow) | `gemini-2.5-flash-preview` (500 req/day free, excellent instruction following) |
+| Cost | $0/month (free tier is flaky) | $0/month free tier with reasonable limits |
+| API | OpenAI-compatible (requires proxy) | OpenAI-compatible endpoint @ `generativelanguage.googleapis.com/v1beta/openai/` |
+| Setup complexity | Single, unified proxy | Single direct endpoint |
 
-**Escalation logic** (in `check_self_consistency`):
+### Model Tiers
+
+| Purpose | Model | Free Quota | Why |
+|---------|-------|-----------|-----|
+| **Fast inference** | `gemini-2.0-flash` | 1500 req/day | Ghost partner, first-pass consistency — fast + cheap |
+| **Reasoning** | `gemini-2.5-flash-preview-04-17` | 500 req/day | Analysis, escalated consistency — best instruction following |
+| **Embeddings** | `all-MiniLM-L6-v2` (local) | Unlimited | 384-dim, fast, sufficient for within-project similarity |
+
+### Escalation Logic
+
+```python
+# In check_self_consistency():
+1. Call gemini-2.0-flash with consistency prompt
+2. Parse response → score_value (0.0–1.0)
+3. If score < 0.7:
+   # Uncertain; spend the reasoning model's quota
+   Call gemini-2.5-flash with same prompt
+   Use reasoning model's response
+4. Return final result
 ```
-1. Run fast model → get consistency_score
-2. If score < CONSISTENCY_ESCALATION_THRESHOLD (0.7):
-   a. Re-run with reasoning model
-   b. Use reasoning model's result instead
-3. Push whichever result to user
-```
 
-This saves tokens on the ~80% of checks that are straightforward while ensuring edge cases get deeper analysis.
+This balances cost (save tokens on 80% of straightforward checks) with quality (catch edge cases with better reasoning).
 
 ---
 
-## Embedding Strategy
+## API Integration
 
-Two modes, controlled by `EMBEDDING_MODEL` in `.env`:
+### Endpoint & Authentication
 
-### Local (default: `local`)
+```python
+# From config.py
+OpenAI(
+    base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+    api_key=settings.gemini_api_key,  # from .env
+)
+```
+
+**Setup**:
+1. Create a free Google AI Studio account at [aistudio.google.com](https://aistudio.google.com)
+2. Generate an API key (no billing required for free tier)
+3. Set `GEMINI_API_KEY=<your-key>` in `.env`
+
+### Client Lifecycle
+
+- **Before**: New `OpenAI` client instantiated on every LLM call
+- **Now**: Module-level singleton in `services/ai_analyzer.py` — created once, reused for all requests
+
+This eliminates unnecessary socket/connection overhead.
+
+### Error Handling
+
+The `_call_llm()` function uses OpenAI SDK's built-in retry logic. If a request fails:
+- API errors are caught in `_run_background_agents()`
+- An `agent_error` WebSocket message is sent
+- The agent fails gracefully without crashing the backend
+
+---
+
+## Embedding & Vector Search
+
+### Local Embeddings (Default)
+
 - **Model**: `sentence-transformers/all-MiniLM-L6-v2`
 - **Dimension**: 384
-- **Cost**: Free (runs on CPU)
-- **Latency**: ~10-50ms per embedding
-- **Trade-off**: Lower quality than API embeddings but sufficient for within-project similarity
+- **Compute**: CPU-local (no API calls)
+- **Latency**: ~10–50ms per embedding
+- **Cost**: $0
+- **Use case**: Within-project similarity (good enough for 8-10K segment documents)
 
-### API (any OpenRouter embedding model)
-- Set `EMBEDDING_MODEL` to an OpenRouter model name (e.g. `openai/text-embedding-3-small`)
-- Higher quality, but adds API cost and latency
+### Multi-User Collections
 
-The embedding is stored in ChromaDB per-user collections with cosine distance. Metadata includes code label, document ID, and text preview.
+ChromaDB maintains one collection per user:
+```python
+collection_name = f"segments_{user_id}"
+```
+
+This ensures deletion of a code cascades only to that user's embeddings (fixes the `CURRENT_USER='default'` bug in earlier versions).
+
+### Query Strategy
+
+`find_similar_across_codes()` retrieves top-K segments by cosine similarity. Metadata filters can narrow by code label. Metadata stored per segment:
+- `text_preview` (first 300 chars)
+- `code` (code label)
+- `document_id`
 
 ---
 
 ## Windowed Context
 
-Instead of sending the full document to every prompt, `segments.py` extracts a **window** around the highlighted text:
+To avoid sending 5–15K token documents to every agents prompt, segments.py extracts a **window**:
 
 ```python
-def _extract_window(full_text, start, end, sentences=2):
-    # Find ~2 sentence boundaries before 'start'
-    # Find ~2 sentence boundaries after 'end'
-    # Return: "...prior context... >>> HIGHLIGHTED TEXT <<< ...following context..."
+def _extract_window(full_text: str, start: int, end: int, sentences: int = 2) -> str:
+    """
+    Extract ~2 sentence boundaries before 'start' and after 'end'.
+    Return: "...context... >>> HIGHLIGHT <<< context..."
+    """
 ```
 
-**Why**: A typical qualitative document is 5-15K tokens. Sending it all for every consistency check wastes 80%+ of context on irrelevant text. The window provides enough context for the LLM to understand the passage while keeping prompt size under 1K tokens.
+**Impact**:
+- Consistency check prompt: ~300 tokens → ~100 tokens (headers + context window)
+- Faster inference, lower cost, less noise
+- Sufficient for the models to understand the qualitative context
 
 ---
 
-## Model Options
+## Data Flow
 
-All models are accessed via [OpenRouter](https://openrouter.ai/). Switch models by changing `FAST_MODEL` and `REASONING_MODEL` in `.env`.
+### Segment Creation
 
-### Free Models
+1. **Endpoint**: `POST /api/segments/`
+2. **Sync path**:
+   - Insert into `coded_segments` table
+   - Fetch code label/color
+   - Return `SegmentOut` (fast, user sees it immediately)
+3. **Async path** (if `GEMINI_API_KEY` is set):
+   - `add_task(_run_background_agents, ...)`
+   - Main request returns; agents run in background
 
-| Model | Speed | Quality | Best For |
-|-------|-------|---------|----------|
-| `deepseek/deepseek-chat-v3-0324:free` | ★★★★ | ★★★★ | Fast inference, consistency checks |
-| `deepseek/deepseek-r1:free` | ★★ | ★★★★★ | Reasoning, analysis, escalation |
-| `google/gemma-3-27b-it:free` | ★★★ | ★★★ | Alternative fast model |
-| `qwen/qwen3-30b-a3b:free` | ★★★★ | ★★★ | Mixture-of-experts, fast |
-| `meta-llama/llama-4-maverick:free` | ★★★ | ★★★★ | Alternative reasoning |
-| `microsoft/phi-4-reasoning-plus:free` | ★★ | ★★★★ | Small but strong reasoning |
+### Background Agents Execution
 
-**Current defaults**: Llama 4 Maverick (fast) + Qwen3-235B (reasoning) — both free, good quality for the price point (zero).
+Inside `_run_background_agents()` (runs in thread pool):
 
-### Cheap Models
+```
+1. ws_send(agents_started)
+2. Embed segment → ChromaDB
+3. If user_segment_count >= MIN_SEGMENTS_FOR_CONSISTENCY:
+   │
+   ├─ ws_send(agent_thinking: consistency)
+   ├─ consistency = check_self_consistency(similar, definitions)
+   ├─ INSERT agent_alert(alert_type='consistency', payload=consistency)
+   └─ ws_send(consistency)
+   
+4. ws_send(agent_thinking: ghost_partner)
+   ├─ ghost = ghost_partner_predict(partner_history, proposed_code)
+   ├─ INSERT agent_alert(alert_type='ghost_partner', payload=ghost)
+   └─ ws_send(ghost_partner)
+   
+5. If code_segment_count >= AUTO_ANALYSIS_THRESHOLD and growth >= threshold:
+   │
+   ├─ ws_send(agent_thinking: analysis)
+   ├─ analysis = analyze_quotes(code_label, all_quotes)
+   ├─ UPSERT analysis_results(id=existing_or_new, definition=..., lens=...)
+   └─ ws_send(analysis_updated)
+   
+6. ws_send(agents_done)
+```
 
-| Model | Input $/M | Output $/M | Notes |
-|-------|-----------|------------|-------|
-| `google/gemini-2.5-flash` | $0.15 | $0.60 | Best price-performance ratio |
-| `anthropic/claude-3.5-haiku` | $0.80 | $4.00 | Fast, high quality |
-| `openai/gpt-4o-mini` | $0.15 | $0.60 | Reliable, well-tested |
-| `deepseek/deepseek-chat-v3-0324` | $0.14 | $0.28 | Non-free version, higher rate limits |
-
-### Premium Models
-
-| Model | Input $/M | Output $/M | Notes |
-|-------|-----------|------------|-------|
-| `anthropic/claude-sonnet-4` | $3.00 | $15.00 | Excellent reasoning |
-| `openai/o3` | $2.00 | $8.00 | Strong chain-of-thought |
-| `google/gemini-2.5-pro` | $1.25 | $10.00 | Long context window |
-
-### Recommended Combinations
-
-| Budget | Fast Model | Reasoning Model |
-|--------|-----------|----------------|
-| **Free** | `meta-llama/llama-4-maverick:free` | `qwen/qwen3-235b-a22b:free` |
-| **$1-5/month** | `google/gemini-2.5-flash` | `qwen/qwen3-235b-a22b:free` |
-| **Best quality** | `google/gemini-2.5-flash` | `anthropic/claude-sonnet-4` |
+**Threading safety**: 
+- Background task opens its own DB session (`SessionLocal()`)
+- WebSocket sends use `send_alert_threadsafe()` which calls `asyncio.run_coroutine_threadsafe(send_alert, loop)` — no blocking on the main event loop
 
 ---
 
-## OpenRouter Integration
+## Key Optimizations
 
-The backend uses the **OpenAI Python SDK** pointed at OpenRouter's endpoint:
+### 1. N+1 Query Elimination
 
+**Before**: `list_segments()` looped through each segment and queried the `Code` table:
 ```python
-from openai import OpenAI
-
-client = OpenAI(
-    base_url="https://openrouter.ai/api/v1",
-    api_key=settings.openrouter_api_key,
-)
-
-response = client.chat.completions.create(
-    model=settings.fast_model,
-    messages=[{"role": "user", "content": prompt}],
-    response_format={"type": "json_object"},
-)
+for s in segments:
+    code = db.query(Code).filter(Code.id == s.code_id).first()  # ← N queries
 ```
 
-**Why OpenRouter over direct APIs**:
-- Single API key for 600+ models
-- Switch models by changing one env var
-- Automatic fallback and load balancing
-- Free tier models available
-- OpenAI-compatible SDK — no custom code needed
+**Now**: Single JOIN:
+```python
+rows = db.query(CodedSegment, Code).outerjoin(Code, CodedSegment.code_id == Code.id).all()
+```
+
+Result: 50–100 segments go from ~50 DB queries → 1 query.
+
+### 2. Event Loop Safety
+
+**Before**: Background threads called `asyncio.run(ws_manager.send_alert())`, creating new event loops and causing `RuntimeError`.
+
+**Now**: 
+- Main event loop captured in `lifespan()` startup
+- Passed to `ws_manager.set_loop(loop)`
+- Background threads use `send_alert_threadsafe()` → `asyncio.run_coroutine_threadsafe(coro, loop)`
+
+### 3. Module-Level Client Singleton
+
+**Before**: New `OpenAI` client on every LLM call
+**Now**: Single reused client in `services/ai_analyzer.py`
+
+### 4. Dead Code Removed
+
+Removed unused streaming code:
+- `_call_llm_stream()` in `ai_analyzer.py`
+- `send_stream_token()` / `send_stream_end()` in `ws_manager.py`
+
+If streaming is needed in the future, these can be re-implemented cleanly.
+
+### 5. Graceful .env Backwards Compatibility
+
+Old `.env` files with `OPENROUTER_API_KEY` no longer crash. Config uses `ConfigDict(extra="allow")` to ignore undefined environment variables.
 
 ---
 
@@ -262,67 +339,145 @@ response = client.chat.completions.create(
 
 ### High Priority
 
-1. **True Ghost Partner Independence**
-   Currently the ghost partner receives the same user's coding history. For genuine inter-rater simulation:
-   - Option A: Train on a subset of segments, withhold the rest
-   - Option B: Use a different model/temperature for the ghost than the consistency checker
-   - Option C: Build a separate "coder profile" for the ghost based only on the code definitions
+1. **True Ghost Partner Simulation**
+   - Currently uses the same researcher's coding history
+   - Options:
+     - Hold out a random 25% of segments for the ghost to evaluate blind
+     - Use a different model (e.g. Gemini 1.5 Pro) so outputs differ systematically
+     - Build a separate "coder profile" learned only from code definitions, not examples
 
-2. **Wire Up Mediation Agent**
-   The mediation prompt and `mediate_conflict()` function exist but aren't called from any endpoint. Add a UI action for when consistency/ghost alerts flag conflicts.
+2. **Streaming Responses**
+   - Remove the dead `_call_llm_stream` placeholder
+   - Implement true token streaming from Gemini's streaming API
+   - Stream tokens to AlertPanel in real-time for longer analyses
 
-3. **Streaming Responses**
-   The `_call_llm_stream()` function exists in `ai_analyzer.py` and `ws_manager.py` has `send_stream_token()`. Wire these together so ghost partner reasoning streams to the AlertPanel in real-time.
+3. **Persistent Embedding Migration**
+   - If embedding model changes, ChromaDB vectors become stale
+   - Add a CLI tool: `python scripts/re_embed.py --user_id <id> --model all-MiniLM-L6-v2`
+   - Re-index all segments for a user
 
-4. **Persistent Embedding Cache**
-   If the embedding model changes (e.g. switching from local to API), existing ChromaDB vectors become inconsistent. Add a migration script that re-embeds all segments.
+4. **Multi-User Authentication**
+   - Currently UI hardcodes `user_id="default"`
+   - Add JWT or OAuth2 login
+   - True multi-coder projects (unlock the real Ghost Partner and Mediation agents)
 
 ### Medium Priority
 
-5. **Batch Analysis Queue**
-   When many segments are coded rapidly, background tasks can pile up. Consider:
-   - Debouncing analysis triggers (e.g. wait 5s after last segment before running)
-   - Using a lightweight queue (e.g. `asyncio.Queue` with a worker)
+5. **Real Inter-Rater Reliability Metrics**
+   - Track when ghost_partner conflicts with user's actual code
+   - Compute kappa or other agreement stats over time
+   - Display researcher dashboard showing inter-rater reliability trajectory
 
-6. **Prompt Caching**
-   For repeated analysis runs on the same code, much of the prompt context is identical. OpenRouter supports prompt caching on some models — configure `extra_headers` to enable it.
+6. **Codebook Drift Detection**
+   - Compare current analysis definition vs. previous one
+   - If divergence > threshold, push a "drift_warning" alert
+   - Help researcher notice when their lens is evolving
 
-7. **Multi-User Support**
-   The architecture has `user_id` fields everywhere but the UI hardcodes `"default"`. Adding a login screen and per-user WebSocket routing would unlock:
-   - True multi-coder projects
-   - Real (not simulated) inter-rater reliability
-   - The mediation agent
+7. **Debounced Analysis Queue**
+   - When segments are coded rapidly, analysis jobs pile up
+   - Introduce a small delay (5s) after the last segment before running analysis
+   - Use `asyncio.Task` with cancellation to debounce
 
-8. **Codebook Drift Detection**
-   Track how code definitions evolve over time. When `analyze_quotes()` produces a definition that significantly differs from the previous one, push a "drift" alert comparing old vs new.
+8. **Prompt Caching**
+   - For repeated consistency checks on the same code, much prompt context repeats
+   - OpenAI/Gemini support prompt caching headers
+   - Configure `extra_headers` to enable it and reduce API calls
 
 ### Low Priority
 
-9. **Model A/B Testing**
-   Run the same prompt through two models and compare responses. Useful for evaluating whether a model upgrade improves analysis quality.
+9. **Mediation Agent (Unused)**
+   - `prompts/mediation_prompt.py` exists but isn't called
+   - Add an endpoint `/api/alerts/{alert_id}/mediate` to resolve conflicts
+   - Call the mediation agent for flagged inconsistencies
 
-10. **Confidence Calibration**
-    Track whether high-confidence consistency checks are actually correct over time. Use this to tune the escalation threshold.
+10. **Model A/B Testing**
+    - Route some prompts through two models
+    - Compare consistency/analysis quality
+    - Automate model selection based on performance
 
 11. **Export to QDAS Formats**
-    Export coded data to formats compatible with NVivo, ATLAS.ti, or MAXQDA for researchers who want to continue in traditional tools.
+    - NVivo XML, ATLAS.ti, MAXQDA formats
+    - Let researchers download coded data for external tools
 
-12. **RAG Over Research Literature**
-    Add a second vector store for academic papers. When generating code definitions, retrieve relevant methodology literature to ground the analysis in established frameworks.
+12. **RAG Over Research Methodology**
+    - Fetch academic papers on qualitative research & coding
+    - Ground code definitions in published frameworks
 
 ---
 
 ## File Reference
 
-| File | Purpose |
-|------|---------|
-| `config.py` | Pydantic Settings (`.env` loader) |
-| `main.py` | FastAPI app, CORS, WebSocket endpoint |
-| `database.py` | SQLAlchemy engine + session |
-| `models.py` | Pydantic request/response schemas |
-| `routers/segments.py` | Agent orchestration, windowed context |
-| `services/ai_analyzer.py` | OpenRouter LLM calls, tiered inference |
-| `services/vector_store.py` | ChromaDB + dual-mode embeddings |
-| `services/ws_manager.py` | WebSocket connection + streaming |
-| `prompts/*.py` | Structured prompt templates |
-| `utils/file_parser.py` | PDF/DOCX/TXT extraction |
+| File | Purpose | Key Functions |
+|------|---------|---|
+| `config.py` | Pydantic Settings, .env loader | Settings class, ConfigDict(extra="allow") |
+| `main.py` | FastAPI app setup, lifespan, WebSocket | lifespan (event loop capture), websocket_endpoint |
+| `database.py` | SQLAlchemy ORM, tables | SessionLocal, init_db, table definitions |
+| `models.py` | Pydantic schemas | SegmentOut, AnalysisOut, AlertOut |
+| `routers/segments.py` | Segment CRUD, agent orchestration | create_segment, list_segments, _run_background_agents |
+| `routers/codes.py` | Code CRUD | create_code, delete_code (with user_id param) |
+| `routers/documents.py` | Document CRUD | upload_document, delete_document (with user_id param) |
+| `routers/projects.py` | Project CRUD | create_project, delete_project (with user_id param) |
+| `services/ai_analyzer.py` | Gemini API calls, tiered inference | _get_client (singleton), check_self_consistency, ghost_partner_predict, analyze_quotes |
+| `services/vector_store.py` | ChromaDB management | add_segment_embedding, find_similar_across_codes, _embed_local, _embed_api |
+| `services/ws_manager.py` | WebSocket broadcast | ConnectionManager, send_alert_threadsafe, set_loop |
+| `prompts/self_consistency_prompt.py` | Self-consistency prompt builder | build_self_consistency_prompt |
+| `prompts/ghost_partner_prompt.py` | Ghost partner prompt builder | build_ghost_partner_prompt |
+| `prompts/analysis_prompt.py` | Analysis prompt builder | build_analysis_prompt |
+| `utils/file_parser.py` | File extraction (TXT/PDF/DOCX) | extract_text, extract_html, _extract_pdf_text (uses pypdf) |
+
+---
+
+## Environment Setup
+
+### Required
+
+```bash
+cd backend
+python -m venv .venv
+source .venv/bin/activate  # on Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+```
+
+### .env File
+
+```
+GEMINI_API_KEY=<your-key-from-aistudio.google.com>
+```
+
+Optional:
+```
+FAST_MODEL=gemini-2.0-flash
+REASONING_MODEL=gemini-2.5-flash-preview-04-17
+EMBEDDING_MODEL=local
+MIN_SEGMENTS_FOR_CONSISTENCY=3
+AUTO_ANALYSIS_THRESHOLD=3
+CONSISTENCY_ESCALATION_THRESHOLD=0.7
+DATABASE_URL=sqlite:///./inductive_lens.db
+CHROMA_PERSIST_DIR=./chroma_data
+```
+
+### Run Backend
+
+```bash
+cd backend
+export GEMINI_API_KEY="<key>"
+uvicorn main:app --reload
+```
+
+Backend runs on `http://localhost:8000`; docs at `http://localhost:8000/docs`.
+
+---
+
+## Technology Stack
+
+| Component | Library | Version |
+|-----------|---------|---------|
+| Web framework | FastAPI | ≥0.109.0 |
+| ASGI server | Uvicorn | ≥0.27.0 |
+| ORM | SQLAlchemy | ≥2.0.0 |
+| Vector DB | ChromaDB | ≥0.4.22 |
+| LLM SDK | OpenAI (Gemini endpoint) | ≥1.30.0 |
+| Embeddings | sentence-transformers | ≥2.2.0 |
+| PDF extraction | pypdf | ≥4.0.0 |
+| DOCX extraction | python-docx | ≥1.1.0 |
+| Config | pydantic-settings | ≥2.0.0 |

@@ -100,3 +100,18 @@ class AlertOut(BaseModel):
     segment_id: Optional[str] = None
     is_read: bool
     created_at: datetime
+
+
+class ChatRequest(BaseModel):
+    message: str
+    project_id: str
+    user_id: str
+    conversation_id: Optional[str] = None
+
+
+class ChatMessageOut(BaseModel):
+    id: str
+    conversation_id: str
+    role: str
+    content: str
+    created_at: datetime

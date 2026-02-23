@@ -41,29 +41,23 @@ export default function App() {
       <Toolbar />
 
       <Group orientation="horizontal" className="flex-1 min-h-0">
-        {/* ── Left: Project Explorer ── */}
         <Panel defaultSize="14%" minSize="10%" maxSize="25%">
           <ProjectExplorer />
         </Panel>
 
         <ResizeHandle />
 
-        {/* ── Centre: Document / Visualisations ── */}
         <Panel defaultSize={showRightPanel ? "68%" : "86%"} minSize="30%">
           <div className="h-full w-full overflow-auto panel-bg">
             {!activeProjectId ? (
-              /* Welcome screen when no project is selected */
               <div className="h-full flex items-center justify-center p-6">
                 <div className="text-center space-y-3">
-                  <div className="mx-auto w-16 h-16 rounded-2xl bg-brand-100 dark:bg-brand-700/30 flex items-center justify-center">
-                    <span className="text-3xl">📁</span>
-                  </div>
                   <h2 className="text-2xl font-bold text-surface-400 dark:text-surface-500">
                     Select or create a project
                   </h2>
                   <p className="text-sm text-surface-400 dark:text-surface-500 max-w-sm">
                     Use the left panel to create a new project or select an
-                    existing one to get started.
+                    existing one to get started
                   </p>
                 </div>
               </div>
@@ -77,7 +71,6 @@ export default function App() {
           </div>
         </Panel>
 
-        {/* ── Right: Alerts / Segments / Definitions / Chat (only when coding a document) ── */}
         {showRightPanel && (
           <>
             <ResizeHandle />
@@ -90,7 +83,6 @@ export default function App() {
 
       <StatusBar />
 
-      {/* Floating popover for coding */}
       <HighlightPopover />
     </div>
   );

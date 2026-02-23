@@ -1,9 +1,10 @@
 from contextlib import asynccontextmanager
+import asyncio
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
 from database import init_db
-from routers import documents, codes, segments, projects
+from routers import documents, codes, segments, projects, chat
 from services.ws_manager import ws_manager
 from config import settings
 
@@ -11,6 +12,9 @@ from config import settings
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    # Store the running event loop so background threads can send WebSocket
+    # messages safely via run_coroutine_threadsafe (avoids RuntimeError).
+    ws_manager.set_loop(asyncio.get_event_loop())
     yield
 
 
@@ -28,6 +32,7 @@ app.include_router(projects.router)
 app.include_router(documents.router)
 app.include_router(codes.router)
 app.include_router(segments.router)
+app.include_router(chat.router)
 
 
 @app.websocket("/ws/{user_id}")
@@ -48,7 +53,7 @@ def health_check():
 @app.get("/api/settings")
 def get_settings():
     return {
-        "has_api_key": bool(settings.openrouter_api_key),
+        "has_api_key": bool(settings.gemini_api_key),
         "fast_model": settings.fast_model,
         "reasoning_model": settings.reasoning_model,
         "embedding_model": settings.embedding_model,

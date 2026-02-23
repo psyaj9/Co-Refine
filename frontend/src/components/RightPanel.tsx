@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useStore } from "@/stores/store";
 import {
   AlertTriangle,
@@ -11,6 +11,7 @@ import {
   MessageCircle,
   Send,
   GitCompare,
+  Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import RetrievedSegments from "./RetrievedSegments";
@@ -86,6 +87,28 @@ function AlertsTab() {
     (a) => a.type !== "agents_started" && a.type !== "agents_done"
   );
 
+  // Derive per-agent status from alerts
+  const agentSteps = agentsRunning
+    ? (["ghost_partner", "consistency", "analysis"] as const).map((key) => {
+        const label = AGENT_LABELS[key];
+        const isThinking = alerts.some(
+          (a) => a.type === "agent_thinking" && a.agent === key
+        );
+        const hasResult = alerts.some(
+          (a) =>
+            (a.type === key ||
+              (a.type === "analysis_updated" && key === "analysis") ||
+              (a.type === "agent_error" && (a as any).agent === key))
+        );
+        const status: "pending" | "running" | "done" = hasResult
+          ? "done"
+          : isThinking
+            ? "running"
+            : "pending";
+        return { key, label, status };
+      })
+    : [];
+
   if (visibleAlerts.length === 0 && !agentsRunning) {
     return (
       <div className="p-4">
@@ -99,11 +122,39 @@ function AlertsTab() {
   return (
     <div className="p-3 overflow-auto thin-scrollbar h-full">
       {agentsRunning && (
-        <div className="mb-3 flex items-center gap-2 rounded-lg border border-brand-200 dark:border-brand-800 bg-brand-50 dark:bg-brand-900/20 px-3 py-2 animate-pulse-subtle">
-          <Loader2 size={12} className="text-brand-500 animate-spin" />
-          <span className="text-2xs font-medium text-brand-700 dark:text-brand-300">
-            Agents analysing your coding…
-          </span>
+        <div className="mb-3 rounded-lg border border-brand-200 dark:border-brand-800 bg-brand-50 dark:bg-brand-900/20 px-3 py-2.5">
+          <div className="flex items-center gap-2 mb-2">
+            <Loader2 size={12} className="text-brand-500 animate-spin" />
+            <span className="text-2xs font-semibold text-brand-700 dark:text-brand-300">
+              Agents analysing your coding…
+            </span>
+          </div>
+          <div className="space-y-1">
+            {agentSteps.map((step) => (
+              <div key={step.key} className="flex items-center gap-2">
+                {step.status === "running" ? (
+                  <Loader2 size={10} className="text-brand-500 animate-spin flex-shrink-0" />
+                ) : step.status === "done" ? (
+                  <CheckCircle2 size={10} className="text-green-500 flex-shrink-0" />
+                ) : (
+                  <span className="w-2.5 h-2.5 rounded-full border border-surface-300 dark:border-surface-600 flex-shrink-0" />
+                )}
+                <span
+                  className={cn(
+                    "text-2xs",
+                    step.status === "running"
+                      ? "text-brand-600 dark:text-brand-400 font-medium"
+                      : step.status === "done"
+                        ? "text-green-600 dark:text-green-400"
+                        : "text-surface-400 dark:text-surface-500"
+                  )}
+                >
+                  {step.label}
+                  {step.status === "running" && "…"}
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
@@ -240,57 +291,96 @@ function DefinitionsTab() {
 // ========== Chat Tab ==========
 function ChatTab() {
   const [message, setMessage] = useState("");
-  const [messages, setMessages] = useState<{ role: "user" | "ai"; text: string }[]>([]);
+  const chatMessages = useStore((s) => s.chatMessages);
+  const chatStreaming = useStore((s) => s.chatStreaming);
+  const sendChatMessage = useStore((s) => s.sendChatMessage);
+  const clearChat = useStore((s) => s.clearChat);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll on new messages or streaming tokens
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [chatMessages]);
 
   const handleSend = () => {
-    if (!message.trim()) return;
-    setMessages((prev) => [
-      ...prev,
-      { role: "user", text: message.trim() },
-      { role: "ai", text: "AI chat is a planned feature. In the future, you'll be able to query your data, ask about code definitions, and explore patterns through conversation." },
-    ]);
+    const text = message.trim();
+    if (!text || chatStreaming) return;
     setMessage("");
+    sendChatMessage(text);
   };
+
+  const SUGGESTIONS = [
+    "Summarise the key themes so far",
+    "Are there any contradictions in my codes?",
+    "What patterns do you see across all segments?",
+  ];
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex-1 overflow-auto p-3 thin-scrollbar space-y-2">
-        {messages.length === 0 && (
-          <div className="text-center mt-8">
+      <div ref={scrollRef} className="flex-1 overflow-auto p-3 thin-scrollbar space-y-2">
+        {chatMessages.length === 0 && !chatStreaming && (
+          <div className="text-center mt-6">
             <MessageCircle size={24} className="mx-auto text-surface-300 dark:text-surface-600 mb-2" />
-            <p className="text-xs text-surface-400 dark:text-surface-500 italic">
+            <p className="text-xs text-surface-400 dark:text-surface-500 italic mb-3">
               Chat with your data. Ask about patterns, definitions, or coding decisions.
             </p>
+            <div className="space-y-1.5">
+              {SUGGESTIONS.map((s) => (
+                <button
+                  key={s}
+                  onClick={() => { setMessage(""); sendChatMessage(s); }}
+                  className="block w-full text-left text-2xs px-3 py-1.5 rounded-lg border panel-border hover:bg-surface-100 dark:hover:bg-surface-800 text-surface-600 dark:text-surface-300 transition-colors"
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
           </div>
         )}
-        {messages.map((msg, i) => (
+        {chatMessages.map((msg, i) => (
           <div
-            key={i}
+            key={msg.id || i}
             className={cn(
-              "rounded-lg px-3 py-2 text-2xs max-w-[90%]",
+              "rounded-lg px-3 py-2 text-2xs max-w-[90%] whitespace-pre-wrap",
               msg.role === "user"
                 ? "ml-auto bg-brand-500 text-white"
                 : "mr-auto bg-surface-100 dark:bg-surface-800 text-surface-700 dark:text-surface-200"
             )}
           >
-            {msg.text}
+            {msg.content}
+            {/* Streaming cursor for the last assistant message */}
+            {chatStreaming && i === chatMessages.length - 1 && msg.role === "assistant" && (
+              <span className="inline-block w-1.5 h-3 ml-0.5 bg-brand-500 animate-pulse rounded-sm align-text-bottom" />
+            )}
           </div>
         ))}
       </div>
 
-      <div className="p-2 border-t panel-border flex gap-1.5">
+      <div className="p-2 border-t panel-border flex gap-1.5 items-center">
+        {chatMessages.length > 0 && (
+          <button
+            onClick={clearChat}
+            title="New conversation"
+            className="rounded p-1.5 text-surface-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+          >
+            <Trash2 size={12} />
+          </button>
+        )}
         <input
           value={message}
           onChange={(e) => setMessage(e.target.value)}
-          placeholder="Ask about your data..."
-          className="flex-1 rounded border panel-border px-2 py-1 text-xs bg-transparent dark:text-surface-200 focus:outline-none focus:ring-1 focus:ring-brand-400"
+          placeholder={chatStreaming ? "Waiting for response..." : "Ask about your data..."}
+          disabled={chatStreaming}
+          className="flex-1 rounded border panel-border px-2 py-1 text-xs bg-transparent dark:text-surface-200 focus:outline-none focus:ring-1 focus:ring-brand-400 disabled:opacity-50"
           onKeyDown={(e) => e.key === "Enter" && handleSend()}
         />
         <button
           onClick={handleSend}
-          className="rounded bg-brand-600 p-1.5 text-white hover:bg-brand-700"
+          disabled={chatStreaming || !message.trim()}
+          className="rounded bg-brand-600 p-1.5 text-white hover:bg-brand-700 disabled:opacity-40"
         >
-          <Send size={12} />
+          {chatStreaming ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
         </button>
       </div>
     </div>
@@ -302,7 +392,6 @@ function alertStyle(type: string): string {
   const styles: Record<string, string> = {
     consistency: "border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/10",
     ghost_partner: "border-purple-200 dark:border-purple-800 bg-purple-50 dark:bg-purple-900/10",
-    ghost_thinking: "border-purple-100 dark:border-purple-900 bg-purple-50/50 dark:bg-purple-900/5 animate-pulse-subtle",
     agent_thinking: "border-brand-100 dark:border-brand-900 bg-brand-50/50 dark:bg-brand-900/5 animate-pulse-subtle",
     agent_error: "border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/10",
     analysis_updated: "border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/10",
@@ -314,7 +403,6 @@ function alertIcon(type: string) {
   const icons: Record<string, React.ReactNode> = {
     consistency: <AlertTriangle size={12} className="text-amber-500" />,
     ghost_partner: <Ghost size={12} className="text-purple-500" />,
-    ghost_thinking: <Loader2 size={12} className="text-purple-400 animate-spin" />,
     agent_thinking: <Loader2 size={12} className="text-brand-400 animate-spin" />,
     agent_error: <AlertCircle size={12} className="text-red-500" />,
     analysis_updated: <BookOpen size={12} className="text-green-600" />,

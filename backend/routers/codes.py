@@ -1,10 +1,3 @@
-"""
-Code management API routes.
-
-Create, list, update, and delete qualitative codes.
-Codes are scoped to a project — all documents in a project share the same codes.
-"""
-
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 import uuid
@@ -14,8 +7,6 @@ from models import CodeCreate, CodeOut, CodeUpdate
 from services.vector_store import delete_segment_embedding
 
 router = APIRouter(prefix="/api/codes", tags=["codes"])
-
-CURRENT_USER = "default"
 
 
 def _code_to_out(code: Code, db: Session) -> CodeOut:
@@ -81,7 +72,7 @@ def update_code(code_id: str, body: CodeUpdate, db: Session = Depends(get_db)):
 
 
 @router.delete("/{code_id}")
-def delete_code(code_id: str, db: Session = Depends(get_db)):
+def delete_code(code_id: str, user_id: str = "default", db: Session = Depends(get_db)):
     """
     Delete a code and ALL associated data:
     - coded segments (+ their vector embeddings)
@@ -95,7 +86,7 @@ def delete_code(code_id: str, db: Session = Depends(get_db)):
 
     segments = db.query(CodedSegment).filter(CodedSegment.code_id == code_id).all()
     for seg in segments:
-        delete_segment_embedding(CURRENT_USER, seg.id)
+        delete_segment_embedding(user_id, seg.id)
         db.query(AgentAlert).filter(AgentAlert.segment_id == seg.id).delete()
 
     db.query(CodedSegment).filter(CodedSegment.code_id == code_id).delete()

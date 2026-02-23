@@ -30,24 +30,25 @@ def _get_collection(user_id: str) -> chromadb.Collection:
 def _embed_text(text: str) -> list[float]:
     if settings.embedding_model == "local":
         return _embed_local(text)
-    return _embed_openrouter(text)
+    return _embed_api(text)
 
 
 def _embed_local(text: str) -> list[float]:
     global _embed_model
     if _embed_model is None:
         with _embed_lock:
-            if _embed_model is None:  # double-check after acquiring lock
+            if _embed_model is None:
                 from sentence_transformers import SentenceTransformer
                 _embed_model = SentenceTransformer("all-MiniLM-L6-v2")
     return _embed_model.encode(text).tolist()
 
 
-def _embed_openrouter(text: str) -> list[float]:
+def _embed_api(text: str) -> list[float]:
+    """API-based embeddings (fallback when embedding_model != 'local')."""
     from openai import OpenAI
     client = OpenAI(
-        base_url="https://openrouter.ai/api/v1",
-        api_key=settings.openrouter_api_key,
+        base_url=settings.gemini_api_base,
+        api_key=settings.gemini_api_key,
     )
     response = client.embeddings.create(
         model=settings.embedding_model,
@@ -120,12 +121,15 @@ def find_similar_across_codes(
 
 
 def delete_segment_embedding(user_id: str, segment_id: str) -> None:
-    collection = _get_collection(user_id)
     try:
+        collection = _get_collection(user_id)
         collection.delete(ids=[segment_id])
     except Exception:
         pass
 
 
 def get_segment_count(user_id: str) -> int:
-    return _get_collection(user_id).count()
+    try:
+        return _get_collection(user_id).count()
+    except Exception:
+        return 0

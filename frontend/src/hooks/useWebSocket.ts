@@ -8,6 +8,8 @@ export function useWebSocket() {
   const pushAlert = useStore((s) => s.pushAlert);
   const loadAnalyses = useStore((s) => s.loadAnalyses);
   const loadCodes = useStore((s) => s.loadCodes);
+  const appendChatToken = useStore((s) => s.appendChatToken);
+  const finishChatStream = useStore((s) => s.finishChatStream);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -23,10 +25,28 @@ export function useWebSocket() {
 
       ws.onmessage = (event) => {
         try {
-          const alert = JSON.parse(event.data);
-          pushAlert(alert);
+          const msg = JSON.parse(event.data);
 
-          if (alert.type === "analysis_updated") {
+          // Chat streaming messages — handle without pushing to alerts
+          if (msg.type === "chat_token") {
+            appendChatToken(msg.token);
+            return;
+          }
+          if (msg.type === "chat_done") {
+            finishChatStream();
+            return;
+          }
+          if (msg.type === "chat_stream_start" || msg.type === "chat_error") {
+            // stream_start is handled by the store on send;
+            // error: finish streaming and let store show the error
+            if (msg.type === "chat_error") finishChatStream();
+            return;
+          }
+
+          // Regular alert pipeline
+          pushAlert(msg);
+
+          if (msg.type === "analysis_updated") {
             loadAnalyses();
             loadCodes();
           }
