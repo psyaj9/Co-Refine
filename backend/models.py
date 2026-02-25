@@ -93,6 +93,11 @@ class AnalysisTrigger(BaseModel):
     user_id: str
 
 
+class BatchAuditRequest(BaseModel):
+    project_id: str
+    user_id: str
+
+
 class AlertOut(BaseModel):
     id: str
     alert_type: str

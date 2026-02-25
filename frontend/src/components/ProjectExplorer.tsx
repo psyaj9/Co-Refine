@@ -429,19 +429,7 @@ export default function ProjectExplorer() {
                           )}
                         </div>
 
-                        {/* AI definition */}
-                        {analysis && (
-                          <div className="rounded bg-brand-50 dark:bg-brand-900/10 p-2">
-                            <p className="text-2xs uppercase tracking-wider text-brand-500 dark:text-brand-400 font-semibold mb-0.5">AI-Inferred Definition</p>
-                            <p className="text-2xs text-surface-500 dark:text-surface-400 line-clamp-3">{analysis.definition || "Not yet analysed"}</p>
-                            {analysis.lens && (
-                              <>
-                                <p className="text-2xs uppercase tracking-wider text-brand-500 dark:text-brand-400 font-semibold mt-1 mb-0.5">Interpretive Lens</p>
-                                <p className="text-2xs text-surface-500 dark:text-surface-400 line-clamp-2">{analysis.lens}</p>
-                              </>
-                            )}
-                          </div>
-                        )}
+
                       </div>
                     )}
                   </li>

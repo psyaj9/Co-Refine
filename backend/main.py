@@ -53,7 +53,7 @@ def health_check():
 @app.get("/api/settings")
 def get_settings():
     return {
-        "has_api_key": bool(settings.gemini_api_key),
+        "has_api_key": bool(settings.azure_api_key),
         "fast_model": settings.fast_model,
         "reasoning_model": settings.reasoning_model,
         "embedding_model": settings.embedding_model,

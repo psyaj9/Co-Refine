@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 import uuid
 
 from database import get_db, Code, CodedSegment, AnalysisResult, AgentAlert
-from models import CodeCreate, CodeOut, CodeUpdate
+from models import CodeCreate, CodeOut, CodeUpdate, SegmentOut
 from services.vector_store import delete_segment_embedding
 
 router = APIRouter(prefix="/api/codes", tags=["codes"])
@@ -95,3 +95,38 @@ def delete_code(code_id: str, user_id: str = "default", db: Session = Depends(ge
     db.delete(code)
     db.commit()
     return {"status": "deleted"}
+
+
+@router.get("/{code_id}/segments", response_model=list[SegmentOut])
+def get_code_segments(
+    code_id: str,
+    user_id: str = "default",
+    db: Session = Depends(get_db),
+):
+    """Get all coded segments for a given code, ordered by creation time."""
+    code = db.query(Code).filter(Code.id == code_id).first()
+    if not code:
+        raise HTTPException(status_code=404, detail="Code not found")
+
+    rows = (
+        db.query(CodedSegment)
+        .filter(CodedSegment.code_id == code_id, CodedSegment.user_id == user_id)
+        .order_by(CodedSegment.created_at)
+        .all()
+    )
+
+    return [
+        SegmentOut(
+            id=s.id,
+            document_id=s.document_id,
+            text=s.text,
+            start_index=s.start_index,
+            end_index=s.end_index,
+            code_id=s.code_id,
+            code_label=code.label,
+            code_colour=code.colour,
+            user_id=s.user_id,
+            created_at=s.created_at,
+        )
+        for s in rows
+    ]

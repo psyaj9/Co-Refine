@@ -20,11 +20,8 @@ def build_chat_messages(
     retrieved_segments: list[dict],
     conversation_history: list[dict],
 ) -> list[dict]:
-    """Build the messages array for the chat completion call."""
-    # System prompt
     messages: list[dict] = [{"role": "system", "content": CHAT_SYSTEM_PROMPT}]
 
-    # Inject project context as a system message
     context_parts: list[str] = []
 
     if codebook:
@@ -53,11 +50,9 @@ def build_chat_messages(
             "content": "Here is the researcher's current project context:\n\n" + "\n".join(context_parts),
         })
 
-    # Conversation history (last N turns)
     for msg in conversation_history[-20:]:
         messages.append({"role": msg["role"], "content": msg["content"]})
 
-    # Current user message
     messages.append({"role": "user", "content": user_message})
 
     return messages

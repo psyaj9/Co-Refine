@@ -3,11 +3,11 @@ from sqlalchemy.orm import Session
 import uuid
 
 from database import get_db, CodedSegment, Code, Document, AnalysisResult, AgentAlert
-from models import SegmentCreate, SegmentOut, AnalysisOut, AnalysisTrigger, AlertOut
-from services.ai_analyzer import check_self_consistency, ghost_partner_predict, analyze_quotes
+from models import SegmentCreate, SegmentOut, AnalysisOut, AnalysisTrigger, AlertOut, BatchAuditRequest
+from services.ai_analyzer import run_coding_audit, analyze_quotes
 from services.vector_store import (
     add_segment_embedding,
-    find_similar_across_codes,
+    find_diverse_segments,
     delete_segment_embedding,
 )
 from services.ws_manager import ws_manager
@@ -75,6 +75,9 @@ async def create_segment(
             user_id=body.user_id,
             document_id=body.document_id,
             document_context=context_window,
+            start_index=body.start_index,
+            end_index=body.end_index,
+            created_at=segment.created_at.isoformat(),
         )
 
     return SegmentOut(
@@ -186,6 +189,32 @@ def list_analyses(project_id: str = "", db: Session = Depends(get_db)):
     return out
 
 
+@router.get("/{segment_id}", response_model=SegmentOut)
+def get_segment(segment_id: str, db: Session = Depends(get_db)):
+    """Fetch a single segment by ID."""
+    row = (
+        db.query(CodedSegment, Code)
+        .outerjoin(Code, CodedSegment.code_id == Code.id)
+        .filter(CodedSegment.id == segment_id)
+        .first()
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="Segment not found")
+    seg, code = row
+    return SegmentOut(
+        id=seg.id,
+        document_id=seg.document_id,
+        text=seg.text,
+        start_index=seg.start_index,
+        end_index=seg.end_index,
+        code_id=seg.code_id,
+        code_label=code.label if code else "?",
+        code_colour=code.colour if code else "#ccc",
+        user_id=seg.user_id,
+        created_at=seg.created_at,
+    )
+
+
 @router.get("/alerts", response_model=list[AlertOut])
 def list_alerts(user_id: str, unread_only: bool = True, db: Session = Depends(get_db)):
     query = db.query(AgentAlert).filter(AgentAlert.user_id == user_id)
@@ -212,6 +241,33 @@ def mark_alert_read(alert_id: str, db: Session = Depends(get_db)):
         alert.is_read = True
         db.commit()
     return {"status": "ok"}
+
+
+@router.post("/batch-audit")
+async def batch_audit(
+    body: BatchAuditRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
+    """Run the Coding Audit agent across ALL codes in a project.
+
+    Uses MMR diversity sampling to pick representative segments per code, then
+    runs run_coding_audit on each. Results stream back via WebSocket as
+    'coding_audit' events with batch=True.
+    """
+    if not settings.gemini_api_key:
+        raise HTTPException(status_code=400, detail="No AI API key configured")
+
+    codes = db.query(Code).filter(Code.project_id == body.project_id).all()
+    if not codes:
+        raise HTTPException(status_code=404, detail="No codes found for this project")
+
+    background_tasks.add_task(
+        _run_batch_audit_background,
+        project_id=body.project_id,
+        user_id=body.user_id,
+    )
+    return {"status": "batch_audit_started", "code_count": len(codes)}
 
 
 def _ws_send(user_id: str, payload: dict):
@@ -291,6 +347,132 @@ def _run_analysis_background(
         db.close()
 
 
+def _run_batch_audit_background(
+    *,
+    project_id: str,
+    user_id: str,
+):
+    """Background task: run Coding Audit for every code in a project using MMR sampling."""
+    from database import SessionLocal
+    db = SessionLocal()
+
+    try:
+        all_codes = db.query(Code).filter(Code.project_id == project_id).all()
+        total = len(all_codes)
+
+        _ws_send(user_id, {
+            "type": "batch_audit_started",
+            "data": {"total_codes": total},
+        })
+
+        # Build shared context: codebook + AI-inferred definitions
+        user_code_definitions: dict[str, str] = {
+            c.label: (c.definition or "") for c in all_codes
+        }
+
+        analyses = (
+            db.query(AnalysisResult)
+            .join(Code, AnalysisResult.code_id == Code.id)
+            .filter(Code.project_id == project_id)
+            .all()
+        )
+        code_definitions: dict[str, dict] = {}
+        for a in analyses:
+            code_obj = db.query(Code).filter(Code.id == a.code_id).first()
+            if code_obj:
+                code_definitions[code_obj.label] = {
+                    "definition": a.definition or "",
+                    "lens": a.lens or "",
+                }
+
+        for i, code in enumerate(all_codes):
+            # MMR-sampled diverse segments for this code
+            diverse = find_diverse_segments(
+                user_id=user_id,
+                query_text=code.label,
+                code_filter=code.label,
+                n=15,
+            )
+
+            if not diverse:
+                _ws_send(user_id, {
+                    "type": "batch_audit_progress",
+                    "data": {
+                        "completed": i + 1,
+                        "total": total,
+                        "code_label": code.label,
+                        "skipped": True,
+                    },
+                })
+                continue
+
+            # The first (most query-relevant) segment is the "candidate"; the rest are history
+            representative = diverse[0]
+            history = [(s["code"], s["text"]) for s in diverse[1:]]
+
+            try:
+                audit_result = run_coding_audit(
+                    user_history=history,
+                    code_definitions=code_definitions,
+                    new_quote=representative["text"],
+                    proposed_code=code.label,
+                    user_code_definitions=user_code_definitions,
+                    existing_codes_on_span=[],
+                )
+
+                # Filter alternative codes to only those that exist in the codebook
+                self_lens = audit_result.get("self_lens", {})
+                alt_codes = self_lens.get("alternative_codes", [])
+                if alt_codes:
+                    self_lens["alternative_codes"] = [
+                        c for c in alt_codes if c in user_code_definitions
+                    ]
+
+                audit_result["code_id"] = code.id
+                audit_result["code_label"] = code.label
+                audit_result["batch"] = True
+
+                alert = AgentAlert(
+                    id=str(uuid.uuid4()),
+                    user_id=user_id,
+                    segment_id=representative["id"],
+                    alert_type="coding_audit",
+                    payload=audit_result,
+                )
+                db.add(alert)
+                db.commit()
+
+                _ws_send(user_id, {
+                    "type": "coding_audit",
+                    "segment_id": representative["id"],
+                    "segment_text": representative["text"],
+                    "code_id": code.id,
+                    "code_label": code.label,
+                    "batch": True,
+                    "data": audit_result,
+                })
+            except Exception as e:
+                print(f"[Agent] Batch audit error for code '{code.label}': {e}")
+
+            _ws_send(user_id, {
+                "type": "batch_audit_progress",
+                "data": {"completed": i + 1, "total": total, "code_label": code.label},
+            })
+
+        _ws_send(user_id, {
+            "type": "batch_audit_done",
+            "data": {"total_codes": total},
+        })
+    except Exception as e:
+        print(f"[Agent] Batch audit fatal error: {e}")
+        _ws_send(user_id, {
+            "type": "batch_audit_done",
+            "data": {"error": str(e)},
+        })
+    finally:
+        db.close()
+
+
 def _run_background_agents(
     *,
     segment_id: str,
@@ -300,6 +482,9 @@ def _run_background_agents(
     user_id: str,
     document_id: str,
     document_context: str,
+    start_index: int = 0,
+    end_index: int = 0,
+    created_at: str | None = None,
 ):
     from database import SessionLocal
     db = SessionLocal()
@@ -320,147 +505,127 @@ def _run_background_agents(
                 text=text,
                 code_label=code_label,
                 document_id=document_id,
+                created_at=created_at,
             )
         except Exception as e:
             print(f"[Vector] Embedding failed: {e}")
 
-        # Load all codes for the project to build codebook of user definitions
+        # Load all codes for the project to build codebook
         current_code = db.query(Code).filter(Code.id == code_id).first()
         project_id = current_code.project_id if current_code else None
         all_codes = (
             db.query(Code).filter(Code.project_id == project_id).all()
             if project_id else []
         )
-        # user_code_definitions: {label -> definition_or_empty}
         user_code_definitions: dict[str, str] = {
             c.label: (c.definition or "") for c in all_codes
         }
-        # codebook: same dict, used by ghost partner
-        codebook = user_code_definitions
+
+        # --- Query co-applied codes on the same text span ---
+        overlapping_segments = (
+            db.query(CodedSegment, Code)
+            .join(Code, CodedSegment.code_id == Code.id)
+            .filter(
+                CodedSegment.document_id == document_id,
+                CodedSegment.id != segment_id,
+                CodedSegment.start_index < end_index,
+                CodedSegment.end_index > start_index,
+            )
+            .all()
+        )
+        existing_codes_on_span: list[str] = list({
+            c.label for _seg, c in overlapping_segments
+        })
 
         user_segment_count = (
             db.query(CodedSegment).filter(CodedSegment.user_id == user_id).count()
         )
 
-        # 2. Self-Consistency check
-        if user_segment_count >= settings.min_segments_for_consistency:
-            _ws_send(user_id, {
-                "type": "agent_thinking",
-                "agent": "consistency",
-                "segment_id": segment_id,
-                "data": {},
-            })
-            try:
-                similar = find_similar_across_codes(
-                    user_id=user_id, query_text=text, top_k=10
-                )
-                user_history = [(s["code"], s["text"]) for s in similar]
-
-                analyses = db.query(AnalysisResult).all()
-                code_definitions: dict[str, dict] = {}
-                for a in analyses:
-                    code_obj = db.query(Code).filter(Code.id == a.code_id).first()
-                    if code_obj:
-                        code_definitions[code_obj.label] = {
-                            "definition": a.definition or "",
-                            "lens": a.lens or "",
-                        }
-
-                consistency_result = check_self_consistency(
-                    user_history=user_history,
-                    code_definitions=code_definitions,
-                    new_quote=text,
-                    proposed_code=code_label,
-                    document_context=document_context,
-                    user_code_definitions=user_code_definitions,
-                )
-
-                is_consistent = consistency_result.get("is_consistent", True)
-
-                alert = AgentAlert(
-                    id=str(uuid.uuid4()),
-                    user_id=user_id,
-                    segment_id=segment_id,
-                    alert_type="consistency",
-                    payload=consistency_result,
-                )
-                db.add(alert)
-                db.commit()
-
-                _ws_send(user_id, {
-                    "type": "consistency",
-                    "segment_id": segment_id,
-                    "is_consistent": is_consistent,
-                    "data": consistency_result,
-                })
-            except Exception as e:
-                print(f"[Agent] Self-consistency error: {e}")
-                _ws_send(user_id, {
-                    "type": "agent_error",
-                    "agent": "consistency",
-                    "segment_id": segment_id,
-                    "data": {"message": str(e)},
-                })
-
-        # 3. Ghost Partner check
+        # 2. Coding Audit — always run using MMR diversity sampling for history
         _ws_send(user_id, {
             "type": "agent_thinking",
-            "agent": "ghost_partner",
+            "agent": "coding_audit",
             "segment_id": segment_id,
             "data": {},
         })
         try:
-            partner_similar = find_similar_across_codes(
-                user_id=user_id, query_text=text, top_k=10
+            diverse = find_diverse_segments(
+                user_id=user_id,
+                query_text=text,
+                code_filter=code_label,
+                n=10,
             )
-            partner_history = [(s["code"], s["text"]) for s in partner_similar]
+            user_history = [(s["code"], s["text"]) for s in diverse]
 
-            if len(partner_history) >= 3:
-                ghost_result = ghost_partner_predict(
-                    partner_history=partner_history,
-                    new_quote=text,
-                    user_proposed_code=code_label,
-                    document_context=document_context,
-                    codebook=codebook,
-                )
+            analyses = db.query(AnalysisResult).all()
+            code_definitions: dict[str, dict] = {}
+            for a in analyses:
+                code_obj = db.query(Code).filter(Code.id == a.code_id).first()
+                if code_obj:
+                    code_definitions[code_obj.label] = {
+                        "definition": a.definition or "",
+                        "lens": a.lens or "",
+                    }
 
-                is_conflict = ghost_result.get("is_conflict", False)
+            audit_result = run_coding_audit(
+                user_history=user_history,
+                code_definitions=code_definitions,
+                new_quote=text,
+                proposed_code=code_label,
+                document_context=document_context,
+                user_code_definitions=user_code_definitions,
+                existing_codes_on_span=existing_codes_on_span,
+            )
 
-                alert = AgentAlert(
-                    id=str(uuid.uuid4()),
-                    user_id=user_id,
-                    segment_id=segment_id,
-                    alert_type="ghost_partner",
-                    payload=ghost_result,
-                )
-                db.add(alert)
-                db.commit()
+            # Post-process: filter alternative codes already on this span
+            all_codes_on_span = set(existing_codes_on_span) | {code_label}
+            self_lens = audit_result.get("self_lens", {})
+            alt_codes = self_lens.get("alternative_codes", [])
+            if alt_codes:
+                self_lens["alternative_codes"] = [
+                    c for c in alt_codes if c not in all_codes_on_span
+                ]
 
-                _ws_send(user_id, {
-                    "type": "ghost_partner",
-                    "segment_id": segment_id,
-                    "is_conflict": is_conflict,
-                    "data": ghost_result,
-                })
-            else:
-                # Not enough history — send a non-conflict result so the UI
-                # clears the thinking placeholder instead of hanging.
-                _ws_send(user_id, {
-                    "type": "ghost_partner",
-                    "segment_id": segment_id,
-                    "is_conflict": False,
-                    "data": {"reasoning": "Not enough coded segments yet for ghost partner comparison.", "skipped": True},
-                })
+            # Post-process: force is_conflict=False if predicted code already applied
+            inter_rater = audit_result.get("inter_rater_lens", {})
+            predicted = inter_rater.get("predicted_code", "")
+            if predicted in all_codes_on_span:
+                inter_rater["is_conflict"] = False
+                inter_rater["conflict_explanation"] = ""
+
+            is_consistent = self_lens.get("is_consistent", True)
+            is_conflict = inter_rater.get("is_conflict", False)
+
+            alert = AgentAlert(
+                id=str(uuid.uuid4()),
+                user_id=user_id,
+                segment_id=segment_id,
+                alert_type="coding_audit",
+                payload=audit_result,
+            )
+            db.add(alert)
+            db.commit()
+
+            _ws_send(user_id, {
+                "type": "coding_audit",
+                "segment_id": segment_id,
+                "segment_text": text,
+                "code_id": code_id,
+                "code_label": code_label,
+                "is_consistent": is_consistent,
+                "is_conflict": is_conflict,
+                "data": audit_result,
+            })
         except Exception as e:
-            print(f"[Agent] Ghost partner error: {e}")
+            print(f"[Agent] Coding audit error: {e}")
             _ws_send(user_id, {
                 "type": "agent_error",
-                "agent": "ghost_partner",
+                "agent": "coding_audit",
                 "segment_id": segment_id,
                 "data": {"message": str(e)},
             })
 
-        # 4. Auto-analysis
+        # 3. Auto-analysis
         code_segment_count = (
             db.query(CodedSegment)
             .filter(CodedSegment.code_id == code_id, CodedSegment.user_id == user_id)

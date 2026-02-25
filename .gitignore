@@ -1,23 +1,19 @@
-# Environment
 .env
 backend/.env
 
-# Python
 __pycache__/
 *.pyc
 *.pyo
 .venv/
 venv/
 
-# Database
 *.db
 backend/chroma_data/
 
-# Node
 node_modules/
 frontend/dist/
 
-# IDE
 .vscode/
 .idea/
 *.swp
+.github/

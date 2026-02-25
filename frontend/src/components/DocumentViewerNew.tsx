@@ -28,6 +28,10 @@ export default function DocumentViewer() {
   const segments = useStore((s) => s.segments);
   const setClickedSegments = useStore((s) => s.setClickedSegments);
   const loadSegments = useStore((s) => s.loadSegments);
+  const inconsistentSegmentIds = useStore((s) => s.inconsistentSegmentIds);
+
+  const scrollToSegmentId = useStore((s) => s.scrollToSegmentId);
+  const setScrollToSegmentId = useStore((s) => s.setScrollToSegmentId);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const textRef = useRef<HTMLDivElement>(null);
@@ -61,8 +65,25 @@ export default function DocumentViewer() {
   // Build annotated HTML with per-code colours
   const annotatedHtml = useMemo(() => {
     if (!doc) return "";
-    return buildAnnotatedText(doc.full_text, segments);
-  }, [doc, segments]);
+    return buildAnnotatedText(doc.full_text, segments, inconsistentSegmentIds);
+  }, [doc, segments, inconsistentSegmentIds]);
+
+  // Scroll to a segment when requested from the Segments tab
+  useEffect(() => {
+    if (!scrollToSegmentId || !textRef.current) return;
+    const seg = segments.find((s) => s.id === scrollToSegmentId);
+    if (!seg) return;
+    const rafId = requestAnimationFrame(() => {
+      const mark = textRef.current?.querySelector<HTMLElement>(
+        `mark[data-start="${seg.start_index}"][data-end="${seg.end_index}"]`
+      );
+      if (mark) {
+        mark.scrollIntoView({ behavior: "smooth", block: "center" });
+        setScrollToSegmentId(null);
+      }
+    });
+    return () => cancelAnimationFrame(rafId);
+  }, [scrollToSegmentId, annotatedHtml]);
 
   // Split text into lines for line numbers
   const lineCount = useMemo(() => {
@@ -331,22 +352,24 @@ export default function DocumentViewer() {
 
 // --- Helpers ---
 
-function mergeRangesWithColours(segments: SegmentOut[]): { start: number; end: number; colour: string }[] {
+function mergeRangesWithColours(segments: SegmentOut[], flaggedIds: Set<string>): { start: number; end: number; colour: string; flagged: boolean }[] {
   if (segments.length === 0) return [];
 
-  // Group by unique start/end — use the first segment's colour
-  const rangeMap = new Map<string, { start: number; end: number; colours: string[] }>();
+  // Group by unique start/end — track if any segment in the range is flagged
+  const rangeMap = new Map<string, { start: number; end: number; colours: string[]; flagged: boolean }>();
   for (const seg of segments) {
     const key = `${seg.start_index}-${seg.end_index}`;
     if (!rangeMap.has(key)) {
-      rangeMap.set(key, { start: seg.start_index, end: seg.end_index, colours: [] });
+      rangeMap.set(key, { start: seg.start_index, end: seg.end_index, colours: [], flagged: false });
     }
-    rangeMap.get(key)!.colours.push(seg.code_colour);
+    const entry = rangeMap.get(key)!;
+    entry.colours.push(seg.code_colour);
+    if (flaggedIds.has(seg.id)) entry.flagged = true;
   }
 
   // Merge overlapping ranges
   const sorted = Array.from(rangeMap.values()).sort((a, b) => a.start - b.start || a.end - b.end);
-  const merged: { start: number; end: number; colour: string }[] = [];
+  const merged: { start: number; end: number; colour: string; flagged: boolean }[] = [];
 
   for (const range of sorted) {
     // Mix colours: use the first one, or create a gradient effect
@@ -354,16 +377,17 @@ function mergeRangesWithColours(segments: SegmentOut[]): { start: number; end: n
     if (merged.length > 0 && range.start <= merged[merged.length - 1].end) {
       const prev = merged[merged.length - 1];
       prev.end = Math.max(prev.end, range.end);
+      if (range.flagged) prev.flagged = true;
       // Keep the existing colour for overlaps
     } else {
-      merged.push({ start: range.start, end: range.end, colour });
+      merged.push({ start: range.start, end: range.end, colour, flagged: range.flagged });
     }
   }
 
   return merged;
 }
 
-function buildAnnotatedText(fullText: string, segments: SegmentOut[]): string {
+function buildAnnotatedText(fullText: string, segments: SegmentOut[], flaggedIds: Set<string> = new Set()): string {
   if (segments.length === 0) return escapeHtml(fullText);
 
   // Build event points for proper nesting of overlapping segments
@@ -380,8 +404,8 @@ function buildAnnotatedText(fullText: string, segments: SegmentOut[]): string {
     return 0;
   });
 
-  // Merge ranges and apply one consistent highlight colour for all coded text
-  const ranges = mergeRangesWithColours(segments);
+  // Merge ranges and apply highlight — flagged ranges use amber/red
+  const ranges = mergeRangesWithColours(segments, flaggedIds);
   const parts: string[] = [];
   let cursor = 0;
 
@@ -389,9 +413,13 @@ function buildAnnotatedText(fullText: string, segments: SegmentOut[]): string {
     if (cursor < range.start) {
       parts.push(escapeHtml(fullText.slice(cursor, range.start)));
     }
-    // Uniform indigo highlight — per-code colours still visible in the margin pills
+    // Flagged segments (inconsistency/conflict detected): amber/red highlight
+    // Normal segments: uniform indigo highlight
+    const markStyle = range.flagged
+      ? `background-color:rgba(239,68,68,0.12);border-bottom:2px solid rgba(239,68,68,0.55)`
+      : `background-color:rgba(99,102,241,0.15);border-bottom:2px solid rgba(99,102,241,0.45)`;
     parts.push(
-      `<mark data-start="${range.start}" data-end="${range.end}" style="background-color:rgba(99,102,241,0.15);border-bottom:2px solid rgba(99,102,241,0.45)">${escapeHtml(
+      `<mark data-start="${range.start}" data-end="${range.end}" style="${markStyle}">${escapeHtml(
         fullText.slice(range.start, range.end)
       )}</mark>`
     );

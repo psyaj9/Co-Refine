@@ -9,7 +9,7 @@ import {
 
 import Toolbar from "@/components/Toolbar";
 import StatusBar from "@/components/StatusBar";
-import ProjectExplorer from "@/components/ProjectExplorer";
+import LeftPanel from "@/components/LeftPanel";
 import DocumentUpload from "@/components/DocumentUpload";
 import DocumentViewerNew from "@/components/DocumentViewerNew";
 import Visualisations from "@/components/Visualisations";
@@ -42,7 +42,7 @@ export default function App() {
 
       <Group orientation="horizontal" className="flex-1 min-h-0">
         <Panel defaultSize="14%" minSize="10%" maxSize="25%">
-          <ProjectExplorer />
+          <LeftPanel />
         </Panel>
 
         <ResizeHandle />

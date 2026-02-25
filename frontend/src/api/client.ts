@@ -155,6 +155,10 @@ export async function fetchSegments(documentId?: string, userId?: string) {
   );
 }
 
+export async function fetchSegment(segmentId: string) {
+  return json<SegmentOut>(await fetch(`${BASE}/segments/${segmentId}`));
+}
+
 export async function deleteSegment(id: string) {
   await fetch(`${BASE}/segments/${id}`, { method: "DELETE" });
 }
@@ -184,6 +188,23 @@ export async function fetchAlerts(userId: string, unreadOnly = true) {
   });
   return json<AlertOut[]>(
     await fetch(`${BASE}/segments/alerts?${params.toString()}`)
+  );
+}
+
+export async function fetchCodeSegments(codeId: string, userId = "default") {
+  const params = new URLSearchParams({ user_id: userId });
+  return json<SegmentOut[]>(
+    await fetch(`${BASE}/codes/${codeId}/segments?${params.toString()}`)
+  );
+}
+
+export async function triggerBatchAudit(projectId: string, userId: string) {
+  return json<{ status: string; code_count: number }>(
+    await fetch(`${BASE}/segments/batch-audit`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ project_id: projectId, user_id: userId }),
+    })
   );
 }
 

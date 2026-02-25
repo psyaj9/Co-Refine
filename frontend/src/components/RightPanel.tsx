@@ -10,16 +10,20 @@ import {
   AlertCircle,
   MessageCircle,
   Send,
-  GitCompare,
   Trash2,
+  ScanSearch,
+  ShieldCheck,
+  Users,
+  ChevronDown,
+  ChevronRight as ChevronRightIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import RetrievedSegments from "./RetrievedSegments";
 import type { RightPanelTab } from "@/types";
 
 const AGENT_LABELS: Record<string, string> = {
-  consistency: "Self-Consistency",
-  ghost_partner: "Ghost Partner",
+  coding_audit: "Coding Audit",
+  consistency: "Self-Consistency",  // legacy
+  ghost_partner: "Ghost Partner",   // legacy
   analysis: "Inductive Analysis",
 };
 
@@ -33,10 +37,8 @@ export default function RightPanel() {
   ).length;
 
   const tabs: { id: RightPanelTab; label: string; icon: typeof AlertTriangle; badge?: number }[] = [
-    { id: "alerts", label: "Alerts", icon: AlertTriangle, badge: visibleAlertCount },
-    { id: "segments", label: "Segments", icon: BookOpen },
-    { id: "definitions", label: "Definitions", icon: GitCompare },
-    { id: "chat", label: "AI Chat", icon: MessageCircle },
+    { id: "alerts", label: "Alerts",  icon: AlertTriangle, badge: visibleAlertCount },
+    { id: "chat",   label: "AI Chat", icon: MessageCircle },
   ];
 
   return (
@@ -69,8 +71,6 @@ export default function RightPanel() {
       {/* Tab content */}
       <div className="flex-1 overflow-hidden">
         {rightPanelTab === "alerts" && <AlertsTab />}
-        {rightPanelTab === "segments" && <RetrievedSegments />}
-        {rightPanelTab === "definitions" && <DefinitionsTab />}
         {rightPanelTab === "chat" && <ChatTab />}
       </div>
     </div>
@@ -82,6 +82,10 @@ function AlertsTab() {
   const alerts = useStore((s) => s.alerts);
   const agentsRunning = useStore((s) => s.agentsRunning);
   const dismissAlert = useStore((s) => s.dismissAlert);
+  const applySuggestedCode = useStore((s) => s.applySuggestedCode);
+  const keepMyCode = useStore((s) => s.keepMyCode);
+  const codes = useStore((s) => s.codes);
+  const activeProjectId = useStore((s) => s.activeProjectId);
 
   const visibleAlerts = alerts.filter(
     (a) => a.type !== "agents_started" && a.type !== "agents_done"
@@ -89,7 +93,7 @@ function AlertsTab() {
 
   // Derive per-agent status from alerts
   const agentSteps = agentsRunning
-    ? (["ghost_partner", "consistency", "analysis"] as const).map((key) => {
+    ? (["coding_audit", "analysis"] as const).map((key) => {
         const label = AGENT_LABELS[key];
         const isThinking = alerts.some(
           (a) => a.type === "agent_thinking" && a.agent === key
@@ -179,19 +183,79 @@ function AlertsTab() {
               {alertIcon(alert.type)}
               <span className="text-2xs font-semibold">{alertTitle(alert)}</span>
             </div>
-            <p className="text-2xs text-surface-600 dark:text-surface-300 line-clamp-4 pr-4">
-              {alertBody(alert)}
-            </p>
+            {/* coding_audit: segment quote as primary body */}
+            {alert.type === "coding_audit" && (alert.segment_text || alert.data?.segment_text) ? (
+              <blockquote className="border-l-2 border-indigo-300 dark:border-indigo-700 pl-2 my-1 text-2xs text-surface-600 dark:text-surface-300 italic line-clamp-3 pr-4">
+                “{String((alert as any).segment_text || alert.data?.segment_text)}”
+              </blockquote>
+            ) : (
+              <p className="text-2xs text-surface-600 dark:text-surface-300 line-clamp-4 pr-4">
+                {alertBody(alert)}
+              </p>
+            )}
 
-            {/* Ghost partner conflict: accept/reject */}
+            {/* Coding Audit: dual-lens collapsible sections */}
+            {alert.type === "coding_audit" && (
+              <CodingAuditDetail
+                alert={alert}
+                alertIdx={alerts.indexOf(alert)}
+                codes={codes}
+                applySuggestedCode={applySuggestedCode}
+                keepMyCode={keepMyCode}
+              />
+            )}
+
+            {/* Legacy ghost partner conflict */}
             {alert.type === "ghost_partner" && alert.is_conflict && (
               <div className="flex gap-1.5 mt-2">
-                <button className="flex-1 rounded px-2 py-1 text-2xs font-medium bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-900/30 transition">
+                <button
+                  onClick={() => keepMyCode(alerts.indexOf(alert))}
+                  className="flex-1 rounded px-2 py-1 text-2xs font-medium bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-900/30 transition"
+                >
                   Keep my code
                 </button>
-                <button className="flex-1 rounded px-2 py-1 text-2xs font-medium bg-purple-100 dark:bg-purple-900/20 text-purple-700 dark:text-purple-400 hover:bg-purple-200 dark:hover:bg-purple-900/30 transition">
-                  Consider suggestion
-                </button>
+                {alert.data?.predicted_code && codes.some((c) => c.label === (alert.data.predicted_code as string)) ? (
+                  <button
+                    onClick={() => applySuggestedCode(alert.segment_id!, alert.data.predicted_code as string, alerts.indexOf(alert))}
+                    className="flex-1 rounded px-2 py-1 text-2xs font-medium bg-purple-100 dark:bg-purple-900/20 text-purple-700 dark:text-purple-400 hover:bg-purple-200 dark:hover:bg-purple-900/30 transition"
+                  >
+                    Apply &ldquo;{String(alert.data.predicted_code)}&rdquo;
+                  </button>
+                ) : alert.data?.predicted_code ? (
+                  <button
+                    onClick={() => dismissAlert(alerts.indexOf(alert))}
+                    className="flex-1 rounded px-2 py-1 text-2xs font-medium bg-surface-100 dark:bg-surface-800 text-surface-600 dark:text-surface-400 hover:bg-surface-200 dark:hover:bg-surface-700 transition"
+                    title="This code doesn't exist in your codebook yet"
+                  >
+                    Dismiss
+                  </button>
+                ) : null}
+              </div>
+            )}
+
+            {/* Legacy consistency: alternative code suggestions */}
+            {alert.type === "consistency" && Array.isArray(alert.data?.alternative_codes) && (alert.data.alternative_codes as string[]).length > 0 && (
+              <div className="mt-2 space-y-1">
+                <span className="text-2xs text-surface-500 dark:text-surface-400 font-medium">Suggested alternatives:</span>
+                <div className="flex flex-wrap gap-1">
+                  {(alert.data.alternative_codes as string[])
+                    .filter((ac) => codes.some((c) => c.label === ac))
+                    .map((ac) => (
+                      <button
+                        key={ac}
+                        onClick={() => applySuggestedCode(alert.segment_id!, ac, alerts.indexOf(alert))}
+                        className="rounded px-2 py-0.5 text-2xs font-medium bg-amber-100 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 hover:bg-amber-200 dark:hover:bg-amber-900/30 transition"
+                      >
+                        Apply &ldquo;{ac}&rdquo;
+                      </button>
+                    ))}
+                  <button
+                    onClick={() => keepMyCode(alerts.indexOf(alert))}
+                    className="rounded px-2 py-0.5 text-2xs font-medium bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-900/30 transition"
+                  >
+                    Keep current
+                  </button>
+                </div>
               </div>
             )}
           </li>
@@ -201,89 +265,123 @@ function AlertsTab() {
   );
 }
 
-// ========== Definitions Tab ==========
-function DefinitionsTab() {
-  const codes = useStore((s) => s.codes);
-  const analyses = useStore((s) => s.analyses);
+// ========== Coding Audit Detail Component ==========
+function CodingAuditDetail({
+  alert,
+  alertIdx,
+  codes,
+  applySuggestedCode,
+  keepMyCode,
+}: {
+  alert: any;
+  alertIdx: number;
+  codes: any[];
+  applySuggestedCode: (segId: string, code: string, idx: number) => void;
+  keepMyCode: (idx: number) => void;
+}) {
+  const [selfOpen, setSelfOpen] = useState(false);
+  const [interOpen, setInterOpen] = useState(false);
 
-  const codesWithAnalyses = codes.filter((c) =>
-    analyses.some((a) => a.code_id === c.id)
-  );
+  const selfLens = alert.data?.self_lens as Record<string, any> | undefined;
+  const interLens = alert.data?.inter_rater_lens as Record<string, any> | undefined;
+  if (!selfLens && !interLens) return null;
 
-  if (codesWithAnalyses.length === 0) {
-    return (
-      <div className="p-4 text-center mt-8">
-        <GitCompare size={24} className="mx-auto text-surface-300 dark:text-surface-600 mb-2" />
-        <p className="text-xs text-surface-400 dark:text-surface-500 italic">
-          AI-inferred definitions will appear here after coding enough segments.
-        </p>
-      </div>
-    );
-  }
+  const altCodes: string[] = Array.isArray(selfLens?.alternative_codes)
+    ? (selfLens.alternative_codes as string[]).filter((c) => codes.some((code) => code.label === c))
+    : [];
 
   return (
-    <div className="p-3 overflow-auto thin-scrollbar h-full space-y-3">
-      {codesWithAnalyses.map((code) => {
-        const analysis = analyses.find((a) => a.code_id === code.id);
-        if (!analysis) return null;
-
-        return (
-          <div key={code.id} className="rounded-lg border panel-border p-2.5">
-            <div className="flex items-center gap-1.5 mb-2">
-              <span
-                className="w-2.5 h-2.5 rounded-full flex-shrink-0 ring-1 ring-black/10"
-                style={{ backgroundColor: code.colour }}
-              />
-              <span className="text-xs font-semibold text-surface-700 dark:text-surface-200">
-                {code.label}
-              </span>
-              <span className="text-2xs text-surface-400 ml-auto">
-                {code.segment_count} seg{code.segment_count !== 1 ? "s" : ""}
-              </span>
+    <div className="mt-2 space-y-1.5">
+      {/* Self-Consistency Lens */}
+      {selfLens && (
+        <div className="rounded border border-amber-200 dark:border-amber-800 overflow-hidden">
+          <button
+            onClick={() => setSelfOpen(!selfOpen)}
+            className="w-full flex items-center gap-1.5 px-2 py-1 bg-amber-50 dark:bg-amber-900/10 text-amber-700 dark:text-amber-400"
+          >
+            <ShieldCheck size={9} />
+            <span className="text-2xs font-semibold flex-1 text-left">Self-Consistency</span>
+            <span className={cn("text-2xs px-1 rounded", selfLens.is_consistent ? "text-green-600" : "text-amber-600")}>
+              {selfLens.consistency_score || "–"}
+            </span>
+            {selfOpen ? <ChevronDown size={9} /> : <ChevronRightIcon size={9} />}
+          </button>
+          {selfOpen && (
+            <div className="px-2 py-1.5 space-y-1">
+              {selfLens.suggestion && (
+                <p className="text-2xs text-surface-600 dark:text-surface-300">{selfLens.suggestion}</p>
+              )}
+              {selfLens.drift_warning && (
+                <p className="text-2xs text-amber-600 dark:text-amber-400 italic">{selfLens.drift_warning}</p>
+              )}
+              {altCodes.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-1">
+                  {altCodes.map((ac) => (
+                    <button
+                      key={ac}
+                      onClick={() => applySuggestedCode(alert.segment_id, ac, alertIdx)}
+                      className="rounded px-1.5 py-0.5 text-2xs font-medium bg-amber-100 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 hover:bg-amber-200 transition"
+                    >
+                      Apply &ldquo;{ac}&rdquo;
+                    </button>
+                  ))}
+                  <button
+                    onClick={() => keepMyCode(alertIdx)}
+                    className="rounded px-1.5 py-0.5 text-2xs font-medium bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-400 hover:bg-green-200 transition"
+                  >
+                    Keep current
+                  </button>
+                </div>
+              )}
             </div>
+          )}
+        </div>
+      )}
 
-            {/* Side by side comparison */}
-            <div className="grid grid-cols-2 gap-2">
-              <div className="rounded bg-surface-50 dark:bg-surface-800 p-2">
-                <p className="text-2xs uppercase tracking-wider text-surface-400 font-semibold mb-1">
-                  Your Definition
+      {/* Inter-Rater Lens */}
+      {interLens && (
+        <div className="rounded border border-purple-200 dark:border-purple-800 overflow-hidden">
+          <button
+            onClick={() => setInterOpen(!interOpen)}
+            className="w-full flex items-center gap-1.5 px-2 py-1 bg-purple-50 dark:bg-purple-900/10 text-purple-700 dark:text-purple-400"
+          >
+            <Users size={9} />
+            <span className="text-2xs font-semibold flex-1 text-left">Inter-Rater</span>
+            <span className={cn("text-2xs px-1 rounded", interLens.is_conflict ? "text-red-600" : "text-green-600")}>
+              {interLens.is_conflict ? "conflict" : "agrees"}
+            </span>
+            {interOpen ? <ChevronDown size={9} /> : <ChevronRightIcon size={9} />}
+          </button>
+          {interOpen && (
+            <div className="px-2 py-1.5 space-y-1">
+              {interLens.predicted_code && (
+                <p className="text-2xs text-surface-500 dark:text-surface-400">
+                  Predicted: <span className="font-medium text-purple-700 dark:text-purple-300">&ldquo;{interLens.predicted_code}&rdquo;</span>
                 </p>
-                <p className="text-2xs text-surface-600 dark:text-surface-300">
-                  {code.definition || <span className="italic text-surface-400">Not defined</span>}
-                </p>
-              </div>
-              <div className="rounded bg-brand-50 dark:bg-brand-900/10 p-2">
-                <p className="text-2xs uppercase tracking-wider text-brand-500 dark:text-brand-400 font-semibold mb-1">
-                  AI-Inferred
-                </p>
-                <p className="text-2xs text-surface-600 dark:text-surface-300">
-                  {analysis.definition || "No AI definition yet"}
-                </p>
-              </div>
+              )}
+              {interLens.conflict_explanation && (
+                <p className="text-2xs text-surface-600 dark:text-surface-300">{interLens.conflict_explanation}</p>
+              )}
+              {interLens.is_conflict && interLens.predicted_code && codes.some((c) => c.label === interLens.predicted_code) && (
+                <div className="flex gap-1 mt-1">
+                  <button
+                    onClick={() => keepMyCode(alertIdx)}
+                    className="flex-1 rounded px-1.5 py-0.5 text-2xs font-medium bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-400 hover:bg-green-200 transition"
+                  >
+                    Keep mine
+                  </button>
+                  <button
+                    onClick={() => applySuggestedCode(alert.segment_id, interLens.predicted_code, alertIdx)}
+                    className="flex-1 rounded px-1.5 py-0.5 text-2xs font-medium bg-purple-100 dark:bg-purple-900/20 text-purple-700 dark:text-purple-400 hover:bg-purple-200 transition"
+                  >
+                    Apply &ldquo;{interLens.predicted_code}&rdquo;
+                  </button>
+                </div>
+              )}
             </div>
-
-            {analysis.lens && (
-              <div className="mt-2 rounded bg-amber-50 dark:bg-amber-900/10 p-2">
-                <p className="text-2xs uppercase tracking-wider text-amber-600 dark:text-amber-400 font-semibold mb-0.5">
-                  Interpretive Lens
-                </p>
-                <p className="text-2xs text-surface-600 dark:text-surface-300">{analysis.lens}</p>
-              </div>
-            )}
-
-            {analysis.reasoning && (
-              <details className="mt-1.5">
-                <summary className="text-2xs text-surface-400 cursor-pointer hover:text-surface-600">
-                  View reasoning
-                </summary>
-                <p className="text-2xs text-surface-500 dark:text-surface-400 mt-1 pl-2 border-l-2 panel-border">
-                  {analysis.reasoning}
-                </p>
-              </details>
-            )}
-          </div>
-        );
-      })}
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -390,6 +488,7 @@ function ChatTab() {
 // ========== Alert helpers ==========
 function alertStyle(type: string): string {
   const styles: Record<string, string> = {
+    coding_audit: "border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-900/10",
     consistency: "border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/10",
     ghost_partner: "border-purple-200 dark:border-purple-800 bg-purple-50 dark:bg-purple-900/10",
     agent_thinking: "border-brand-100 dark:border-brand-900 bg-brand-50/50 dark:bg-brand-900/5 animate-pulse-subtle",
@@ -401,6 +500,7 @@ function alertStyle(type: string): string {
 
 function alertIcon(type: string) {
   const icons: Record<string, React.ReactNode> = {
+    coding_audit: <ScanSearch size={12} className="text-indigo-500" />,
     consistency: <AlertTriangle size={12} className="text-amber-500" />,
     ghost_partner: <Ghost size={12} className="text-purple-500" />,
     agent_thinking: <Loader2 size={12} className="text-brand-400 animate-spin" />,
@@ -412,6 +512,14 @@ function alertIcon(type: string) {
 
 function alertTitle(alert: any): string {
   switch (alert.type) {
+    case "coding_audit": {
+      const selfLens = alert.data?.self_lens as Record<string, any> | undefined;
+      const interLens = alert.data?.inter_rater_lens as Record<string, any> | undefined;
+      const baseLabel = alert.code_label || "Audit";
+      const consistentFlag = selfLens?.is_consistent === false ? " (drift)" : "";
+      const conflictFlag = interLens?.is_conflict ? " (conflict)" : "";
+      return `${baseLabel}${consistentFlag}${conflictFlag}`;
+    }
     case "consistency":
       return alert.is_consistent === false ? "⚠ Drift Detected" : "✓ Consistent";
     case "ghost_partner":
@@ -433,6 +541,13 @@ function alertTitle(alert: any): string {
 
 function alertBody(alert: any): string {
   const data = alert.data || {};
+  if (alert.type === "coding_audit") {
+    const self = data.self_lens as Record<string, any> | undefined;
+    const inter = data.inter_rater_lens as Record<string, any> | undefined;
+    const selfText = self?.suggestion || self?.reasoning || "";
+    const interText = inter?.is_conflict ? (inter?.conflict_explanation || "") : "";
+    return [selfText, interText].filter(Boolean).join(" • ") || "See details below.";
+  }
   if (alert.type === "consistency")
     return data.suggestion || data.reasoning || data.drift_warning || "No details available";
   if (alert.type === "ghost_partner")

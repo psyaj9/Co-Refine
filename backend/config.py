@@ -1,26 +1,33 @@
 from pydantic_settings import BaseSettings
-from pydantic import ConfigDict
+from pydantic import ConfigDict, Field
 
 
 class Settings(BaseSettings):
     app_title: str = "Co-Refine"
-    gemini_api_key: str = ""
-    gemini_api_base: str = "https://generativelanguage.googleapis.com/v1beta/openai/"
 
-    fast_model: str = "gemini-2.5-flash-lite"
-    reasoning_model: str = "gemini-2.5-flash"
-    embedding_model: str = "local"
+    azure_api_key = AZURE_API_KEY
+    azure_endpoint= AZURE_ENDPOINT
+    azure_api_version= AZURE_API_VERSION
 
-    min_segments_for_consistency: int = 3
-    auto_analysis_threshold: int = 3
-    vector_search_top_k: int = 8
-    consistency_escalation_threshold: float = 0.7
+    # Azure deployment names (used in API calls — must match deployment names in Azure portal)
+    azure_deployment_fast = AZURE_DEPLOYMENT_FAST
+    azure_deployment_reasoning= AZURE_DEPLOYMENT_REASONING
 
-    database_url: str = "sqlite:///./inductive_lens.db"
-    chroma_persist_dir: str = "./chroma_data"
+    # Display names (used in /api/settings response)
+    fast_model = "gpt-5-mini"
+    reasoning_model = "gpt-5.2"
+    embedding_model = "local"
+
+    min_segments_for_consistency = 3
+    auto_analysis_threshold = 3
+    vector_search_top_k = 8
+    consistency_escalation_threshold = 0.7
+
+    database_url = "sqlite:///./inductive_lens.db"
+    chroma_persist_dir = "./chroma_data"
 
     model_config = ConfigDict(
-        env_file=".env",
+        env_file=(".env"),
         env_file_encoding="utf-8",
         extra="allow",
     )

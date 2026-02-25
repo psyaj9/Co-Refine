@@ -10,6 +10,7 @@ import type {
   TextSelection,
   ViewMode,
   RightPanelTab,
+  LeftPanelTab,
   ThemeMode,
 } from "../types";
 import * as api from "../api/client";
@@ -28,6 +29,8 @@ interface AppState {
   setViewMode: (v: ViewMode) => void;
   rightPanelTab: RightPanelTab;
   setRightPanelTab: (t: RightPanelTab) => void;
+  leftPanelTab: LeftPanelTab;
+  setLeftPanelTab: (t: LeftPanelTab) => void;
 
   showUploadPage: boolean;
   setShowUploadPage: (v: boolean) => void;
@@ -57,6 +60,9 @@ interface AppState {
   updateCodeDefinition: (id: string, definition: string) => Promise<void>;
   updateCode: (id: string, patch: { label?: string; colour?: string; definition?: string }) => Promise<void>;
 
+  // Inconsistent segment tracking (for document viewer red highlights)
+  inconsistentSegmentIds: Set<string>;
+
   // Segments
   segments: SegmentOut[];
   loadSegments: (docId?: string) => Promise<void>;
@@ -67,6 +73,10 @@ interface AppState {
   retrievedCodeId: string | null;
   loadRetrievedSegments: (codeId: string) => Promise<void>;
   clearRetrievedSegments: () => void;
+
+  // Scroll-to-segment (used by RetrievedSegments → DocumentViewerNew)
+  scrollToSegmentId: string | null;
+  setScrollToSegmentId: (id: string | null) => void;
 
   // Selection
   selection: TextSelection | null;
@@ -85,6 +95,12 @@ interface AppState {
   pushAlert: (a: AlertPayload) => void;
   dismissAlert: (idx: number) => void;
   clearThinkingAlerts: () => void;
+  applySuggestedCode: (segmentId: string, codeLabel: string, alertIdx: number) => Promise<void>;
+  keepMyCode: (alertIdx: number) => void;
+
+  // Batch Audit
+  batchAuditRunning: boolean;
+  batchAuditProgress: { completed: number; total: number } | null;
 
   // Search
   codeSearchQuery: string;
@@ -129,6 +145,8 @@ export const useStore = create<AppState>((set, get) => ({
   setViewMode: (v) => set({ viewMode: v }),
   rightPanelTab: "alerts",
   setRightPanelTab: (t) => set({ rightPanelTab: t }),
+  leftPanelTab: "codes",
+  setLeftPanelTab: (t) => set({ leftPanelTab: t }),
 
   showUploadPage: false,
   setShowUploadPage: (v) => set({ showUploadPage: v }),
@@ -261,9 +279,13 @@ export const useStore = create<AppState>((set, get) => ({
     // Fetch ALL segments across all docs, then filter by code
     const allSegs = await api.fetchSegments(undefined, CURRENT_USER);
     const forCode = allSegs.filter((s) => s.code_id === codeId);
-    set({ retrievedSegments: forCode, retrievedCodeId: codeId, rightPanelTab: "segments" });
+    set({ retrievedSegments: forCode, retrievedCodeId: codeId });
   },
   clearRetrievedSegments: () => set({ retrievedSegments: [], retrievedCodeId: null }),
+
+  scrollToSegmentId: null,
+  setScrollToSegmentId: (id) => set({ scrollToSegmentId: id }),
+
   applyCode: async (sel, codeId) => {
     const { activeDocumentId, activeCodeId } = get();
     const resolvedCodeId = codeId || activeCodeId;
@@ -310,6 +332,21 @@ export const useStore = create<AppState>((set, get) => ({
   alerts: [],
   agentsRunning: false,
   pushAlert: (a) => set((s) => {
+    // Batch audit lifecycle — update progress state only, don't push to visible alerts
+    if (a.type === "batch_audit_started") {
+      return { batchAuditRunning: true, batchAuditProgress: { completed: 0, total: (a.data?.total_codes as number) || 0 } };
+    }
+    if (a.type === "batch_audit_progress") {
+      return {
+        batchAuditProgress: {
+          completed: (a.data?.completed as number) || 0,
+          total: (a.data?.total as number) || 0,
+        },
+      };
+    }
+    if (a.type === "batch_audit_done") {
+      return { batchAuditRunning: false, batchAuditProgress: null };
+    }
     // When agents start, set running flag
     if (a.type === "agents_started") {
       return { agentsRunning: true, alerts: [a, ...s.alerts].slice(0, 50) };
@@ -324,8 +361,9 @@ export const useStore = create<AppState>((set, get) => ({
       };
     }
     // When a final result arrives, remove the matching thinking placeholder
-    if (a.type === "consistency" || a.type === "ghost_partner" || a.type === "analysis_updated" || a.type === "agent_error") {
+    if (a.type === "coding_audit" || a.type === "consistency" || a.type === "ghost_partner" || a.type === "analysis_updated" || a.type === "agent_error") {
       const agentMap: Record<string, string> = {
+        coding_audit: "coding_audit",
         consistency: "consistency",
         ghost_partner: "ghost_partner",
         analysis_updated: "analysis",
@@ -335,18 +373,79 @@ export const useStore = create<AppState>((set, get) => ({
       const filtered = s.alerts.filter(
         (al) => !(al.type === "agent_thinking" && al.agent === agentName)
       );
+      // Track inconsistent segment IDs for red highlights in document viewer
+      if (a.type === "coding_audit" && a.segment_id) {
+        const selfLens = a.data?.self_lens as Record<string, any> | undefined;
+        const interLens = a.data?.inter_rater_lens as Record<string, any> | undefined;
+        const isFlagged = selfLens?.is_consistent === false || interLens?.is_conflict === true;
+        if (isFlagged) {
+          const newSet = new Set(s.inconsistentSegmentIds);
+          newSet.add(a.segment_id);
+          return { inconsistentSegmentIds: newSet, alerts: [a, ...filtered].slice(0, 50) };
+        }
+      }
       return { alerts: [a, ...filtered].slice(0, 50) };
     }
     return { alerts: [a, ...s.alerts].slice(0, 50) };
   }),
   dismissAlert: (idx) =>
-    set((s) => ({ alerts: s.alerts.filter((_, i) => i !== idx) })),
+    set((s) => {
+      const dismissed = s.alerts[idx];
+      const newAlerts = s.alerts.filter((_, i) => i !== idx);
+      if (dismissed?.type === "coding_audit" && dismissed?.segment_id) {
+        const newSet = new Set(s.inconsistentSegmentIds);
+        newSet.delete(dismissed.segment_id);
+        return { alerts: newAlerts, inconsistentSegmentIds: newSet };
+      }
+      return { alerts: newAlerts };
+    }),
   clearThinkingAlerts: () =>
     set((s) => ({
       alerts: s.alerts.filter(
         (al) => al.type !== "agents_started" && al.type !== "agent_thinking"
       ),
     })),
+  applySuggestedCode: async (segmentId, codeLabel, alertIdx) => {
+    try {
+      // Fetch the original segment to get its text range
+      const seg = await api.fetchSegment(segmentId);
+      // Find the matching code in the store
+      const { codes, activeDocumentId, currentUser } = get();
+      const matchingCode = codes.find((c) => c.label === codeLabel);
+      if (!matchingCode) {
+        console.error("Suggested code not found in project:", codeLabel);
+        return;
+      }
+      // Apply the suggested code to the same text range
+      await api.codeSegment({
+        document_id: seg.document_id,
+        text: seg.text,
+        start_index: seg.start_index,
+        end_index: seg.end_index,
+        code_id: matchingCode.id,
+        user_id: currentUser,
+      });
+      // Dismiss the alert
+      set((s) => ({ alerts: s.alerts.filter((_, i) => i !== alertIdx) }));
+      // Refresh segments and codes
+      if (activeDocumentId) {
+        await get().loadSegments(activeDocumentId);
+      }
+      await get().loadCodes();
+    } catch (e) {
+      console.error("Failed to apply suggested code:", e);
+    }
+  },
+  keepMyCode: (alertIdx) => {
+    set((s) => ({ alerts: s.alerts.filter((_, i) => i !== alertIdx) }));
+  },
+
+  // Inconsistent segment tracking
+  inconsistentSegmentIds: new Set<string>(),
+
+  // Batch Audit
+  batchAuditRunning: false,
+  batchAuditProgress: null,
 
   // Chat
   chatMessages: [],

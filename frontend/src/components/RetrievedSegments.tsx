@@ -10,6 +10,7 @@ export default function RetrievedSegments() {
   const loadSegments = useStore((s) => s.loadSegments);
   const clearRetrievedSegments = useStore((s) => s.clearRetrievedSegments);
   const setShowUploadPage = useStore((s) => s.setShowUploadPage);
+  const setScrollToSegmentId = useStore((s) => s.setScrollToSegmentId);
 
   const activeCode = codes.find((c) => c.id === retrievedCodeId);
 
@@ -89,6 +90,7 @@ export default function RetrievedSegments() {
                       setActiveDocument(seg.document_id);
                       loadSegments(seg.document_id);
                       setShowUploadPage(false);
+                      setScrollToSegmentId(seg.id);
                     }}
                   >
                     <p className="text-surface-600 dark:text-surface-300 line-clamp-4">
