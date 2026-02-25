@@ -1,10 +1,7 @@
 import { useState, useRef, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
 import { useStore } from "@/stores/store";
 import { MessageCircle, Send, Loader2, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { chatBubble, easeFast } from "@/lib/motion";
-import { useReducedMotion } from "@/hooks/useReducedMotion";
 
 const SUGGESTIONS = [
   "Summarise the key themes so far",
@@ -19,7 +16,6 @@ export default function ChatTab() {
   const sendChatMessage = useStore((s) => s.sendChatMessage);
   const clearChat = useStore((s) => s.clearChat);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const reduced = useReducedMotion();
 
   useEffect(() => {
     const el = scrollRef.current;
@@ -71,12 +67,8 @@ export default function ChatTab() {
         )}
 
         {chatMessages.map((msg, i) => (
-          <motion.div
+          <div
             key={msg.id || i}
-            variants={reduced ? undefined : chatBubble}
-            initial={reduced ? false : "initial"}
-            animate="animate"
-            transition={easeFast}
             role="article"
             aria-label={msg.role === "user" ? "Your message" : "AI response"}
             className={cn(
@@ -95,7 +87,7 @@ export default function ChatTab() {
                   aria-label="Loading response"
                 />
               )}
-          </motion.div>
+          </div>
         ))}
       </div>
 

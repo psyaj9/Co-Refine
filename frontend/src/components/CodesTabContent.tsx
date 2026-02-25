@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
 import { useStore } from "@/stores/store";
 import {
   Plus,
@@ -16,8 +15,6 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getNextColour } from "@/lib/constants";
-import { listItem, easeFast } from "@/lib/motion";
-import { useReducedMotion } from "@/hooks/useReducedMotion";
 import * as api from "@/api/client";
 import RetrievedSegments from "@/components/RetrievedSegments";
 import type { CodeOut, AnalysisOut } from "@/types";
@@ -42,7 +39,6 @@ export default function CodesTabContent() {
   const [expandedCodeId, setExpandedCodeId] = useState<string | null>(null);
   const [editingDefCodeId, setEditingDefCodeId] = useState<string | null>(null);
   const [editDefText, setEditDefText] = useState("");
-  const reduced = useReducedMotion();
 
   const filteredCodes = codes.filter((c) =>
     c.label.toLowerCase().includes(codeSearchQuery.toLowerCase())
@@ -120,20 +116,13 @@ export default function CodesTabContent() {
       </div>
 
       <ul className="flex-1 overflow-auto px-2 pb-2 thin-scrollbar space-y-0.5" role="listbox" aria-label="Codebook">
-        <AnimatePresence initial={false}>
           {filteredCodes.map((code) => {
             const isExpanded = expandedCodeId === code.id;
             const isEditingDef = editingDefCodeId === code.id;
 
             return (
-              <motion.li
+              <li
                 key={code.id}
-                variants={reduced ? undefined : listItem}
-                initial={reduced ? false : "initial"}
-                animate="animate"
-                exit="exit"
-                transition={easeFast}
-                layout={!reduced}
               >
                 <div
                   role="option"
@@ -216,10 +205,9 @@ export default function CodesTabContent() {
                   analyses={analyses}
                 />
                 )}
-              </motion.li>
+              </li>
             );
           })}
-        </AnimatePresence>
       </ul>
     </div>
   );

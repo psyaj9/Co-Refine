@@ -24,12 +24,19 @@ html.dark {
   @apply flex-shrink-0 bg-surface-200 dark:bg-surface-700;
   cursor: col-resize;
   width: 4px;
-  transition: width 0.15s ease, background-color 0.15s ease;
+  position: relative;
+  transition: background-color 0.15s ease;
+}
+/* Invisible wider hit zone for easier grabbing */
+[data-separator]::before {
+  content: "";
+  position: absolute;
+  inset: 0 -4px;
+  cursor: col-resize;
 }
 [data-separator]:hover,
-[data-separator="active"] {
+[data-separator][data-state="active"] {
   @apply bg-brand-400 dark:bg-brand-500;
-  width: 6px;
 }
 
 /* ---- Document highlights — per-code colour via inline style ---- */
@@ -89,10 +96,10 @@ mark[data-start]:hover {
 
 /* ---- Alert slide-in ---- */
 .alert-slide {
-  animation: slideIn 0.3s ease-out;
+  animation: slideIn 0.2s ease-out;
 }
 @keyframes slideIn {
-  from { opacity: 0; transform: translateX(100%); }
+  from { opacity: 0; transform: translateX(20px); }
   to   { opacity: 1; transform: translateX(0); }
 }
 

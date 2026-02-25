@@ -8,11 +8,7 @@ import {
   useDefaultLayout,
   usePanelRef,
 } from "react-resizable-panels";
-import { ChevronLeft, ChevronRight, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
-import { cn } from "@/lib/utils";
-import { fadeIn, easeFast } from "@/lib/motion";
-import { useReducedMotion } from "@/hooks/useReducedMotion";
+import { PanelLeftOpen, PanelRightOpen } from "lucide-react";
 
 import Toolbar from "@/components/Toolbar";
 import StatusBar from "@/components/StatusBar";
@@ -42,8 +38,6 @@ export default function App() {
     storage: localStorage,
   });
 
-  const reduced = useReducedMotion();
-
   useWebSocket();
 
   useEffect(() => {
@@ -59,26 +53,21 @@ export default function App() {
   const toggleLeftPanel = useCallback(() => {
     const panel = leftPanelRef.current;
     if (!panel) return;
-    if (panel.isCollapsed()) {
-      panel.expand();
-      setLeftCollapsed(false);
-    } else {
-      panel.collapse();
-      setLeftCollapsed(true);
-    }
+    if (panel.isCollapsed()) panel.expand();
+    else panel.collapse();
   }, [leftPanelRef]);
 
   const toggleRightPanel = useCallback(() => {
     const panel = rightPanelRef.current;
     if (!panel) return;
-    if (panel.isCollapsed()) {
-      panel.expand();
-      setRightCollapsed(false);
-    } else {
-      panel.collapse();
-      setRightCollapsed(true);
-    }
+    if (panel.isCollapsed()) panel.expand();
+    else panel.collapse();
   }, [rightPanelRef]);
+
+  // Reset right collapsed state when panel unmounts/remounts
+  useEffect(() => {
+    if (!showRightPanel) setRightCollapsed(false);
+  }, [showRightPanel]);
 
   /* Keyboard shortcuts: Ctrl+B = toggle left, Ctrl+J = toggle right */
   useEffect(() => {
@@ -118,27 +107,31 @@ export default function App() {
           collapsible
           collapsedSize="0%"
           panelRef={leftPanelRef}
+          onResize={(size) => setLeftCollapsed(size.asPercentage === 0)}
         >
           <nav aria-label="Project and codebook" className="h-full">
-            <LeftPanel />
+            <LeftPanel onCollapse={toggleLeftPanel} />
           </nav>
         </Panel>
 
-        <ResizeHandle onToggle={toggleLeftPanel} side="left" collapsed={leftCollapsed} />
+        {/* Expand strip shown when left panel is collapsed */}
+        {leftCollapsed && (
+          <button
+            onClick={toggleLeftPanel}
+            className="flex-shrink-0 w-6 flex items-center justify-center bg-surface-100 dark:bg-surface-800 hover:bg-brand-50 dark:hover:bg-brand-900/20 border-r panel-border transition-colors cursor-pointer"
+            aria-label="Expand left panel (Ctrl+B)"
+            title="Expand left panel (Ctrl+B)"
+          >
+            <PanelLeftOpen size={12} className="text-surface-400 hover:text-brand-500" aria-hidden="true" />
+          </button>
+        )}
+
+        <ResizeHandle />
 
         <Panel id="center-panel" defaultSize="68%" minSize="30%">
           <main id="main-content" className="h-full w-full overflow-auto panel-bg" aria-label="Main content">
-            <AnimatePresence mode="wait">
               {!activeProjectId ? (
-                <motion.div
-                  key="no-project"
-                  className="h-full flex items-center justify-center p-6"
-                  variants={reduced ? undefined : fadeIn}
-                  initial={reduced ? false : "initial"}
-                  animate="animate"
-                  exit="exit"
-                  transition={easeFast}
-                >
+                <div className="h-full flex items-center justify-center p-6 view-enter">
                   <div className="text-center space-y-3">
                     <h2 className="text-fluid-xl font-bold text-surface-400 dark:text-surface-500">
                       Select or create a project
@@ -148,63 +141,43 @@ export default function App() {
                       existing one to get started
                     </p>
                   </div>
-                </motion.div>
+                </div>
               ) : viewMode === "visualisation" ? (
-                <motion.div
-                  key="vis"
-                  className="h-full"
-                  variants={reduced ? undefined : fadeIn}
-                  initial={reduced ? false : "initial"}
-                  animate="animate"
-                  exit="exit"
-                  transition={easeFast}
-                >
+                <div className="h-full view-enter">
                   <Visualisations />
-                </motion.div>
+                </div>
               ) : viewMode === "history" ? (
-                <motion.div
-                  key="history"
-                  className="h-full"
-                  variants={reduced ? undefined : fadeIn}
-                  initial={reduced ? false : "initial"}
-                  animate="animate"
-                  exit="exit"
-                  transition={easeFast}
-                >
+                <div className="h-full view-enter">
                   <EditHistoryView />
-                </motion.div>
+                </div>
               ) : showUpload ? (
-                <motion.div
-                  key="upload"
-                  className="h-full"
-                  variants={reduced ? undefined : fadeIn}
-                  initial={reduced ? false : "initial"}
-                  animate="animate"
-                  exit="exit"
-                  transition={easeFast}
-                >
+                <div className="h-full view-enter">
                   <DocumentUpload />
-                </motion.div>
+                </div>
               ) : (
-                <motion.div
-                  key="viewer"
-                  className="h-full"
-                  variants={reduced ? undefined : fadeIn}
-                  initial={reduced ? false : "initial"}
-                  animate="animate"
-                  exit="exit"
-                  transition={easeFast}
-                >
+                <div className="h-full view-enter">
                   <DocumentViewer />
-                </motion.div>
+                </div>
               )}
-            </AnimatePresence>
           </main>
         </Panel>
 
         {showRightPanel && (
           <>
-            <ResizeHandle onToggle={toggleRightPanel} side="right" collapsed={rightCollapsed} />
+            <ResizeHandle />
+
+            {/* Expand strip shown when right panel is collapsed */}
+            {rightCollapsed && (
+              <button
+                onClick={toggleRightPanel}
+                className="flex-shrink-0 w-6 flex items-center justify-center bg-surface-100 dark:bg-surface-800 hover:bg-brand-50 dark:hover:bg-brand-900/20 border-l panel-border transition-colors cursor-pointer"
+                aria-label="Expand right panel (Ctrl+J)"
+                title="Expand right panel (Ctrl+J)"
+              >
+                <PanelRightOpen size={12} className="text-surface-400 hover:text-brand-500" aria-hidden="true" />
+              </button>
+            )}
+
             <Panel
               id="right-panel"
               defaultSize="18%"
@@ -213,9 +186,10 @@ export default function App() {
               collapsible
               collapsedSize="0%"
               panelRef={rightPanelRef}
+              onResize={(size) => setRightCollapsed(size.asPercentage === 0)}
             >
               <aside aria-label="Alerts and AI chat" className="h-full">
-                <RightPanel />
+                <RightPanel onCollapse={toggleRightPanel} />
               </aside>
             </Panel>
           </>
@@ -229,56 +203,10 @@ export default function App() {
   );
 }
 
-function ResizeHandle({
-  onToggle,
-  side,
-  collapsed,
-}: {
-  onToggle?: () => void;
-  side?: "left" | "right";
-  collapsed?: boolean;
-}): React.ReactElement {
-  const labelMap = {
-    left: collapsed ? "Expand left panel (Ctrl+B)" : "Collapse left panel (Ctrl+B)",
-    right: collapsed ? "Expand right panel (Ctrl+J)" : "Collapse right panel (Ctrl+J)",
-  };
-
+function ResizeHandle(): React.ReactElement {
   return (
-    <div
-      className="relative group/sep flex-shrink-0"
-      role="separator"
-      aria-orientation="vertical"
-      aria-label="Resize panel"
-    >
-      <Separator />
-      {onToggle && (
-        <button
-          onClick={onToggle}
-          className={cn(
-            "absolute top-1/2 -translate-y-1/2 z-10",
-            /* WCAG 2.2 Target Size: 24×40px — meets 24×24 minimum */
-            "w-6 h-10 flex items-center justify-center",
-            "rounded-md bg-surface-200 dark:bg-surface-700 border panel-border",
-            "text-surface-500 dark:text-surface-400",
-            /* Always visible at reduced opacity so keyboard/touch users can discover it */
-            "opacity-60 hover:opacity-100 focus-visible:opacity-100 transition-opacity duration-200",
-            "hover:bg-brand-100 dark:hover:bg-brand-900/30 hover:text-brand-600 dark:hover:text-brand-400",
-            "focus-visible:ring-2 focus-visible:ring-brand-500",
-            side === "left" ? "-left-3" : "-right-3"
-          )}
-          aria-label={side ? labelMap[side] : "Toggle panel"}
-        >
-          {side === "left" ? (
-            collapsed
-              ? <PanelLeftOpen size={12} aria-hidden="true" />
-              : <PanelLeftClose size={12} aria-hidden="true" />
-          ) : (
-            collapsed
-              ? <PanelRightOpen size={12} aria-hidden="true" />
-              : <PanelRightClose size={12} aria-hidden="true" />
-          )}
-        </button>
-      )}
-    </div>
+    <Separator
+      className="separator-handle"
+    />
   );
 }

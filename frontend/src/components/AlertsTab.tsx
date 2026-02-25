@@ -1,12 +1,7 @@
-import { useState } from "react";
 import {
   CheckCircle2,
   Loader2,
   X,
-  ChevronDown,
-  ChevronRight as ChevronRightIcon,
-  ShieldCheck,
-  Users,
 } from "lucide-react";
 import { useStore } from "@/stores/store";
 import { cn } from "@/lib/utils";
@@ -98,7 +93,7 @@ export default function AlertsTab(): React.ReactElement {
       <ul className="space-y-2" aria-label="AI alerts">
         {visibleAlerts.map((alert, idx) => (
           <li
-            key={idx}
+            key={`${alert.type}-${alert.segment_id ?? idx}`}
             className={cn(
               "alert-slide rounded-lg border p-2.5 relative",
               alertStyle(alert.type)

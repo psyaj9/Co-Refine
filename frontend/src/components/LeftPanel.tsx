@@ -1,6 +1,5 @@
-import { useState, useCallback } from "react";
+import { useState } from "react";
 import * as Collapsible from "@radix-ui/react-collapsible";
-import { motion, AnimatePresence } from "framer-motion";
 import { useStore } from "@/stores/store";
 import {
   Plus,
@@ -12,18 +11,20 @@ import {
   Hash,
   Upload,
   Trash2,
+  PanelLeftClose,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useReducedMotion } from "@/hooks/useReducedMotion";
-import { collapsible, easeMedium, listItem } from "@/lib/motion";
 import DocumentsTabContent from "@/components/DocumentsTabContent";
 import CodesTabContent from "@/components/CodesTabContent";
 
-export default function LeftPanel() {
+interface LeftPanelProps {
+  onCollapse?: () => void;
+}
+
+export default function LeftPanel({ onCollapse }: LeftPanelProps) {
   const activeProjectId = useStore((s) => s.activeProjectId);
   const [docsOpen, setDocsOpen] = useState(true);
   const [codesOpen, setCodesOpen] = useState(true);
-  const reduced = useReducedMotion();
 
   if (!activeProjectId) return <ProjectList />;
 
@@ -37,15 +38,19 @@ export default function LeftPanel() {
 
   return (
     <div className="flex flex-col h-full panel-bg overflow-hidden">
-      <ProjectHeader />
+      <ProjectHeader onCollapse={onCollapse} />
 
-      {/* Both sections share flex-1 so each gets 50% when both open, 100% when alone */}
+      {/* Documents sizes to content (max 40%); codes fills remaining space */}
       <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
         {/* ---- DOCUMENTS ---- */}
         <Collapsible.Root
           open={docsOpen}
           onOpenChange={setDocsOpen}
-          className={cn("flex flex-col min-h-0 overflow-hidden", docsOpen && "flex-1")}
+          className={cn(
+            "flex flex-col min-h-0 overflow-hidden flex-shrink-0",
+            docsOpen && !codesOpen && "flex-1",
+            docsOpen && codesOpen && "max-h-[40%]"
+          )}
         >
           <Collapsible.Trigger
             className={triggerCn}
@@ -60,28 +65,16 @@ export default function LeftPanel() {
             <span>Documents</span>
           </Collapsible.Trigger>
 
-          <AnimatePresence initial={false}>
-            {docsOpen && (
-              <motion.div
-                key="docs-content"
-                initial={reduced ? false : "closed"}
-                animate="open"
-                exit="closed"
-                variants={collapsible}
-                transition={easeMedium}
-                className="flex-1 min-h-0 overflow-hidden"
-              >
-                <DocumentsTabContent />
-              </motion.div>
-            )}
-          </AnimatePresence>
+          <Collapsible.Content className="collapsible-content flex-1 min-h-0 overflow-hidden">
+            <DocumentsTabContent />
+          </Collapsible.Content>
         </Collapsible.Root>
 
         {/* ---- CODES ---- */}
         <Collapsible.Root
           open={codesOpen}
           onOpenChange={setCodesOpen}
-          className={cn("flex flex-col min-h-0 overflow-hidden", codesOpen && "flex-1")}
+          className={cn("flex flex-col min-h-0 overflow-hidden flex-1")}
         >
           <Collapsible.Trigger
             className={triggerCn}
@@ -96,28 +89,16 @@ export default function LeftPanel() {
             <span>Codes</span>
           </Collapsible.Trigger>
 
-          <AnimatePresence initial={false}>
-            {codesOpen && (
-              <motion.div
-                key="codes-content"
-                initial={reduced ? false : "closed"}
-                animate="open"
-                exit="closed"
-                variants={collapsible}
-                transition={easeMedium}
-                className="flex-1 min-h-0 overflow-hidden"
-              >
-                <CodesTabContent />
-              </motion.div>
-            )}
-          </AnimatePresence>
+          <Collapsible.Content className="collapsible-content flex-1 min-h-0 overflow-hidden">
+            <CodesTabContent />
+          </Collapsible.Content>
         </Collapsible.Root>
       </div>
     </div>
   );
 }
 
-function ProjectHeader() {
+function ProjectHeader({ onCollapse }: { onCollapse?: () => void }) {
   const projects = useStore((s) => s.projects);
   const activeProjectId = useStore((s) => s.activeProjectId);
   const setShowUploadPage = useStore((s) => s.setShowUploadPage);
@@ -144,6 +125,16 @@ function ProjectHeader() {
       >
         <Upload size={12} aria-hidden="true" />
       </button>
+      {onCollapse && (
+        <button
+          onClick={onCollapse}
+          className="rounded p-1 text-surface-400 hover:text-surface-600 dark:hover:text-surface-300 hover:bg-surface-100 dark:hover:bg-surface-800 transition-colors"
+          title="Collapse panel (Ctrl+B)"
+          aria-label="Collapse left panel"
+        >
+          <PanelLeftClose size={12} aria-hidden="true" />
+        </button>
+      )}
     </div>
   );
 }

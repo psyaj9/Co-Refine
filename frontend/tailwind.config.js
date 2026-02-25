@@ -72,11 +72,11 @@ export default {
           to: { opacity: '1', transform: 'translateY(0)' },
         },
         slideInRight: {
-          from: { opacity: '0', transform: 'translateX(100%)' },
+          from: { opacity: '0', transform: 'translateX(20px)' },
           to: { opacity: '1', transform: 'translateX(0)' },
         },
         slideInLeft: {
-          from: { opacity: '0', transform: 'translateX(-100%)' },
+          from: { opacity: '0', transform: 'translateX(-20px)' },
           to: { opacity: '1', transform: 'translateX(0)' },
         },
         pulseSubtle: {

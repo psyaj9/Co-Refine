@@ -3,7 +3,7 @@
  * Validates icons are hidden from AT and no axe violations.
  */
 import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render } from "@testing-library/react";
 import { axe, toHaveNoViolations } from "jest-axe";
 import StatusBar from "@/components/StatusBar";
 

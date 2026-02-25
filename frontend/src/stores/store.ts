@@ -337,7 +337,7 @@ export const useStore = create<AppState>((set, get) => ({
         consistency: "consistency",
         ghost_partner: "ghost_partner",
         analysis_updated: "analysis",
-        agent_error: (a as any).agent || "",
+        agent_error: a.agent || "",
       };
       const agentName = agentMap[a.type];
       const filtered = s.alerts.filter(

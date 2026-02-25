@@ -1,10 +1,7 @@
 import * as Tabs from "@radix-ui/react-tabs";
-import { motion, AnimatePresence } from "framer-motion";
 import { useStore } from "@/stores/store";
-import { AlertTriangle, MessageCircle } from "lucide-react";
+import { AlertTriangle, MessageCircle, PanelRightClose } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { tabContent, easeFast } from "@/lib/motion";
-import { useReducedMotion } from "@/hooks/useReducedMotion";
 import AlertsTab from "@/components/AlertsTab";
 import ChatTab from "@/components/ChatTab";
 import type { RightPanelTab } from "@/types";
@@ -18,11 +15,10 @@ const TAB_META: {
   { id: "chat", label: "AI Chat", Icon: MessageCircle },
 ];
 
-export default function RightPanel() {
+export default function RightPanel({ onCollapse }: { onCollapse?: () => void }) {
   const rightPanelTab = useStore((s) => s.rightPanelTab);
   const setRightPanelTab = useStore((s) => s.setRightPanelTab);
   const alerts = useStore((s) => s.alerts);
-  const reduced = useReducedMotion();
 
   const visibleAlertCount = alerts.filter(
     (a) => a.type !== "agents_started" && a.type !== "agents_done"
@@ -38,6 +34,15 @@ export default function RightPanel() {
         className="flex border-b panel-border flex-shrink-0"
         aria-label="Right panel tabs"
       >
+        {onCollapse && (
+          <button
+            onClick={onCollapse}
+            className="flex items-center justify-center px-1.5 text-surface-400 hover:text-surface-600 dark:hover:text-surface-300 transition-colors"
+            aria-label="Collapse right panel"
+          >
+            <PanelRightClose size={14} />
+          </button>
+        )}
         {TAB_META.map(({ id, label, Icon }) => (
           <Tabs.Trigger
             key={id}
@@ -69,21 +74,11 @@ export default function RightPanel() {
         className="flex-1 overflow-hidden"
         forceMount
       >
-        <AnimatePresence mode="wait">
-          {rightPanelTab === "alerts" && (
-            <motion.div
-              key="alerts"
-              variants={reduced ? undefined : tabContent}
-              initial={reduced ? false : "initial"}
-              animate="animate"
-              exit="exit"
-              transition={easeFast}
-              className="h-full"
-            >
-              <AlertsTab />
-            </motion.div>
-          )}
-        </AnimatePresence>
+        {rightPanelTab === "alerts" && (
+          <div className="h-full tab-content-enter">
+            <AlertsTab />
+          </div>
+        )}
       </Tabs.Content>
 
       <Tabs.Content
@@ -91,21 +86,11 @@ export default function RightPanel() {
         className="flex-1 overflow-hidden"
         forceMount
       >
-        <AnimatePresence mode="wait">
-          {rightPanelTab === "chat" && (
-            <motion.div
-              key="chat"
-              variants={reduced ? undefined : tabContent}
-              initial={reduced ? false : "initial"}
-              animate="animate"
-              exit="exit"
-              transition={easeFast}
-              className="h-full"
-            >
-              <ChatTab />
-            </motion.div>
-          )}
-        </AnimatePresence>
+        {rightPanelTab === "chat" && (
+          <div className="h-full tab-content-enter">
+            <ChatTab />
+          </div>
+        )}
       </Tabs.Content>
     </Tabs.Root>
   );

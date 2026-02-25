@@ -1,11 +1,8 @@
 import { useStore } from "@/stores/store";
 import { Tag, Check, X, Trash2, GripHorizontal } from "lucide-react";
 import { useEffect, useRef, useCallback } from "react";
-import { motion, AnimatePresence } from "framer-motion";
 import { useDraggable } from "@/hooks/useDraggable";
 import { getContrastColor } from "@/lib/utils";
-import { scaleIn, easeFast } from "@/lib/motion";
-import { useReducedMotion } from "@/hooks/useReducedMotion";
 
 interface Props {
   containerRef?: React.RefObject<HTMLDivElement | null>;
@@ -54,7 +51,6 @@ export default function HighlightPopover({ containerRef }: Props = {}) {
   const { pos, onPointerDown, onPointerMove, onPointerUp } = useDraggable(dx, dy);
 
   const popoverRef = useRef<HTMLDivElement>(null);
-  const reduced = useReducedMotion();
 
   const dismiss = () => {
     setSelection(null);
@@ -124,7 +120,7 @@ export default function HighlightPopover({ containerRef }: Props = {}) {
     const segText = clickedSegments[0].text;
 
     return (
-      <motion.div
+      <div
         ref={popoverRef}
         tabIndex={-1}
         role="dialog"
@@ -133,12 +129,7 @@ export default function HighlightPopover({ containerRef }: Props = {}) {
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onKeyDown={handleFocusTrap}
-        variants={reduced ? undefined : scaleIn}
-        initial={reduced ? false : "initial"}
-        animate="animate"
-        exit="exit"
-        transition={easeFast}
-        className="fixed z-50 bg-white dark:bg-surface-800 rounded-xl shadow-xl border border-surface-200 dark:border-surface-700 p-3 w-72 outline-none"
+        className="fixed z-50 bg-white dark:bg-surface-800 rounded-xl shadow-xl border border-surface-200 dark:border-surface-700 p-3 w-72 outline-none popover-enter"
         style={{ left: pos.x, top: pos.y }}
       >
         {dragHandle}
@@ -180,7 +171,7 @@ export default function HighlightPopover({ containerRef }: Props = {}) {
         </ul>
 
         {doneButton}
-      </motion.div>
+      </div>
     );
   }
 
@@ -211,7 +202,7 @@ export default function HighlightPopover({ containerRef }: Props = {}) {
   const appliedCodes = codes.filter((c) => appliedCodeIds.has(c.id));
 
   return (
-    <motion.div
+    <div
       ref={popoverRef}
       tabIndex={-1}
       role="dialog"
@@ -220,12 +211,7 @@ export default function HighlightPopover({ containerRef }: Props = {}) {
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onKeyDown={handleFocusTrap}
-      variants={reduced ? undefined : scaleIn}
-      initial={reduced ? false : "initial"}
-      animate="animate"
-      exit="exit"
-      transition={easeFast}
-      className="fixed z-50 bg-white dark:bg-surface-800 rounded-xl shadow-xl border border-surface-200 dark:border-surface-700 p-3 w-72 outline-none"
+      className="fixed z-50 bg-white dark:bg-surface-800 rounded-xl shadow-xl border border-surface-200 dark:border-surface-700 p-3 w-72 outline-none popover-enter"
       style={{ left: pos.x, top: pos.y }}
     >
       {dragHandle}
@@ -304,6 +290,6 @@ export default function HighlightPopover({ containerRef }: Props = {}) {
       )}
 
       {doneButton}
-    </motion.div>
+    </div>
   );
 }

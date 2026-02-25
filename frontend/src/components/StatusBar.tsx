@@ -15,7 +15,7 @@ export default function StatusBar() {
 
   const activeAgent = alerts.find((a) => a.type === "agent_thinking");
   const activeAgentLabel = activeAgent
-    ? AGENT_LABELS[(activeAgent as any).agent] || (activeAgent as any).agent || "Agent"
+    ? AGENT_LABELS[activeAgent.agent ?? ""] || activeAgent.agent || "Agent"
     : null;
 
   return (

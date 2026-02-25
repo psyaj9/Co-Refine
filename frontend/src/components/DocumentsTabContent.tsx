@@ -1,4 +1,3 @@
-import { motion, AnimatePresence } from "framer-motion";
 import { useStore } from "@/stores/store";
 import {
   FileText,
@@ -7,8 +6,6 @@ import {
   Upload,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { listItem, easeFast } from "@/lib/motion";
-import { useReducedMotion } from "@/hooks/useReducedMotion";
 
 export default function DocumentsTabContent() {
   const documents = useStore((s) => s.documents);
@@ -19,7 +16,6 @@ export default function DocumentsTabContent() {
   const deleteDocument = useStore((s) => s.deleteDocument);
   const docSearchQuery = useStore((s) => s.docSearchQuery);
   const setDocSearchQuery = useStore((s) => s.setDocSearchQuery);
-  const reduced = useReducedMotion();
 
   const filteredDocs = documents.filter((d) =>
     d.title.toLowerCase().includes(docSearchQuery.toLowerCase())
@@ -70,16 +66,9 @@ export default function DocumentsTabContent() {
             </button>
           </li>
         )}
-        <AnimatePresence initial={false}>
           {filteredDocs.map((doc) => (
-            <motion.li
+            <li
               key={doc.id}
-              variants={reduced ? undefined : listItem}
-              initial={reduced ? false : "initial"}
-              animate="animate"
-              exit="exit"
-              transition={easeFast}
-              layout={!reduced}
               role="option"
               aria-selected={activeDocumentId === doc.id}
               tabIndex={0}
@@ -114,9 +103,8 @@ export default function DocumentsTabContent() {
               >
                 <Trash2 size={10} aria-hidden="true" />
               </button>
-            </motion.li>
+            </li>
           ))}
-        </AnimatePresence>
       </ul>
     </div>
   );
