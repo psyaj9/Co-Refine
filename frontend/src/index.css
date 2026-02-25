@@ -21,13 +21,15 @@ html.dark {
   overflow: hidden;
 }
 [data-separator] {
-  @apply flex-shrink-0 bg-surface-200 dark:bg-surface-700 transition-colors;
+  @apply flex-shrink-0 bg-surface-200 dark:bg-surface-700;
   cursor: col-resize;
-  width: 6px;
+  width: 4px;
+  transition: width 0.15s ease, background-color 0.15s ease;
 }
 [data-separator]:hover,
 [data-separator="active"] {
   @apply bg-brand-400 dark:bg-brand-500;
+  width: 6px;
 }
 
 /* ---- Document highlights — per-code colour via inline style ---- */
@@ -207,3 +209,14 @@ button:active:not(:disabled) {
   100% { background-position: -200% 0; }
 }
 
+/* ---- Reduced motion: kill all CSS animations/transitions as fallback ---- */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

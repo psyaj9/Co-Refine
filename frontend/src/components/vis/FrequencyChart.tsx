@@ -38,7 +38,8 @@ export default function FrequencyChart() {
       <h3 className="text-sm font-semibold text-surface-700 dark:text-surface-200 mb-3">
         Code Frequency
       </h3>
-      <ResponsiveContainer width="100%" height="85%">
+      <figure role="img" aria-label={`Bar chart showing frequency of ${data.length} codes. ${data.length > 0 ? `Top code: ${data[0].name} with ${data[0].count} segments.` : ''}`}>
+        <ResponsiveContainer width="100%" height="85%">
         <BarChart
           data={data}
           layout="vertical"
@@ -70,6 +71,7 @@ export default function FrequencyChart() {
           </Bar>
         </BarChart>
       </ResponsiveContainer>
+      </figure>
     </div>
   );
 }

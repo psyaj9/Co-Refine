@@ -66,24 +66,24 @@ export function alertTitle(alert: AlertPayload): string {
     }
     case "consistency":
       return alert.is_consistent === false
-        ? "\u26A0 Drift Detected"
-        : "\u2713 Consistent";
+        ? "Drift Detected"
+        : "Consistent";
     case "ghost_partner":
       return alert.is_conflict
-        ? "\uD83D\uDC7B Conflict"
-        : "\uD83D\uDC7B Agrees";
+        ? "Conflict"
+        : "Agrees";
     case "agent_thinking": {
       const label =
         AGENT_LABELS[alert.agent ?? ""] || alert.agent || "Agent";
-      return `\uD83D\uDD0D ${label}...`;
+      return `${label}...`;
     }
     case "agent_error": {
       const label =
         AGENT_LABELS[alert.agent ?? ""] || alert.agent || "Agent";
-      return `\u26A0 ${label} failed`;
+      return `${label} failed`;
     }
     case "analysis_updated":
-      return `\uD83D\uDCD6 ${alert.code_label || "Definition updated"}`;
+      return alert.code_label || "Definition updated";
     default:
       return "Agent Alert";
   }

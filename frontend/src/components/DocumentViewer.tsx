@@ -46,7 +46,6 @@ export default function DocumentViewer() {
     return buildAnnotatedText(doc.full_text, segments, inconsistentSegmentIds);
   }, [doc, segments, inconsistentSegmentIds]);
 
-  // Scroll to a segment when requested
   useEffect(() => {
     if (!scrollToSegmentId || !textRef.current) return;
     const seg = segments.find((s) => s.id === scrollToSegmentId);
@@ -77,7 +76,6 @@ export default function DocumentViewer() {
       role="region"
       aria-label={`Document: ${doc.title}`}
     >
-      {/* Document header */}
       <div className="px-4 pt-3 pb-2 border-b panel-border panel-bg flex-shrink-0 z-10">
         <h2 className="text-sm font-bold text-surface-700 dark:text-surface-200">
           {doc.title}
@@ -88,10 +86,8 @@ export default function DocumentViewer() {
         </p>
       </div>
 
-      {/* Scrollable body */}
       <div className="flex-1 min-h-0 overflow-auto thin-scrollbar">
         <div className="flex min-h-full">
-          {/* Line numbers gutter */}
           <div
             className="flex-shrink-0 pt-4 pb-4 select-none border-r panel-border bg-surface-50/50 dark:bg-surface-900/50"
             aria-hidden="true"
@@ -103,18 +99,16 @@ export default function DocumentViewer() {
             ))}
           </div>
 
-          {/* Text content */}
           <div className="flex-1 min-w-0">
             <div
               ref={textRef}
               onMouseUp={handleMouseUp}
               onClick={handleClick}
-              className="px-4 py-4 text-sm leading-relaxed whitespace-pre-wrap selection:bg-brand-100 dark:selection:bg-brand-700/30 cursor-text text-surface-700 dark:text-surface-200"
+              className="px-4 py-4 text-fluid-sm leading-relaxed whitespace-pre-wrap selection:bg-brand-100 dark:selection:bg-brand-700/30 cursor-text text-surface-700 dark:text-surface-200"
               dangerouslySetInnerHTML={{ __html: annotatedHtml }}
             />
           </div>
 
-          {/* Margin area */}
           <div className="w-44 flex-shrink-0 border-l panel-border bg-surface-50/50 dark:bg-surface-900/50 relative">
             <MarginPills
               segments={segments}

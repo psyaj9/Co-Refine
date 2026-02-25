@@ -145,7 +145,6 @@ export default function MarginPills({
 
   return (
     <>
-      {/* SVG connector lines */}
       <svg
         className="absolute inset-0 w-full h-full pointer-events-none"
         style={{ overflow: "visible" }}
@@ -170,7 +169,6 @@ export default function MarginPills({
         })}
       </svg>
 
-      {/* Pill groups */}
       {pillGroups.map((group) => {
         const visiblePills = group.expanded
           ? group.pills

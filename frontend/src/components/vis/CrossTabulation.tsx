@@ -43,7 +43,7 @@ export default function CrossTabulation() {
         <table className="text-2xs border-collapse w-full">
           <thead>
             <tr>
-              <th className="sticky left-0 bg-surface-50 dark:bg-surface-800 p-1.5 text-left text-surface-500 font-semibold border panel-border min-w-[120px]">
+              <th className="sticky left-0 bg-surface-50 dark:bg-surface-800 p-1.5 text-left text-surface-500 font-semibold border panel-border min-w-[120px]" scope="col">
                 Document
               </th>
               {codes.map((code) => (
@@ -51,6 +51,7 @@ export default function CrossTabulation() {
                   key={code.id}
                   className="p-1.5 text-center font-semibold border panel-border min-w-[60px]"
                   title={code.label}
+                  scope="col"
                 >
                   <div className="flex flex-col items-center gap-0.5">
                     <span
@@ -64,7 +65,7 @@ export default function CrossTabulation() {
                   </div>
                 </th>
               ))}
-              <th className="p-1.5 text-center font-semibold border panel-border text-surface-500 min-w-[40px]">
+              <th className="p-1.5 text-center font-semibold border panel-border text-surface-500 min-w-[40px]" scope="col">
                 Σ
               </th>
             </tr>
@@ -80,7 +81,7 @@ export default function CrossTabulation() {
                   key={doc.id}
                   className="hover:bg-surface-50 dark:hover:bg-surface-800 transition-colors"
                 >
-                  <td className="sticky left-0 bg-white dark:bg-panel-dark p-1.5 text-left text-surface-600 dark:text-surface-300 font-medium border panel-border truncate max-w-[120px]">
+                  <td className="sticky left-0 bg-white dark:bg-panel-dark p-1.5 text-left text-surface-600 dark:text-surface-300 font-medium border panel-border truncate max-w-[120px]" scope="row">
                     {doc.title}
                   </td>
                   {codes.map((code) => {
@@ -110,7 +111,6 @@ export default function CrossTabulation() {
                 </tr>
               );
             })}
-            {/* Column totals */}
             <tr className="bg-surface-50 dark:bg-surface-800 font-semibold">
               <td className="sticky left-0 bg-surface-50 dark:bg-surface-800 p-1.5 border panel-border text-surface-500">
                 Σ

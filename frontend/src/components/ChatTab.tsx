@@ -1,7 +1,10 @@
 import { useState, useRef, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { useStore } from "@/stores/store";
 import { MessageCircle, Send, Loader2, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { chatBubble, easeFast } from "@/lib/motion";
+import { useReducedMotion } from "@/hooks/useReducedMotion";
 
 const SUGGESTIONS = [
   "Summarise the key themes so far",
@@ -16,8 +19,8 @@ export default function ChatTab() {
   const sendChatMessage = useStore((s) => s.sendChatMessage);
   const clearChat = useStore((s) => s.clearChat);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const reduced = useReducedMotion();
 
-  // Auto-scroll on new messages or streaming tokens
   useEffect(() => {
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
@@ -32,7 +35,6 @@ export default function ChatTab() {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Messages */}
       <div
         ref={scrollRef}
         className="flex-1 overflow-auto p-3 thin-scrollbar space-y-2"
@@ -69,8 +71,14 @@ export default function ChatTab() {
         )}
 
         {chatMessages.map((msg, i) => (
-          <div
+          <motion.div
             key={msg.id || i}
+            variants={reduced ? undefined : chatBubble}
+            initial={reduced ? false : "initial"}
+            animate="animate"
+            transition={easeFast}
+            role="article"
+            aria-label={msg.role === "user" ? "Your message" : "AI response"}
             className={cn(
               "rounded-lg px-3 py-2 text-2xs max-w-[90%] whitespace-pre-wrap",
               msg.role === "user"
@@ -79,7 +87,6 @@ export default function ChatTab() {
             )}
           >
             {msg.content}
-            {/* Streaming cursor */}
             {chatStreaming &&
               i === chatMessages.length - 1 &&
               msg.role === "assistant" && (
@@ -88,11 +95,10 @@ export default function ChatTab() {
                   aria-label="Loading response"
                 />
               )}
-          </div>
+          </motion.div>
         ))}
       </div>
 
-      {/* Input bar */}
       <div className="p-2 border-t panel-border flex gap-1.5 items-center">
         {chatMessages.length > 0 && (
           <button

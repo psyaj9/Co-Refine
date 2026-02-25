@@ -10,7 +10,6 @@ import type {
   TextSelection,
   ViewMode,
   RightPanelTab,
-  LeftPanelTab,
   EditEventOut,
   HistoryScope,
 } from "@/types";
@@ -21,13 +20,10 @@ const CURRENT_USER = "default";
 interface AppState {
   currentUser: string;
 
-  // View modes
   viewMode: ViewMode;
   setViewMode: (v: ViewMode) => void;
   rightPanelTab: RightPanelTab;
   setRightPanelTab: (t: RightPanelTab) => void;
-  leftPanelTab: LeftPanelTab;
-  setLeftPanelTab: (t: LeftPanelTab) => void;
 
   showUploadPage: boolean;
   setShowUploadPage: (v: boolean) => void;
@@ -95,17 +91,14 @@ interface AppState {
   applySuggestedCode: (segmentId: string, codeLabel: string, alertIdx: number) => Promise<void>;
   keepMyCode: (alertIdx: number) => void;
 
-  // Batch Audit
   batchAuditRunning: boolean;
   batchAuditProgress: { completed: number; total: number } | null;
 
-  // Search
   codeSearchQuery: string;
   setCodeSearchQuery: (q: string) => void;
   docSearchQuery: string;
   setDocSearchQuery: (q: string) => void;
 
-  // Chat
   chatMessages: ChatMessageOut[];
   chatConversationId: string | null;
   chatStreaming: boolean;
@@ -115,7 +108,6 @@ interface AppState {
   clearChat: () => void;
   loadChatHistory: (conversationId: string) => Promise<void>;
 
-  // Edit History
   editHistory: EditEventOut[];
   historyScope: HistoryScope;
   setHistoryScope: (s: HistoryScope) => void;
@@ -127,18 +119,14 @@ interface AppState {
 export const useStore = create<AppState>((set, get) => ({
   currentUser: CURRENT_USER,
 
-  // View modes
   viewMode: "document",
   setViewMode: (v) => set({ viewMode: v }),
   rightPanelTab: "alerts",
   setRightPanelTab: (t) => set({ rightPanelTab: t }),
-  leftPanelTab: "codes",
-  setLeftPanelTab: (t) => set({ leftPanelTab: t }),
 
   showUploadPage: false,
   setShowUploadPage: (v) => set({ showUploadPage: v }),
 
-  // Search
   codeSearchQuery: "",
   setCodeSearchQuery: (q) => set({ codeSearchQuery: q }),
   docSearchQuery: "",
@@ -152,7 +140,6 @@ export const useStore = create<AppState>((set, get) => ({
   },
   setActiveProject: (id) => {
     if (!id) {
-      // Going back to project list
       set({
         activeProjectId: null,
         activeDocumentId: null,
@@ -173,7 +160,6 @@ export const useStore = create<AppState>((set, get) => ({
       analyses: [],
       showUploadPage: false,
     });
-    // Load project-scoped data
     setTimeout(async () => {
       const { loadDocuments, loadCodes, loadAnalyses } = get();
       await Promise.all([loadDocuments(), loadCodes(), loadAnalyses()]);
@@ -286,7 +272,7 @@ export const useStore = create<AppState>((set, get) => ({
       code_id: resolvedCodeId,
       user_id: CURRENT_USER,
     });
-    // Refresh segments list AND code counts
+    // Refresh segments and code counts
     await get().loadSegments(activeDocumentId);
     await get().loadCodes();
   },
@@ -334,11 +320,9 @@ export const useStore = create<AppState>((set, get) => ({
     if (a.type === "batch_audit_done") {
       return { batchAuditRunning: false, batchAuditProgress: null };
     }
-    // When agents start, set running flag
     if (a.type === "agents_started") {
       return { agentsRunning: true, alerts: [a, ...s.alerts].slice(0, 50) };
     }
-    // When agents finish, clear running flag and remove transient thinking alerts
     if (a.type === "agents_done") {
       return {
         agentsRunning: false,
@@ -347,7 +331,6 @@ export const useStore = create<AppState>((set, get) => ({
         ),
       };
     }
-    // When a final result arrives, remove the matching thinking placeholder
     if (a.type === "coding_audit" || a.type === "consistency" || a.type === "ghost_partner" || a.type === "analysis_updated" || a.type === "agent_error") {
       const agentMap: Record<string, string> = {
         coding_audit: "coding_audit",
@@ -394,16 +377,13 @@ export const useStore = create<AppState>((set, get) => ({
     })),
   applySuggestedCode: async (segmentId, codeLabel, alertIdx) => {
     try {
-      // Fetch the original segment to get its text range
       const seg = await api.fetchSegment(segmentId);
-      // Find the matching code in the store
       const { codes, activeDocumentId, currentUser } = get();
       const matchingCode = codes.find((c) => c.label === codeLabel);
       if (!matchingCode) {
         console.error("Suggested code not found in project:", codeLabel);
         return;
       }
-      // Apply the suggested code to the same text range
       await api.codeSegment({
         document_id: seg.document_id,
         text: seg.text,
@@ -412,9 +392,7 @@ export const useStore = create<AppState>((set, get) => ({
         code_id: matchingCode.id,
         user_id: currentUser,
       });
-      // Dismiss the alert
       set((s) => ({ alerts: s.alerts.filter((_, i) => i !== alertIdx) }));
-      // Refresh segments and codes
       if (activeDocumentId) {
         await get().loadSegments(activeDocumentId);
       }
@@ -430,11 +408,9 @@ export const useStore = create<AppState>((set, get) => ({
   // Inconsistent segment tracking
   inconsistentSegmentIds: new Set<string>(),
 
-  // Batch Audit
   batchAuditRunning: false,
   batchAuditProgress: null,
 
-  // Chat
   chatMessages: [],
   chatConversationId: null,
   chatStreaming: false,
@@ -454,7 +430,6 @@ export const useStore = create<AppState>((set, get) => ({
 
     try {
       const res = await api.sendChatMessage(text, activeProjectId, currentUser, chatConversationId);
-      // Set conversation ID, add placeholder for assistant
       const assistantPlaceholder: ChatMessageOut = {
         id: "streaming-" + Date.now(),
         conversation_id: res.conversation_id,
@@ -493,12 +468,10 @@ export const useStore = create<AppState>((set, get) => ({
     set({ chatMessages: msgs, chatConversationId: conversationId, chatStreaming: false });
   },
 
-  // Edit History
   editHistory: [],
   historyScope: "document",
   setHistoryScope: (s) => {
     set({ historyScope: s });
-    // Reload history with new scope
     setTimeout(() => get().loadEditHistory(), 0);
   },
   historySelectedEventId: null,

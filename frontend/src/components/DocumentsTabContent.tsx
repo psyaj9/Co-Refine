@@ -1,3 +1,4 @@
+import { motion, AnimatePresence } from "framer-motion";
 import { useStore } from "@/stores/store";
 import {
   FileText,
@@ -6,6 +7,8 @@ import {
   Upload,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { listItem, easeFast } from "@/lib/motion";
+import { useReducedMotion } from "@/hooks/useReducedMotion";
 
 export default function DocumentsTabContent() {
   const documents = useStore((s) => s.documents);
@@ -16,6 +19,7 @@ export default function DocumentsTabContent() {
   const deleteDocument = useStore((s) => s.deleteDocument);
   const docSearchQuery = useStore((s) => s.docSearchQuery);
   const setDocSearchQuery = useStore((s) => s.setDocSearchQuery);
+  const reduced = useReducedMotion();
 
   const filteredDocs = documents.filter((d) =>
     d.title.toLowerCase().includes(docSearchQuery.toLowerCase())
@@ -48,9 +52,9 @@ export default function DocumentsTabContent() {
         </div>
       )}
 
-      <ul className="flex-1 overflow-auto px-2 pb-2 thin-scrollbar space-y-0.5" role="list" aria-label="Documents">
+      <ul className="flex-1 overflow-auto px-2 pb-2 thin-scrollbar space-y-0.5" role="listbox" aria-label="Documents">
         {filteredDocs.length === 0 && (
-          <li className="text-center py-8">
+          <li role="presentation" className="text-center py-8">
             <FileText
               size={24}
               className="mx-auto text-surface-300 dark:text-surface-600 mb-2"
@@ -66,35 +70,53 @@ export default function DocumentsTabContent() {
             </button>
           </li>
         )}
-        {filteredDocs.map((doc) => (
-          <li
-            key={doc.id}
-            onClick={() => {
-              setActiveDocument(doc.id);
-              loadSegments(doc.id);
-              setShowUploadPage(false);
-            }}
-            className={cn(
-              "group cursor-pointer rounded px-2 py-1.5 text-xs flex items-center gap-1.5 transition-colors",
-              activeDocumentId === doc.id
-                ? "bg-brand-50 dark:bg-brand-900/20 text-brand-700 dark:text-brand-300 font-medium"
-                : "text-surface-600 dark:text-surface-300 panel-hover"
-            )}
-            role="option"
-            aria-selected={activeDocumentId === doc.id}
-          >
-            <FileText size={11} className="flex-shrink-0 text-surface-400" aria-hidden="true" />
-            <span className="flex-1 truncate">{doc.title}</span>
-            <button
-              onClick={(e) => handleDeleteDocument(e, doc.id)}
-              className="opacity-0 group-hover:opacity-100 text-surface-400 hover:text-red-500 flex-shrink-0 transition-opacity"
-              title="Delete document"
-              aria-label={`Delete ${doc.title}`}
+        <AnimatePresence initial={false}>
+          {filteredDocs.map((doc) => (
+            <motion.li
+              key={doc.id}
+              variants={reduced ? undefined : listItem}
+              initial={reduced ? false : "initial"}
+              animate="animate"
+              exit="exit"
+              transition={easeFast}
+              layout={!reduced}
+              role="option"
+              aria-selected={activeDocumentId === doc.id}
+              tabIndex={0}
+              onClick={() => {
+                setActiveDocument(doc.id);
+                loadSegments(doc.id);
+                setShowUploadPage(false);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  setActiveDocument(doc.id);
+                  loadSegments(doc.id);
+                  setShowUploadPage(false);
+                }
+              }}
+              className={cn(
+                "group cursor-pointer rounded px-2 py-1.5 text-xs flex items-center gap-1.5 transition-colors",
+                "focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1",
+                activeDocumentId === doc.id
+                  ? "bg-brand-50 dark:bg-brand-900/20 text-brand-700 dark:text-brand-300 font-medium"
+                  : "text-surface-600 dark:text-surface-300 panel-hover"
+              )}
             >
-              <Trash2 size={10} aria-hidden="true" />
-            </button>
-          </li>
-        ))}
+              <FileText size={11} className="flex-shrink-0 text-surface-400" aria-hidden="true" />
+              <span className="flex-1 truncate">{doc.title}</span>
+              <button
+                onClick={(e) => handleDeleteDocument(e, doc.id)}
+                className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus:opacity-100 text-surface-400 hover:text-red-500 flex-shrink-0 transition-opacity"
+                title="Delete document"
+                aria-label={`Delete ${doc.title}`}
+              >
+                <Trash2 size={10} aria-hidden="true" />
+              </button>
+            </motion.li>
+          ))}
+        </AnimatePresence>
       </ul>
     </div>
   );

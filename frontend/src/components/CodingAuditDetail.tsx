@@ -38,7 +38,6 @@ export default function CodingAuditDetail({
 
   return (
     <div className="mt-2 space-y-1.5">
-      {/* Self-Consistency Lens */}
       {selfLens && (
         <div className="rounded border border-amber-200 dark:border-amber-800 overflow-hidden">
           <button
@@ -97,7 +96,6 @@ export default function CodingAuditDetail({
         </div>
       )}
 
-      {/* Inter-Rater Lens */}
       {interLens && (
         <div className="rounded border border-purple-200 dark:border-purple-800 overflow-hidden">
           <button

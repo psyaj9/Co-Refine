@@ -79,12 +79,9 @@ export interface TextSelection {
   rect?: { top: number; left: number; bottom: number; right: number; width: number; height: number };
 }
 
-// New types for the redesign
-
 export type ViewMode = "document" | "visualisation" | "history";
 export type VisTab = "frequencies" | "crosstab" | "analytics";
 export type RightPanelTab = "alerts" | "chat";
-export type LeftPanelTab = "documents" | "codes" | "segments" | "definitions";
 export type HistoryScope = "project" | "document";
 
 export interface ChatMessageOut {

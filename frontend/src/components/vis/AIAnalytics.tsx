@@ -115,8 +115,7 @@ export default function AIAnalytics() {
         AI Analytics Overview
       </h3>
 
-      {/* Summary cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-4 gap-3">
         <MetricCard
           icon={<CheckCircle2 size={16} className="text-green-500" />}
           label="Consistency Rate"
@@ -147,14 +146,14 @@ export default function AIAnalytics() {
         />
       </div>
 
-      {/* Pie charts */}
       {(consistencyPieData.length > 0 || ghostPieData.length > 0) && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 gap-4">
           {consistencyPieData.length > 0 && (
             <div className="rounded-lg border panel-border p-3">
               <p className="text-xs font-semibold text-surface-600 dark:text-surface-300 mb-2">
                 Self-Consistency Results
               </p>
+              <figure role="img" aria-label={`Pie chart: ${metrics.consistentCount} consistent, ${metrics.driftCount} drifted`}>
               <ResponsiveContainer width="100%" height={180}>
                 <PieChart>
                   <Pie
@@ -176,6 +175,7 @@ export default function AIAnalytics() {
                   <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8 }} />
                 </PieChart>
               </ResponsiveContainer>
+              </figure>
             </div>
           )}
           {ghostPieData.length > 0 && (
@@ -183,6 +183,7 @@ export default function AIAnalytics() {
               <p className="text-xs font-semibold text-surface-600 dark:text-surface-300 mb-2">
                 Ghost Partner Results
               </p>
+              <figure role="img" aria-label={`Pie chart: ${metrics.ghostAgrees} agrees, ${metrics.ghostConflicts} conflicts`}>
               <ResponsiveContainer width="100%" height={180}>
                 <PieChart>
                   <Pie
@@ -204,18 +205,17 @@ export default function AIAnalytics() {
                   <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8 }} />
                 </PieChart>
               </ResponsiveContainer>
+              </figure>
             </div>
           )}
         </div>
       )}
 
-      {/* Per-code breakdown */}
       {metrics.codeMetrics.length > 0 && <PerCodeTable codeMetrics={metrics.codeMetrics} />}
     </div>
   );
 }
 
-/* ─── Per-code breakdown table ─── */
 function PerCodeTable({
   codeMetrics,
 }: {
@@ -239,12 +239,12 @@ function PerCodeTable({
         <table className="text-2xs border-collapse w-full">
           <thead>
             <tr>
-              <th className="p-1.5 text-left text-surface-500 font-semibold border panel-border">Code</th>
-              <th className="p-1.5 text-center text-surface-500 font-semibold border panel-border">Segments</th>
-              <th className="p-1.5 text-center text-surface-500 font-semibold border panel-border">Checks</th>
-              <th className="p-1.5 text-center text-surface-500 font-semibold border panel-border">Drift Rate</th>
-              <th className="p-1.5 text-center text-surface-500 font-semibold border panel-border">Ghost</th>
-              <th className="p-1.5 text-center text-surface-500 font-semibold border panel-border">AI</th>
+              <th className="p-1.5 text-left text-surface-500 font-semibold border panel-border" scope="col">Code</th>
+              <th className="p-1.5 text-center text-surface-500 font-semibold border panel-border" scope="col">Segments</th>
+              <th className="p-1.5 text-center text-surface-500 font-semibold border panel-border" scope="col">Checks</th>
+              <th className="p-1.5 text-center text-surface-500 font-semibold border panel-border" scope="col">Drift Rate</th>
+              <th className="p-1.5 text-center text-surface-500 font-semibold border panel-border" scope="col">Ghost</th>
+              <th className="p-1.5 text-center text-surface-500 font-semibold border panel-border" scope="col">AI</th>
             </tr>
           </thead>
           <tbody>
@@ -306,7 +306,6 @@ function PerCodeTable({
   );
 }
 
-/* ─── Metric card ─── */
 function MetricCard({
   icon,
   label,

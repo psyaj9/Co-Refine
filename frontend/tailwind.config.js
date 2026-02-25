@@ -41,6 +41,11 @@ export default {
       },
       fontSize: {
         '2xs': '0.625rem',
+        'fluid-xs': 'clamp(0.625rem, 0.55rem + 0.15vw, 0.75rem)',
+        'fluid-sm': 'clamp(0.75rem, 0.7rem + 0.15vw, 0.875rem)',
+        'fluid-base': 'clamp(0.875rem, 0.8rem + 0.2vw, 1rem)',
+        'fluid-lg': 'clamp(1.125rem, 1rem + 0.3vw, 1.375rem)',
+        'fluid-xl': 'clamp(1.25rem, 1.1rem + 0.4vw, 1.625rem)',
       },
       borderRadius: {
         DEFAULT: '0.375rem',

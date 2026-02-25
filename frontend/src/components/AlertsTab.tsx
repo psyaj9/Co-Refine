@@ -12,7 +12,6 @@ import { useStore } from "@/stores/store";
 import { cn } from "@/lib/utils";
 import { AGENT_LABELS } from "@/lib/constants";
 import { alertStyle, alertIcon, alertTitle, alertBody } from "@/lib/alert-helpers";
-import CodingAuditDetail from "@/components/CodingAuditDetail";
 
 export default function AlertsTab(): React.ReactElement {
   const alerts = useStore((s) => s.alerts);
@@ -131,13 +130,11 @@ export default function AlertsTab(): React.ReactElement {
             )}
 
             {alert.type === "coding_audit" && (
-              <CodingAuditDetail
-                alert={alert}
-                alertIdx={alerts.indexOf(alert)}
-                codes={codes}
-                applySuggestedCode={applySuggestedCode}
-                keepMyCode={keepMyCode}
-              />
+              <div className="mt-2 space-y-1">
+                <p className="text-2xs text-surface-600 dark:text-surface-300">
+                  {alertBody(alert)}
+                </p>
+              </div>
             )}
 
             {alert.type === "ghost_partner" && alert.is_conflict && (

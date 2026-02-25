@@ -18,7 +18,6 @@ export default function EditHistoryView() {
   const textRef = useRef<HTMLDivElement>(null);
   const doc = documents.find((d) => d.id === activeDocumentId);
 
-  // Load history on mount or scope change
   useEffect(() => {
     loadEditHistory();
   }, [activeDocumentId, historyScope]);
@@ -40,7 +39,6 @@ export default function EditHistoryView() {
     [doc],
   );
 
-  // Scroll to highlighted mark
   useEffect(() => {
     if (!selectedEvent || !textRef.current) return;
     const raf = requestAnimationFrame(() => {
@@ -54,13 +52,11 @@ export default function EditHistoryView() {
 
   return (
     <div className="flex h-full overflow-hidden view-enter">
-      {/* ── Document view ── */}
       <div
         className="flex-1 min-w-0 flex flex-col h-full overflow-hidden"
         role="region"
         aria-label={doc ? `Edit history for ${doc.title}` : "Edit history"}
       >
-        {/* Header */}
         <div className="px-4 pt-3 pb-2 border-b panel-border panel-bg flex-shrink-0 flex items-center gap-3 z-10">
           <button
             onClick={() => setViewMode("document")}
@@ -80,16 +76,13 @@ export default function EditHistoryView() {
           </div>
         </div>
 
-        {/* Code-level change banner */}
         {selectedEvent && selectedEvent.entity_type === "code" && (
           <CodeChangeBanner event={selectedEvent} />
         )}
 
-        {/* Document body */}
         {doc ? (
           <div className="flex-1 min-h-0 overflow-auto thin-scrollbar">
             <div className="flex min-h-full">
-              {/* Line numbers gutter */}
               <div
                 className="flex-shrink-0 pt-4 pb-4 select-none border-r panel-border bg-surface-50/50 dark:bg-surface-900/50"
                 aria-hidden
@@ -104,7 +97,6 @@ export default function EditHistoryView() {
                 ))}
               </div>
 
-              {/* Text content */}
               <div className="flex-1 min-w-0">
                 <div
                   ref={textRef}
@@ -121,7 +113,6 @@ export default function EditHistoryView() {
         )}
       </div>
 
-      {/* ── Timeline sidebar ── */}
       <HistoryTimeline />
     </div>
   );

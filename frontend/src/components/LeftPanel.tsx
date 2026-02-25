@@ -1,95 +1,122 @@
-import { useState } from "react";
-import * as Tabs from "@radix-ui/react-tabs";
+import { useState, useCallback } from "react";
+import * as Collapsible from "@radix-ui/react-collapsible";
+import { motion, AnimatePresence } from "framer-motion";
 import { useStore } from "@/stores/store";
 import {
   Plus,
   X,
   FolderOpen,
   ChevronLeft,
+  ChevronDown,
   FileText,
   Hash,
-  Tag,
-  GitCompare,
   Upload,
   Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useReducedMotion } from "@/hooks/useReducedMotion";
+import { collapsible, easeMedium, listItem } from "@/lib/motion";
 import DocumentsTabContent from "@/components/DocumentsTabContent";
 import CodesTabContent from "@/components/CodesTabContent";
-import RetrievedSegments from "@/components/RetrievedSegments";
-import DefinitionsTab from "@/components/DefinitionsTab";
-import type { LeftPanelTab } from "@/types";
-
-const TAB_META: { id: LeftPanelTab; label: string; Icon: typeof FileText }[] = [
-  { id: "documents", label: "Docs", Icon: FileText },
-  { id: "codes", label: "Codes", Icon: Hash },
-  { id: "segments", label: "Segments", Icon: Tag },
-  { id: "definitions", label: "Defs", Icon: GitCompare },
-];
 
 export default function LeftPanel() {
   const activeProjectId = useStore((s) => s.activeProjectId);
-  const leftPanelTab = useStore((s) => s.leftPanelTab);
-  const setLeftPanelTab = useStore((s) => s.setLeftPanelTab);
+  const [docsOpen, setDocsOpen] = useState(true);
+  const [codesOpen, setCodesOpen] = useState(true);
+  const reduced = useReducedMotion();
 
   if (!activeProjectId) return <ProjectList />;
 
+  /** Trigger class shared by both section headers */
+  const triggerCn = cn(
+    "flex items-center gap-1.5 px-2 py-2 border-b panel-border flex-shrink-0 cursor-pointer transition-colors",
+    "text-2xs font-semibold uppercase tracking-wider",
+    "text-surface-500 dark:text-surface-400 hover:bg-surface-50 dark:hover:bg-surface-800",
+    "focus-visible:outline-2 focus-visible:outline-brand-500 focus-visible:outline-offset-[-2px]"
+  );
+
   return (
     <div className="flex flex-col h-full panel-bg overflow-hidden">
-      {/* Project header */}
       <ProjectHeader />
 
-      {/* Tabbed content */}
-      <Tabs.Root
-        value={leftPanelTab}
-        onValueChange={(v) => setLeftPanelTab(v as LeftPanelTab)}
-        className="flex flex-col flex-1 overflow-hidden min-h-0"
-      >
-        <Tabs.List
-          className="flex border-b panel-border flex-shrink-0"
-          aria-label="Left panel tabs"
+      {/* Both sections share flex-1 so each gets 50% when both open, 100% when alone */}
+      <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+        {/* ---- DOCUMENTS ---- */}
+        <Collapsible.Root
+          open={docsOpen}
+          onOpenChange={setDocsOpen}
+          className={cn("flex flex-col min-h-0 overflow-hidden", docsOpen && "flex-1")}
         >
-          {TAB_META.map(({ id, label, Icon }) => (
-            <Tabs.Trigger
-              key={id}
-              value={id}
-              className={cn(
-                "flex-1 flex items-center justify-center gap-1 py-1.5 text-2xs font-medium transition-colors",
-                "data-[state=active]:text-brand-600 dark:data-[state=active]:text-brand-400",
-                "data-[state=active]:border-b-2 data-[state=active]:border-brand-500",
-                "data-[state=inactive]:text-surface-400 dark:data-[state=inactive]:text-surface-500",
-                "hover:text-surface-600 dark:hover:text-surface-300"
-              )}
-            >
-              <Icon size={10} aria-hidden="true" />
-              <span className="truncate">{label}</span>
-            </Tabs.Trigger>
-          ))}
-        </Tabs.List>
+          <Collapsible.Trigger
+            className={triggerCn}
+            aria-label={docsOpen ? "Collapse documents section" : "Expand documents section"}
+          >
+            <ChevronDown
+              size={10}
+              className={cn("transition-transform duration-200", !docsOpen && "-rotate-90")}
+              aria-hidden="true"
+            />
+            <FileText size={10} aria-hidden="true" />
+            <span>Documents</span>
+          </Collapsible.Trigger>
 
-        <Tabs.Content value="documents" className="flex-1 overflow-hidden">
-          <DocumentsTabContent />
-        </Tabs.Content>
+          <AnimatePresence initial={false}>
+            {docsOpen && (
+              <motion.div
+                key="docs-content"
+                initial={reduced ? false : "closed"}
+                animate="open"
+                exit="closed"
+                variants={collapsible}
+                transition={easeMedium}
+                className="flex-1 min-h-0 overflow-hidden"
+              >
+                <DocumentsTabContent />
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </Collapsible.Root>
 
-        <Tabs.Content value="codes" className="flex-1 overflow-hidden">
-          <CodesTabContent />
-        </Tabs.Content>
+        {/* ---- CODES ---- */}
+        <Collapsible.Root
+          open={codesOpen}
+          onOpenChange={setCodesOpen}
+          className={cn("flex flex-col min-h-0 overflow-hidden", codesOpen && "flex-1")}
+        >
+          <Collapsible.Trigger
+            className={triggerCn}
+            aria-label={codesOpen ? "Collapse codes section" : "Expand codes section"}
+          >
+            <ChevronDown
+              size={10}
+              className={cn("transition-transform duration-200", !codesOpen && "-rotate-90")}
+              aria-hidden="true"
+            />
+            <Hash size={10} aria-hidden="true" />
+            <span>Codes</span>
+          </Collapsible.Trigger>
 
-        <Tabs.Content value="segments" className="flex-1 overflow-hidden">
-          <div className="h-full overflow-auto thin-scrollbar tab-content-enter">
-            <RetrievedSegments />
-          </div>
-        </Tabs.Content>
-
-        <Tabs.Content value="definitions" className="flex-1 overflow-hidden">
-          <DefinitionsTab />
-        </Tabs.Content>
-      </Tabs.Root>
+          <AnimatePresence initial={false}>
+            {codesOpen && (
+              <motion.div
+                key="codes-content"
+                initial={reduced ? false : "closed"}
+                animate="open"
+                exit="closed"
+                variants={collapsible}
+                transition={easeMedium}
+                className="flex-1 min-h-0 overflow-hidden"
+              >
+                <CodesTabContent />
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </Collapsible.Root>
+      </div>
     </div>
   );
 }
 
-/* ─── Project header with back button ─── */
 function ProjectHeader() {
   const projects = useStore((s) => s.projects);
   const activeProjectId = useStore((s) => s.activeProjectId);
@@ -121,7 +148,6 @@ function ProjectHeader() {
   );
 }
 
-/* ─── Project list view (no active project) ─── */
 function ProjectList() {
   const projects = useStore((s) => s.projects);
   const setActiveProject = useStore((s) => s.setActiveProject);
@@ -211,17 +237,27 @@ function ProjectList() {
             <button
               onClick={() => setShowNewProject(true)}
               className="mt-4 rounded bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 transition-colors"
+              aria-label="Create new project"
             >
               Create Project
             </button>
           </div>
         ) : (
-          <ul className="space-y-0.5" role="list" aria-label="Projects">
+          <ul className="space-y-0.5" role="listbox" aria-label="Projects">
             {projects.map((p) => (
               <li
                 key={p.id}
+                role="option"
+                aria-selected={false}
+                tabIndex={0}
                 onClick={() => setActiveProject(p.id)}
-                className="group flex items-center gap-2 cursor-pointer rounded px-2 py-2 text-sm panel-hover transition-colors"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    setActiveProject(p.id);
+                  }
+                }}
+                className="group flex items-center gap-2 cursor-pointer rounded px-2 py-2 text-sm panel-hover transition-colors focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1"
               >
                 <FolderOpen
                   size={14}
@@ -239,7 +275,7 @@ function ProjectList() {
                 </div>
                 <button
                   onClick={(e) => handleDeleteProject(e, p.id)}
-                  className="opacity-0 group-hover:opacity-100 text-surface-400 hover:text-red-500 transition-opacity"
+                  className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus:opacity-100 text-surface-400 hover:text-red-500 transition-opacity"
                   title="Delete project"
                   aria-label={`Delete ${p.name}`}
                 >

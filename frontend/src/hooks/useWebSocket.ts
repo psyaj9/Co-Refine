@@ -43,7 +43,6 @@ export function useWebSocket() {
             return;
           }
 
-          // Regular alert pipeline
           pushAlert(msg);
 
           if (msg.type === "analysis_updated") {

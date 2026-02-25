@@ -1,3 +1,4 @@
+import { useRef, useCallback } from "react";
 import { useStore } from "@/stores/store";
 import {
   FilePlus,
@@ -22,21 +23,47 @@ export default function Toolbar() {
   // "Add Document" is highlighted when the upload page is shown or no doc is selected yet
   const isAddDocActive = showUploadPage || (viewMode === "document" && !activeDocumentId);
 
+  /* WAI-ARIA toolbar pattern: arrow keys move focus between buttons */
+  const toolbarRef = useRef<HTMLDivElement>(null);
+  const handleToolbarKeyDown = useCallback((e: React.KeyboardEvent) => {
+    const buttons = toolbarRef.current?.querySelectorAll<HTMLButtonElement>("button");
+    if (!buttons || buttons.length === 0) return;
+
+    const btnArr = Array.from(buttons);
+    const idx = btnArr.indexOf(e.target as HTMLButtonElement);
+    if (idx === -1) return;
+
+    let next = -1;
+    if (e.key === "ArrowRight") next = (idx + 1) % btnArr.length;
+    else if (e.key === "ArrowLeft") next = (idx - 1 + btnArr.length) % btnArr.length;
+    else if (e.key === "Home") next = 0;
+    else if (e.key === "End") next = btnArr.length - 1;
+
+    if (next >= 0) {
+      e.preventDefault();
+      btnArr[next].focus();
+    }
+  }, []);
+
   return (
     <header className="h-10 grid grid-cols-[1fr_auto_1fr] items-center px-3 border-b panel-border panel-bg flex-shrink-0 select-none" role="banner">
-      {/* Left: brand */}
       <div className="flex items-center gap-2 justify-self-start">
-        <Sparkles size={16} className="text-brand-500" />
-        <h1 className="text-sm font-bold text-surface-800 dark:text-surface-100 tracking-tight">
+        <Sparkles size={16} className="text-brand-500" aria-hidden="true" />
+        <h1 className="text-fluid-sm font-bold text-surface-800 dark:text-surface-100 tracking-tight">
           Co-Refine
         </h1>
-        <span className="hidden sm:inline text-2xs text-surface-400 dark:text-surface-500 border-l pl-2 ml-1 panel-border">
+        <span className="text-fluid-xs text-surface-400 dark:text-surface-500 border-l pl-2 ml-1 panel-border">
           AI-assisted qualitative analysis
         </span>
       </div>
 
-      {/* Center: actions — always in the middle column */}
-      <div className="flex items-center gap-0.5 justify-self-center" role="toolbar" aria-label="View controls">
+      <div
+        ref={toolbarRef}
+        className="flex items-center gap-0.5 justify-self-center"
+        role="toolbar"
+        aria-label="View controls"
+        onKeyDown={handleToolbarKeyDown}
+      >
         {activeProjectId && (
           <>
             <ToolbarButton
@@ -62,7 +89,6 @@ export default function Toolbar() {
         )}
       </div>
 
-      {/* Right: Edit History */}
       <div className="flex items-center gap-1 justify-self-end">
         {activeProjectId && activeDocumentId && !showUploadPage && (
           <ToolbarButton
@@ -101,8 +127,8 @@ function ToolbarButton({
           : "text-surface-500 dark:text-surface-400 hover:bg-surface-100 dark:hover:bg-surface-800 hover:text-surface-700 dark:hover:text-surface-200"
       )}
     >
-      <Icon size={14} />
-      <span className="hidden md:inline">{label}</span>
+      <Icon size={14} aria-hidden="true" />
+      <span>{label}</span>
     </button>
   );
 }

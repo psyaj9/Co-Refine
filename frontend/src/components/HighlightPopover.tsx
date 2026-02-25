@@ -1,7 +1,11 @@
 import { useStore } from "@/stores/store";
 import { Tag, Check, X, Trash2, GripHorizontal } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useCallback } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { useDraggable } from "@/hooks/useDraggable";
+import { getContrastColor } from "@/lib/utils";
+import { scaleIn, easeFast } from "@/lib/motion";
+import { useReducedMotion } from "@/hooks/useReducedMotion";
 
 interface Props {
   containerRef?: React.RefObject<HTMLDivElement | null>;
@@ -50,13 +54,13 @@ export default function HighlightPopover({ containerRef }: Props = {}) {
   const { pos, onPointerDown, onPointerMove, onPointerUp } = useDraggable(dx, dy);
 
   const popoverRef = useRef<HTMLDivElement>(null);
+  const reduced = useReducedMotion();
 
   const dismiss = () => {
     setSelection(null);
     setClickedSegments(null);
   };
 
-  // Escape key to dismiss
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") dismiss();
@@ -70,15 +74,38 @@ export default function HighlightPopover({ containerRef }: Props = {}) {
     popoverRef.current?.focus();
   }, [selection, clickedSegments]);
 
-  /* ── Shared shell ─────────────────────────────────────────────────────── */
+  /** Trap focus inside the popover so Tab doesn't escape */
+  const handleFocusTrap = useCallback((e: React.KeyboardEvent) => {
+    if (e.key !== "Tab") return;
+    const focusable = popoverRef.current?.querySelectorAll<HTMLElement>(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    );
+    if (!focusable || focusable.length === 0) return;
+
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+
+    if (e.shiftKey) {
+      if (document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      }
+    } else {
+      if (document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+  }, []);
+
 
   const dragHandle = (
     <div
       onPointerDown={onPointerDown}
       className="flex items-center justify-center gap-1 cursor-grab active:cursor-grabbing py-1 -mt-1 mb-1 text-surface-300 dark:text-surface-600 hover:text-surface-400 dark:hover:text-surface-500 select-none"
-      aria-hidden
+      aria-hidden="true"
     >
-      <GripHorizontal size={14} />
+      <GripHorizontal size={14} aria-hidden="true" />
     </div>
   );
 
@@ -87,25 +114,31 @@ export default function HighlightPopover({ containerRef }: Props = {}) {
       onClick={dismiss}
       className="mt-2 w-full text-center text-xs text-surface-400 hover:text-surface-600 dark:hover:text-surface-300 flex items-center justify-center gap-1 transition-colors"
     >
-      <X size={12} aria-hidden />
+      <X size={12} aria-hidden="true" />
       Done
     </button>
   );
 
-  /* ── Clicked-segment view ─────────────────────────────────────────────── */
 
   if (clickedSegments && clickedSegments.length > 0) {
     const segText = clickedSegments[0].text;
 
     return (
-      <div
+      <motion.div
         ref={popoverRef}
         tabIndex={-1}
         role="dialog"
         aria-label="Coded segment details"
+        aria-modal="true"
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
-        className="popover-enter fixed z-50 bg-white dark:bg-surface-800 rounded-xl shadow-xl border border-surface-200 dark:border-surface-700 p-3 w-72 outline-none"
+        onKeyDown={handleFocusTrap}
+        variants={reduced ? undefined : scaleIn}
+        initial={reduced ? false : "initial"}
+        animate="animate"
+        exit="exit"
+        transition={easeFast}
+        className="fixed z-50 bg-white dark:bg-surface-800 rounded-xl shadow-xl border border-surface-200 dark:border-surface-700 p-3 w-72 outline-none"
         style={{ left: pos.x, top: pos.y }}
       >
         {dragHandle}
@@ -131,7 +164,7 @@ export default function HighlightPopover({ containerRef }: Props = {}) {
                 <span
                   className="w-2.5 h-2.5 rounded-full flex-shrink-0"
                   style={{ backgroundColor: seg.code_colour }}
-                  aria-hidden
+                  aria-hidden="true"
                 />
                 {seg.code_label}
               </span>
@@ -147,11 +180,10 @@ export default function HighlightPopover({ containerRef }: Props = {}) {
         </ul>
 
         {doneButton}
-      </div>
+      </motion.div>
     );
   }
 
-  /* ── New-selection view ───────────────────────────────────────────────── */
 
   if (!selection) return null;
 
@@ -179,14 +211,21 @@ export default function HighlightPopover({ containerRef }: Props = {}) {
   const appliedCodes = codes.filter((c) => appliedCodeIds.has(c.id));
 
   return (
-    <div
+    <motion.div
       ref={popoverRef}
       tabIndex={-1}
       role="dialog"
       aria-label="Apply code to selection"
+      aria-modal="true"
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
-      className="popover-enter fixed z-50 bg-white dark:bg-surface-800 rounded-xl shadow-xl border border-surface-200 dark:border-surface-700 p-3 w-72 outline-none"
+      onKeyDown={handleFocusTrap}
+      variants={reduced ? undefined : scaleIn}
+      initial={reduced ? false : "initial"}
+      animate="animate"
+      exit="exit"
+      transition={easeFast}
+      className="fixed z-50 bg-white dark:bg-surface-800 rounded-xl shadow-xl border border-surface-200 dark:border-surface-700 p-3 w-72 outline-none"
       style={{ left: pos.x, top: pos.y }}
     >
       {dragHandle}
@@ -209,10 +248,10 @@ export default function HighlightPopover({ containerRef }: Props = {}) {
             {appliedCodes.map((code) => (
               <span
                 key={code.id}
-                className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium text-white"
-                style={{ backgroundColor: code.colour }}
+                className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium"
+                style={{ backgroundColor: code.colour, color: getContrastColor(code.colour) }}
               >
-                <Check size={10} aria-hidden />
+                <Check size={10} aria-hidden="true" />
                 {code.label}
               </span>
             ))}
@@ -223,10 +262,10 @@ export default function HighlightPopover({ containerRef }: Props = {}) {
       {activeCode && !activeAlreadyApplied && (
         <button
           onClick={() => handleApply(activeCode.id)}
-          className="w-full flex items-center gap-2 rounded-lg px-3 py-2 mb-2 text-sm font-medium text-white transition-colors"
-          style={{ backgroundColor: activeCode.colour }}
+          className="w-full flex items-center gap-2 rounded-lg px-3 py-2 mb-2 text-sm font-medium transition-colors"
+          style={{ backgroundColor: activeCode.colour, color: getContrastColor(activeCode.colour) }}
         >
-          <Tag size={14} aria-hidden />
+          <Tag size={14} aria-hidden="true" />
           Apply &ldquo;{activeCode.label}&rdquo;
         </button>
       )}
@@ -248,7 +287,7 @@ export default function HighlightPopover({ containerRef }: Props = {}) {
                     <span
                       className="w-2.5 h-2.5 rounded-full flex-shrink-0"
                       style={{ backgroundColor: code.colour }}
-                      aria-hidden
+                      aria-hidden="true"
                     />
                     {code.label}
                   </button>
@@ -265,6 +304,6 @@ export default function HighlightPopover({ containerRef }: Props = {}) {
       )}
 
       {doneButton}
-    </div>
+    </motion.div>
   );
 }

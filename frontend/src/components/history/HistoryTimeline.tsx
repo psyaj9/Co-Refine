@@ -4,7 +4,6 @@ import { cn } from "@/lib/utils";
 import { formatDateTime, eventSummary } from "./history-helpers";
 import type { EditEventOut } from "@/types";
 
-/* ── Tiny sub-components ────────────────────────────────────────────────── */
 
 function ActionIcon({ action }: { action: string }) {
   const cls = "flex-shrink-0";
@@ -92,7 +91,6 @@ function TimelineEntry({
         {eventSummary(event)}
       </p>
 
-      {/* Old → New values for updates */}
       {event.action === "updated" && event.old_value && event.new_value && (
         <div className="mt-1.5 flex items-center gap-1.5 text-2xs">
           <span className="px-1.5 py-0.5 rounded bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400 line-through">
@@ -109,7 +107,6 @@ function TimelineEntry({
         </div>
       )}
 
-      {/* Colour chip for segment events */}
       {event.entity_type === "segment" && (
         <div className="mt-1 flex items-center gap-1.5">
           <div
@@ -126,7 +123,6 @@ function TimelineEntry({
   );
 }
 
-/* ── Main Timeline Sidebar ──────────────────────────────────────────────── */
 
 export default function HistoryTimeline() {
   const editHistory = useStore((s) => s.editHistory);
@@ -148,7 +144,6 @@ export default function HistoryTimeline() {
       className="w-72 flex-shrink-0 border-l panel-border flex flex-col h-full bg-surface-50 dark:bg-surface-900"
       aria-label="Edit history timeline"
     >
-      {/* Scope toggle */}
       <div
         className="px-3 py-2.5 border-b panel-border flex items-center gap-1.5"
         role="group"
@@ -166,7 +161,6 @@ export default function HistoryTimeline() {
         />
       </div>
 
-      {/* Timeline entries */}
       <div
         className="flex-1 min-h-0 overflow-auto thin-scrollbar"
         role="listbox"

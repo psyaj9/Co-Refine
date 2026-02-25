@@ -36,7 +36,6 @@ export default function RetrievedSegments() {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header */}
       <div className="flex items-center gap-2 px-3 py-2 border-b panel-border flex-shrink-0">
         <span
           className="w-3 h-3 rounded-full flex-shrink-0 ring-1 ring-black/10"
@@ -53,14 +52,14 @@ export default function RetrievedSegments() {
         </div>
         <button
           onClick={clearRetrievedSegments}
-          className="text-surface-400 hover:text-surface-600 dark:hover:text-surface-300"
+          className="text-surface-400 hover:text-surface-600 dark:hover:text-surface-300 transition-colors"
           title="Close"
+          aria-label="Close segments panel"
         >
-          <X size={14} />
+          <X size={14} aria-hidden="true" />
         </button>
       </div>
 
-      {/* Segment list */}
       <div className="flex-1 overflow-auto p-2 space-y-3 thin-scrollbar">
         {Array.from(byDoc.entries()).map(([docId, segs]) => {
           const doc = documents.find((d) => d.id === docId);
@@ -78,11 +77,13 @@ export default function RetrievedSegments() {
                 {doc?.title || "Unknown Document"}
                 <ArrowRight size={8} />
               </button>
-              <ul className="space-y-1">
+              <ul className="space-y-1" role="list" aria-label={`Segments in ${doc?.title || 'document'}`}>
                 {segs.map((seg) => (
                   <li
                     key={seg.id}
-                    className="rounded p-2 text-2xs leading-relaxed cursor-pointer panel-hover transition"
+                    role="button"
+                    tabIndex={0}
+                    className="rounded p-2 text-2xs leading-relaxed cursor-pointer panel-hover transition focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1"
                     style={{
                       borderLeft: `3px solid ${seg.code_colour}`,
                       backgroundColor: `${hexToRgba(seg.code_colour, 0.05)}`,
@@ -92,6 +93,15 @@ export default function RetrievedSegments() {
                       loadSegments(seg.document_id);
                       setShowUploadPage(false);
                       setScrollToSegmentId(seg.id);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setActiveDocument(seg.document_id);
+                        loadSegments(seg.document_id);
+                        setShowUploadPage(false);
+                        setScrollToSegmentId(seg.id);
+                      }
                     }}
                   >
                     <p className="text-surface-600 dark:text-surface-300 line-clamp-4">

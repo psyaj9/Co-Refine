@@ -222,8 +222,6 @@ export async function fetchSettings() {
   }>(await fetch(`${BASE}/settings`));
 }
 
-// ========== Chat ==========
-
 export async function sendChatMessage(
   message: string,
   projectId: string,
@@ -260,8 +258,6 @@ export async function fetchConversations(projectId: string, userId: string) {
 export async function deleteConversation(conversationId: string) {
   await fetch(`${BASE}/chat/conversations/${conversationId}`, { method: "DELETE" });
 }
-
-// ========== Edit History ==========
 
 export async function fetchEditHistory(
   projectId: string,
