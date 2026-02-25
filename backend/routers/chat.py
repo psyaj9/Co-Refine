@@ -21,7 +21,7 @@ async def send_chat_message(
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ):
-    if not settings.gemini_api_key:
+    if not settings.azure_api_key:
         raise HTTPException(status_code=503, detail="No API key configured")
 
     conversation_id = body.conversation_id or str(uuid.uuid4())

@@ -64,7 +64,7 @@ async def create_segment(
     db.commit()
     db.refresh(segment)
 
-    if settings.gemini_api_key:
+    if settings.azure_api_key:
         context_window = _extract_window(doc.full_text, body.start_index, body.end_index)
         background_tasks.add_task(
             _run_background_agents,
@@ -255,7 +255,7 @@ async def batch_audit(
     runs run_coding_audit on each. Results stream back via WebSocket as
     'coding_audit' events with batch=True.
     """
-    if not settings.gemini_api_key:
+    if not settings.azure_api_key:
         raise HTTPException(status_code=400, detail="No AI API key configured")
 
     codes = db.query(Code).filter(Code.project_id == body.project_id).all()

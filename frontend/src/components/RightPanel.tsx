@@ -22,8 +22,6 @@ import type { RightPanelTab } from "@/types";
 
 const AGENT_LABELS: Record<string, string> = {
   coding_audit: "Coding Audit",
-  consistency: "Self-Consistency",  // legacy
-  ghost_partner: "Ghost Partner",   // legacy
   analysis: "Inductive Analysis",
 };
 

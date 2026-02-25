@@ -1,4 +1,4 @@
 # Service modules
-from .ai_analyzer import analyze_quotes, ghost_partner_predict, check_self_consistency
+from .ai_analyzer import analyze_quotes, run_coding_audit, stream_chat_response
 
-__all__ = ["analyze_quotes", "ghost_partner_predict", "check_self_consistency"]
+__all__ = ["analyze_quotes", "run_coding_audit", "stream_chat_response"]

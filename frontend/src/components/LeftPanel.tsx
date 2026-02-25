@@ -267,7 +267,7 @@ export default function LeftPanel() {
         <div className="px-3 py-1.5 flex items-center gap-1.5 border-b panel-border flex-shrink-0">
           <Hash size={10} className="text-surface-400" />
           <span className="text-2xs font-semibold uppercase tracking-wider text-surface-500 dark:text-surface-400 flex-1">
-            Codes
+            Codebook
             <span className="ml-1 font-mono normal-case text-surface-400">({codes.length})</span>
           </span>
         </div>

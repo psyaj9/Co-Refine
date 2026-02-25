@@ -47,10 +47,11 @@ def _embed_local(text: str) -> list[float]:
 
 def _embed_api(text: str) -> list[float]:
     """API-based embeddings (fallback when embedding_model != 'local')."""
-    from openai import OpenAI
-    client = OpenAI(
-        base_url=settings.gemini_api_base,
-        api_key=settings.gemini_api_key,
+    from openai import AzureOpenAI
+    client = AzureOpenAI(
+        azure_endpoint=settings.azure_endpoint,
+        api_key=settings.azure_api_key,
+        api_version=settings.azure_api_version,
     )
     response = client.embeddings.create(
         model=settings.embedding_model,
