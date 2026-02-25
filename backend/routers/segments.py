@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
 import uuid
 
-from database import get_db, CodedSegment, Code, Document, AnalysisResult, AgentAlert
+from database import get_db, CodedSegment, Code, Document, AnalysisResult, AgentAlert, EditEvent
 from models import SegmentCreate, SegmentOut, AnalysisOut, AnalysisTrigger, AlertOut, BatchAuditRequest
 from services.ai_analyzer import run_coding_audit, analyze_quotes
 from services.vector_store import (
@@ -63,6 +63,26 @@ async def create_segment(
     db.add(segment)
     db.commit()
     db.refresh(segment)
+
+    # Record edit event
+    db.add(EditEvent(
+        id=str(uuid.uuid4()),
+        project_id=code.project_id,
+        document_id=body.document_id,
+        entity_type="segment",
+        action="created",
+        entity_id=seg_id,
+        metadata_json={
+            "code_label": code.label,
+            "code_colour": code.colour,
+            "code_id": body.code_id,
+            "segment_text": body.text[:200],
+            "start_index": body.start_index,
+            "end_index": body.end_index,
+        },
+        user_id=body.user_id,
+    ))
+    db.commit()
 
     if settings.azure_api_key:
         context_window = _extract_window(doc.full_text, body.start_index, body.end_index)
@@ -130,6 +150,31 @@ def delete_segment(segment_id: str, user_id: str = "default", db: Session = Depe
     seg = db.query(CodedSegment).filter(CodedSegment.id == segment_id).first()
     if not seg:
         raise HTTPException(status_code=404, detail="Segment not found")
+
+    # Snapshot before deletion for edit history
+    code = db.query(Code).filter(Code.id == seg.code_id).first()
+    doc = db.query(Document).filter(Document.id == seg.document_id).first()
+    project_id = code.project_id if code else (doc.project_id if doc else None)
+
+    if project_id:
+        db.add(EditEvent(
+            id=str(uuid.uuid4()),
+            project_id=project_id,
+            document_id=seg.document_id,
+            entity_type="segment",
+            action="deleted",
+            entity_id=segment_id,
+            metadata_json={
+                "code_label": code.label if code else "?",
+                "code_colour": code.colour if code else "#ccc",
+                "code_id": seg.code_id,
+                "segment_text": seg.text[:200],
+                "start_index": seg.start_index,
+                "end_index": seg.end_index,
+            },
+            user_id=user_id,
+        ))
+
     delete_segment_embedding(user_id, segment_id)
     db.delete(seg)
     db.commit()
@@ -315,12 +360,14 @@ def _run_analysis_background(
             })
         else:
             existing = db.query(AnalysisResult).filter(AnalysisResult.code_id == code_id).first()
+            raw_reasoning = analysis_result.get("reasoning")
+            reasoning_str = "\n".join(raw_reasoning) if isinstance(raw_reasoning, list) else raw_reasoning
             analysis = AnalysisResult(
                 id=existing.id if existing else str(uuid.uuid4()),
                 code_id=code_id,
                 definition=analysis_result.get("definition"),
                 lens=analysis_result.get("lens"),
-                reasoning=analysis_result.get("reasoning"),
+                reasoning=reasoning_str,
                 segment_count_at_analysis=len(all_quotes),
             )
             db.merge(analysis)
@@ -665,12 +712,14 @@ def _run_background_agents(
                         "data": {"message": "AI could not generate a definition — will retry next time."},
                     })
                 else:
+                    raw_reasoning = analysis_result.get("reasoning")
+                    reasoning_str = "\n".join(raw_reasoning) if isinstance(raw_reasoning, list) else raw_reasoning
                     analysis = AnalysisResult(
                         id=existing_analysis.id if existing_analysis else str(uuid.uuid4()),
                         code_id=code_id,
                         definition=analysis_result.get("definition"),
                         lens=analysis_result.get("lens"),
-                        reasoning=analysis_result.get("reasoning"),
+                        reasoning=reasoning_str,
                         segment_count_at_analysis=code_segment_count,
                     )
                     db.merge(analysis)

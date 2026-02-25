@@ -11,7 +11,8 @@ import type {
   ViewMode,
   RightPanelTab,
   LeftPanelTab,
-  ThemeMode,
+  EditEventOut,
+  HistoryScope,
 } from "../types";
 import * as api from "../api/client";
 
@@ -19,10 +20,6 @@ const CURRENT_USER = "default";
 
 interface AppState {
   currentUser: string;
-
-  // Theme
-  theme: ThemeMode;
-  toggleTheme: () => void;
 
   // View modes
   viewMode: ViewMode;
@@ -74,7 +71,7 @@ interface AppState {
   loadRetrievedSegments: (codeId: string) => Promise<void>;
   clearRetrievedSegments: () => void;
 
-  // Scroll-to-segment (used by RetrievedSegments → DocumentViewerNew)
+  // Scroll-to-segment (used by RetrievedSegments → DocumentViewer)
   scrollToSegmentId: string | null;
   setScrollToSegmentId: (id: string | null) => void;
 
@@ -117,28 +114,18 @@ interface AppState {
   finishChatStream: () => void;
   clearChat: () => void;
   loadChatHistory: (conversationId: string) => Promise<void>;
-}
 
-function getInitialTheme(): ThemeMode {
-  if (typeof window !== "undefined") {
-    const stored = localStorage.getItem("theme") as ThemeMode | null;
-    if (stored) return stored;
-    if (window.matchMedia("(prefers-color-scheme: dark)").matches) return "dark";
-  }
-  return "light";
+  // Edit History
+  editHistory: EditEventOut[];
+  historyScope: HistoryScope;
+  setHistoryScope: (s: HistoryScope) => void;
+  historySelectedEventId: string | null;
+  setHistorySelectedEventId: (id: string | null) => void;
+  loadEditHistory: () => Promise<void>;
 }
 
 export const useStore = create<AppState>((set, get) => ({
   currentUser: CURRENT_USER,
-
-  // Theme
-  theme: getInitialTheme(),
-  toggleTheme: () => {
-    const next = get().theme === "light" ? "dark" : "light";
-    localStorage.setItem("theme", next);
-    document.documentElement.classList.toggle("dark", next === "dark");
-    set({ theme: next });
-  },
 
   // View modes
   viewMode: "document",
@@ -504,5 +491,30 @@ export const useStore = create<AppState>((set, get) => ({
   loadChatHistory: async (conversationId) => {
     const msgs = await api.fetchChatHistory(conversationId);
     set({ chatMessages: msgs, chatConversationId: conversationId, chatStreaming: false });
+  },
+
+  // Edit History
+  editHistory: [],
+  historyScope: "document",
+  setHistoryScope: (s) => {
+    set({ historyScope: s });
+    // Reload history with new scope
+    setTimeout(() => get().loadEditHistory(), 0);
+  },
+  historySelectedEventId: null,
+  setHistorySelectedEventId: (id) => set({ historySelectedEventId: id }),
+  loadEditHistory: async () => {
+    const { activeProjectId, activeDocumentId, historyScope } = get();
+    if (!activeProjectId) return;
+    const params: { document_id?: string } = {};
+    if (historyScope === "document" && activeDocumentId) {
+      params.document_id = activeDocumentId;
+    }
+    try {
+      const events = await api.fetchEditHistory(activeProjectId, params);
+      set({ editHistory: events });
+    } catch (e) {
+      console.error("Failed to load edit history:", e);
+    }
   },
 }));

@@ -7,6 +7,7 @@ import type {
   AlertOut,
   ChatMessageOut,
   ConversationPreview,
+  EditEventOut,
 } from "@/types";
 
 const BASE = "/api";
@@ -258,4 +259,20 @@ export async function fetchConversations(projectId: string, userId: string) {
 
 export async function deleteConversation(conversationId: string) {
   await fetch(`${BASE}/chat/conversations/${conversationId}`, { method: "DELETE" });
+}
+
+// ========== Edit History ==========
+
+export async function fetchEditHistory(
+  projectId: string,
+  params?: { document_id?: string; entity_type?: string; limit?: number; offset?: number },
+) {
+  const qs = new URLSearchParams();
+  if (params?.document_id) qs.set("document_id", params.document_id);
+  if (params?.entity_type) qs.set("entity_type", params.entity_type);
+  if (params?.limit) qs.set("limit", String(params.limit));
+  if (params?.offset) qs.set("offset", String(params.offset));
+  return json<EditEventOut[]>(
+    await fetch(`${BASE}/projects/${projectId}/edit-history?${qs.toString()}`)
+  );
 }

@@ -81,11 +81,11 @@ export interface TextSelection {
 
 // New types for the redesign
 
-export type ViewMode = "document" | "visualisation";
+export type ViewMode = "document" | "visualisation" | "history";
 export type VisTab = "frequencies" | "crosstab" | "analytics";
 export type RightPanelTab = "alerts" | "chat";
 export type LeftPanelTab = "documents" | "codes" | "segments" | "definitions";
-export type ThemeMode = "light" | "dark";
+export type HistoryScope = "project" | "document";
 
 export interface Memo {
   id: string;
@@ -111,5 +111,20 @@ export interface ConversationPreview {
   conversation_id: string;
   preview: string;
   started_at: string | null;
+}
+
+export interface EditEventOut {
+  id: string;
+  project_id: string;
+  document_id: string | null;
+  entity_type: "segment" | "code";
+  action: "created" | "updated" | "deleted";
+  entity_id: string;
+  field_changed: string | null;
+  old_value: string | null;
+  new_value: string | null;
+  metadata_json: Record<string, unknown> | null;
+  user_id: string;
+  created_at: string;
 }
 

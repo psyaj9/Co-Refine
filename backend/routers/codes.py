@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 import uuid
 
-from database import get_db, Code, CodedSegment, AnalysisResult, AgentAlert
+from database import get_db, Code, CodedSegment, AnalysisResult, AgentAlert, EditEvent
 from models import CodeCreate, CodeOut, CodeUpdate, SegmentOut
 from services.vector_store import delete_segment_embedding
 
@@ -43,6 +43,24 @@ def create_code(body: CodeCreate, db: Session = Depends(get_db)):
     db.add(code)
     db.commit()
     db.refresh(code)
+
+    # Record edit event
+    db.add(EditEvent(
+        id=str(uuid.uuid4()),
+        project_id=body.project_id,
+        document_id=None,
+        entity_type="code",
+        action="created",
+        entity_id=code.id,
+        metadata_json={
+            "code_label": body.label,
+            "code_colour": body.colour or "#FFEB3B",
+            "definition": body.definition,
+        },
+        user_id=body.user_id,
+    ))
+    db.commit()
+
     return _code_to_out(code, db)
 
 
@@ -60,12 +78,41 @@ def update_code(code_id: str, body: CodeUpdate, db: Session = Depends(get_db)):
     code = db.query(Code).filter(Code.id == code_id).first()
     if not code:
         raise HTTPException(status_code=404, detail="Code not found")
+
+    # Record one edit event per changed field
+    changes: list[tuple[str, str | None, str | None]] = []
+    if body.label is not None and body.label != code.label:
+        changes.append(("label", code.label, body.label))
+    if body.definition is not None and body.definition != code.definition:
+        changes.append(("definition", code.definition, body.definition))
+    if body.colour is not None and body.colour != code.colour:
+        changes.append(("colour", code.colour, body.colour))
+
     if body.label is not None:
         code.label = body.label
     if body.definition is not None:
         code.definition = body.definition
     if body.colour is not None:
         code.colour = body.colour
+
+    for field, old_val, new_val in changes:
+        db.add(EditEvent(
+            id=str(uuid.uuid4()),
+            project_id=code.project_id,
+            document_id=None,
+            entity_type="code",
+            action="updated",
+            entity_id=code_id,
+            field_changed=field,
+            old_value=old_val,
+            new_value=new_val,
+            metadata_json={
+                "code_label": code.label,
+                "code_colour": code.colour,
+            },
+            user_id=code.created_by,
+        ))
+
     db.commit()
     db.refresh(code)
     return _code_to_out(code, db)
@@ -83,6 +130,22 @@ def delete_code(code_id: str, user_id: str = "default", db: Session = Depends(ge
     code = db.query(Code).filter(Code.id == code_id).first()
     if not code:
         raise HTTPException(status_code=404, detail="Code not found")
+
+    # Snapshot before deletion for edit history
+    db.add(EditEvent(
+        id=str(uuid.uuid4()),
+        project_id=code.project_id,
+        document_id=None,
+        entity_type="code",
+        action="deleted",
+        entity_id=code_id,
+        metadata_json={
+            "code_label": code.label,
+            "code_colour": code.colour,
+            "definition": code.definition,
+        },
+        user_id=user_id,
+    ))
 
     segments = db.query(CodedSegment).filter(CodedSegment.code_id == code_id).all()
     for seg in segments:

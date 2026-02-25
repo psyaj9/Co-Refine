@@ -11,8 +11,9 @@ import Toolbar from "@/components/Toolbar";
 import StatusBar from "@/components/StatusBar";
 import LeftPanel from "@/components/LeftPanel";
 import DocumentUpload from "@/components/DocumentUpload";
-import DocumentViewerNew from "@/components/DocumentViewerNew";
+import DocumentViewer from "@/components/DocumentViewer";
 import Visualisations from "@/components/Visualisations";
+import EditHistoryView from "@/components/EditHistoryView";
 import RightPanel from "@/components/RightPanel";
 import HighlightPopover from "@/components/HighlightPopover";
 
@@ -63,10 +64,12 @@ export default function App() {
               </div>
             ) : viewMode === "visualisation" ? (
               <Visualisations />
+            ) : viewMode === "history" ? (
+              <EditHistoryView />
             ) : showUpload ? (
               <DocumentUpload />
             ) : (
-              <DocumentViewerNew />
+              <DocumentViewer />
             )}
           </div>
         </Panel>

@@ -1,11 +1,8 @@
 import { useStore } from "@/stores/store";
 import {
   FilePlus,
-  Plus,
-  BarChart3,
   Search,
-  Sun,
-  Moon,
+  History,
   LayoutGrid,
   FileText,
   Sparkles,
@@ -13,8 +10,6 @@ import {
 import { cn } from "@/lib/utils";
 
 export default function Toolbar() {
-  const theme = useStore((s) => s.theme);
-  const toggleTheme = useStore((s) => s.toggleTheme);
   const viewMode = useStore((s) => s.viewMode);
   const setViewMode = useStore((s) => s.setViewMode);
   const activeProjectId = useStore((s) => s.activeProjectId);
@@ -67,13 +62,16 @@ export default function Toolbar() {
         )}
       </div>
 
-      {/* Right: theme toggle */}
+      {/* Right: Edit History */}
       <div className="flex items-center gap-1 justify-self-end">
-        <ToolbarButton
-          icon={theme === "dark" ? Sun : Moon}
-          label={theme === "dark" ? "Light mode" : "Dark mode"}
-          onClick={toggleTheme}
-        />
+        {activeProjectId && activeDocumentId && !showUploadPage && (
+          <ToolbarButton
+            icon={History}
+            label="Edit History"
+            active={viewMode === "history"}
+            onClick={() => setViewMode(viewMode === "history" ? "document" : "history")}
+          />
+        )}
       </div>
     </header>
   );
