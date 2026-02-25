@@ -95,6 +95,13 @@ mark[data-start]:hover {
 }
 
 /* ---- Scrollbar styling ---- */
+.thin-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+.dark .thin-scrollbar {
+  scrollbar-color: #334155 transparent;
+}
 .thin-scrollbar::-webkit-scrollbar {
   width: 5px;
   height: 5px;
@@ -130,5 +137,73 @@ mark[data-start]:hover {
 }
 .panel-hover {
   @apply hover:bg-surface-50 dark:hover:bg-panel-dark-hover;
+}
+
+/* ---- Skip navigation ---- */
+.skip-nav {
+  @apply sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100]
+         focus:rounded focus:bg-brand-600 focus:px-4 focus:py-2 focus:text-sm
+         focus:font-medium focus:text-white focus:shadow-lg focus:outline-none;
+}
+
+/* ---- Radix Collapsible animation ---- */
+[data-state='open'] > .collapsible-content {
+  animation: collapsibleOpen 0.2s ease-out;
+}
+[data-state='closed'] > .collapsible-content {
+  animation: collapsibleClose 0.15s ease-in;
+}
+@keyframes collapsibleOpen {
+  from { height: 0; opacity: 0; }
+  to   { height: var(--radix-collapsible-content-height); opacity: 1; }
+}
+@keyframes collapsibleClose {
+  from { height: var(--radix-collapsible-content-height); opacity: 1; }
+  to   { height: 0; opacity: 0; }
+}
+
+/* ---- Tab content fade-in ---- */
+.tab-content-enter {
+  animation: tabContentEnter 0.15s ease-out;
+}
+@keyframes tabContentEnter {
+  from { opacity: 0; transform: translateY(2px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ---- View transition wrapper ---- */
+.view-enter {
+  animation: viewEnter 0.2s ease-out;
+}
+@keyframes viewEnter {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* ---- Focus ring for keyboard navigation ---- */
+:focus-visible {
+  @apply outline-2 outline-offset-2 outline-brand-500;
+}
+
+/* ---- Button press micro-interaction ---- */
+button:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+/* ---- Loading skeleton shimmer ---- */
+.skeleton {
+  @apply rounded bg-surface-200 dark:bg-surface-700;
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255,255,255,0.15) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+@keyframes shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
 }
 

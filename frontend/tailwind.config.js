@@ -3,6 +3,10 @@ export default {
   darkMode: 'class',
   theme: {
     extend: {
+      fontFamily: {
+        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+        mono: ['"JetBrains Mono"', 'ui-monospace', 'monospace'],
+      },
       colors: {
         surface: {
           50: '#f8fafc',
@@ -38,11 +42,24 @@ export default {
       fontSize: {
         '2xs': '0.625rem',
       },
+      borderRadius: {
+        DEFAULT: '0.375rem',
+        panel: '0.75rem',
+        card: '0.625rem',
+      },
+      transitionDuration: {
+        DEFAULT: '150ms',
+      },
       animation: {
         'fade-in': 'fadeIn 0.2s ease-out',
+        'fade-in-fast': 'fadeIn 0.15s ease-out',
         'slide-in-right': 'slideInRight 0.3s ease-out',
         'slide-in-left': 'slideInLeft 0.2s ease-out',
         'pulse-subtle': 'pulseSubtle 2s ease-in-out infinite',
+        'tab-content': 'tabContent 0.15s ease-out',
+        'collapsible-open': 'collapsibleOpen 0.2s ease-out',
+        'collapsible-close': 'collapsibleClose 0.15s ease-in',
+        'view-enter': 'viewEnter 0.2s ease-out',
       },
       keyframes: {
         fadeIn: {
@@ -60,6 +77,22 @@ export default {
         pulseSubtle: {
           '0%, 100%': { opacity: '1' },
           '50%': { opacity: '0.7' },
+        },
+        tabContent: {
+          from: { opacity: '0', transform: 'translateY(2px)' },
+          to: { opacity: '1', transform: 'translateY(0)' },
+        },
+        collapsibleOpen: {
+          from: { height: '0', opacity: '0' },
+          to: { height: 'var(--radix-collapsible-content-height)', opacity: '1' },
+        },
+        collapsibleClose: {
+          from: { height: 'var(--radix-collapsible-content-height)', opacity: '1' },
+          to: { height: '0', opacity: '0' },
+        },
+        viewEnter: {
+          from: { opacity: '0' },
+          to: { opacity: '1' },
         },
       },
     },

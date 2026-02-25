@@ -87,18 +87,6 @@ export type RightPanelTab = "alerts" | "chat";
 export type LeftPanelTab = "documents" | "codes" | "segments" | "definitions";
 export type HistoryScope = "project" | "document";
 
-export interface Memo {
-  id: string;
-  title: string;
-  content: string;
-  linked_code_id?: string | null;
-  linked_document_id?: string | null;
-  linked_segment_id?: string | null;
-  project_id: string;
-  created_at: string;
-  updated_at: string;
-}
-
 export interface ChatMessageOut {
   id: string;
   conversation_id: string;

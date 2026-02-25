@@ -1,11 +1,6 @@
 import { useStore } from "@/stores/store";
 import { FileText, Hash, FolderOpen, Loader2 } from "lucide-react";
-
-const AGENT_LABELS: Record<string, string> = {
-  ghost_partner: "Ghost Partner",
-  consistency: "Self-Consistency",
-  analysis: "Analysis",
-};
+import { AGENT_LABELS } from "@/lib/constants";
 
 export default function StatusBar() {
   const activeProjectId = useStore((s) => s.activeProjectId);
@@ -25,7 +20,7 @@ export default function StatusBar() {
     : null;
 
   return (
-    <footer className="h-6 flex items-center justify-between px-3 border-t panel-border panel-bg text-2xs text-surface-400 dark:text-surface-500 flex-shrink-0 select-none">
+    <footer className="h-6 flex items-center justify-between px-3 border-t panel-border panel-bg text-2xs text-surface-400 dark:text-surface-500 flex-shrink-0 select-none" role="contentinfo">
       <div className="flex items-center gap-3">
         {activeProject ? (
           <>
@@ -50,7 +45,7 @@ export default function StatusBar() {
         )}
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2" role="status" aria-live="polite">
         {agentsRunning && (
           <span className="flex items-center gap-1 text-brand-500 dark:text-brand-400">
             <Loader2 size={10} className="animate-spin" />

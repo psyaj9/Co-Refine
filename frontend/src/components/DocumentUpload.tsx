@@ -1,20 +1,17 @@
 import { useState, useCallback } from "react";
 import { useDropzone } from "react-dropzone";
-import { Upload, FileText } from "lucide-react";
+import { Upload } from "lucide-react";
 import { useStore } from "@/stores/store";
+import { cn } from "@/lib/utils";
 import * as api from "@/api/client";
 
 export default function DocumentUpload() {
-  const {
-    activeProjectId,
-    loadDocuments,
-    setActiveDocument,
-    loadSegments,
-    setShowUploadPage,
-  } = useStore();
+  const activeProjectId = useStore((s) => s.activeProjectId);
+  const loadDocuments = useStore((s) => s.loadDocuments);
+  const setActiveDocument = useStore((s) => s.setActiveDocument);
+  const loadSegments = useStore((s) => s.loadSegments);
+  const setShowUploadPage = useStore((s) => s.setShowUploadPage);
 
-  const [pasteTitle, setPasteTitle] = useState("");
-  const [pasteText, setPasteText] = useState("");
   const [uploading, setUploading] = useState(false);
   const [uploadCount, setUploadCount] = useState(0);
   const [uploadTotal, setUploadTotal] = useState(0);
@@ -61,26 +58,6 @@ export default function DocumentUpload() {
     multiple: true,
   });
 
-  const handlePaste = async () => {
-    if (!pasteTitle.trim() || !pasteText.trim() || !activeProjectId) return;
-    try {
-      const res = await api.pasteDocument(
-        pasteTitle.trim(),
-        pasteText.trim(),
-        "transcript",
-        activeProjectId
-      );
-      await loadDocuments();
-      setActiveDocument(res.id);
-      loadSegments(res.id);
-      setShowUploadPage(false);
-      setPasteTitle("");
-      setPasteText("");
-    } catch (e: any) {
-      alert(`Paste failed: ${e.message}`);
-    }
-  };
-
   return (
     <div className="max-w-3xl mx-auto space-y-8 py-10 px-6">
       <div className="text-center">
@@ -94,12 +71,14 @@ export default function DocumentUpload() {
 
       <div
         {...getRootProps()}
-        className={`border-2 border-dashed rounded-xl p-12 text-center cursor-pointer transition
-          ${
-            isDragActive
-              ? "border-brand-400 bg-brand-50 dark:bg-brand-700/20"
-              : "border-surface-300 dark:border-surface-600 hover:border-surface-400 dark:hover:border-surface-500 hover:bg-surface-50 dark:hover:bg-surface-800"
-          }`}
+        className={cn(
+          "border-2 border-dashed rounded-xl p-12 text-center cursor-pointer transition-colors",
+          isDragActive
+            ? "border-brand-400 bg-brand-50 dark:bg-brand-700/20"
+            : "border-surface-300 dark:border-surface-600 hover:border-surface-400 dark:hover:border-surface-500 hover:bg-surface-50 dark:hover:bg-surface-800",
+        )}
+        role="button"
+        aria-label="Upload documents"
       >
         <input {...getInputProps()} />
         <Upload className="mx-auto text-surface-400 dark:text-surface-500 mb-3" size={36} />

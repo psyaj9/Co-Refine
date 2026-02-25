@@ -16,6 +16,7 @@ import Visualisations from "@/components/Visualisations";
 import EditHistoryView from "@/components/EditHistoryView";
 import RightPanel from "@/components/RightPanel";
 import HighlightPopover from "@/components/HighlightPopover";
+import MobileDisclaimer from "@/components/MobileDisclaimer";
 
 function ResizeHandle() {
   return <Separator />;
@@ -39,19 +40,26 @@ export default function App() {
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-surface-50 dark:bg-surface-900 text-surface-800 dark:text-surface-100">
+      {/* Skip-nav for keyboard users */}
+      <a href="#main-content" className="skip-nav">
+        Skip to main content
+      </a>
+
       <Toolbar />
 
       <Group orientation="horizontal" className="flex-1 min-h-0">
         <Panel defaultSize="14%" minSize="10%" maxSize="25%">
-          <LeftPanel />
+          <nav aria-label="Project and codebook">
+            <LeftPanel />
+          </nav>
         </Panel>
 
         <ResizeHandle />
 
         <Panel defaultSize={showRightPanel ? "68%" : "86%"} minSize="30%">
-          <div className="h-full w-full overflow-auto panel-bg">
+          <main id="main-content" className="h-full w-full overflow-auto panel-bg" aria-label="Main content">
             {!activeProjectId ? (
-              <div className="h-full flex items-center justify-center p-6">
+              <div className="h-full flex items-center justify-center p-6 view-enter">
                 <div className="text-center space-y-3">
                   <h2 className="text-2xl font-bold text-surface-400 dark:text-surface-500">
                     Select or create a project
@@ -63,22 +71,24 @@ export default function App() {
                 </div>
               </div>
             ) : viewMode === "visualisation" ? (
-              <Visualisations />
+              <div className="view-enter h-full"><Visualisations /></div>
             ) : viewMode === "history" ? (
-              <EditHistoryView />
+              <div className="view-enter h-full"><EditHistoryView /></div>
             ) : showUpload ? (
-              <DocumentUpload />
+              <div className="view-enter h-full"><DocumentUpload /></div>
             ) : (
               <DocumentViewer />
             )}
-          </div>
+          </main>
         </Panel>
 
         {showRightPanel && (
           <>
             <ResizeHandle />
             <Panel defaultSize="18%" minSize="12%" maxSize="35%">
-              <RightPanel />
+              <aside aria-label="Alerts and AI chat">
+                <RightPanel />
+              </aside>
             </Panel>
           </>
         )}
@@ -87,6 +97,7 @@ export default function App() {
       <StatusBar />
 
       <HighlightPopover />
+      <MobileDisclaimer />
     </div>
   );
 }

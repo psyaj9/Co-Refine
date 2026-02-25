@@ -13,8 +13,8 @@ import type {
   LeftPanelTab,
   EditEventOut,
   HistoryScope,
-} from "../types";
-import * as api from "../api/client";
+} from "@/types";
+import * as api from "@/api/client";
 
 const CURRENT_USER = "default";
 

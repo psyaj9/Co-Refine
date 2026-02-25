@@ -23,7 +23,7 @@ export default function Toolbar() {
   const isAddDocActive = showUploadPage || (viewMode === "document" && !activeDocumentId);
 
   return (
-    <header className="h-10 grid grid-cols-[1fr_auto_1fr] items-center px-3 border-b panel-border panel-bg flex-shrink-0 select-none">
+    <header className="h-10 grid grid-cols-[1fr_auto_1fr] items-center px-3 border-b panel-border panel-bg flex-shrink-0 select-none" role="banner">
       {/* Left: brand */}
       <div className="flex items-center gap-2 justify-self-start">
         <Sparkles size={16} className="text-brand-500" />
@@ -36,7 +36,7 @@ export default function Toolbar() {
       </div>
 
       {/* Center: actions — always in the middle column */}
-      <div className="flex items-center gap-0.5 justify-self-center">
+      <div className="flex items-center gap-0.5 justify-self-center" role="toolbar" aria-label="View controls">
         {activeProjectId && (
           <>
             <ToolbarButton
@@ -92,6 +92,8 @@ function ToolbarButton({
     <button
       onClick={onClick}
       title={label}
+      aria-label={label}
+      aria-pressed={active}
       className={cn(
         "flex items-center gap-1.5 rounded px-2 py-1 text-xs transition-colors",
         active
