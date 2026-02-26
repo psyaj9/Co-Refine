@@ -34,10 +34,10 @@ vi.mock("@/stores/store", () => ({
 describe("Visualisations", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("renders 3 sub-tabs", () => {
+  it("renders sub-tabs", () => {
     render(<Visualisations />);
     expect(screen.getByText("Frequencies")).toBeInTheDocument();
-    expect(screen.getByText(/Code.*Document/i)).toBeInTheDocument();
+    expect(screen.getByText(/Code.*Doc/i)).toBeInTheDocument();
     expect(screen.getByText(/AI Analytics/i)).toBeInTheDocument();
   });
 

@@ -23,14 +23,26 @@ def _get_client() -> AzureOpenAI:
     return _client
 
 
-def _call_llm(prompt: str, model: str | None = None, retries: int = 1) -> dict:
+def _call_llm(prompt: str | list[dict], model: str | None = None, retries: int = 1) -> dict:
+    """Call LLM with either a plain string prompt or a list of message dicts.
+
+    Accepts:
+        prompt: str  — wrapped as [{"role": "user", "content": prompt}]
+        prompt: list[dict] — used directly as messages (system + user)
+    """
     client = _get_client()
     deployment = model or settings.azure_deployment_fast
+
+    # Support both old (string) and new (messages list) format
+    if isinstance(prompt, str):
+        messages = [{"role": "user", "content": prompt}]
+    else:
+        messages = prompt
 
     for attempt in range(1 + retries):
         response = client.chat.completions.create(
             model=deployment,
-            messages=[{"role": "user", "content": prompt}],
+            messages=messages,
             response_format={"type": "json_object"},
         )
         raw = response.choices[0].message.content or ""
@@ -59,17 +71,27 @@ def run_coding_audit(
     document_context: str = "",
     user_code_definitions: dict[str, str] | None = None,
     existing_codes_on_span: list[str] | None = None,
+    # Stage 1 deterministic scores (None = no grounding available)
+    centroid_similarity: float | None = None,
+    codebook_prob_dist: dict[str, float] | None = None,
+    entropy: float | None = None,
+    temporal_drift: float | None = None,
+    is_pseudo_centroid: bool = False,
+    segment_count: int | None = None,
 ) -> dict:
-    """Merged coding audit: runs self-consistency and inter-rater checks in a single LLM call.
+    """Multi-stage coding audit: Stage 1 scores ground Stage 2 LLM judgment.
 
     Returns a dict with keys:
-      self_lens: { is_consistent, consistency_score, reasoning, definition_match,
-                   drift_warning, alternative_codes, suggestion }
-      inter_rater_lens: { predicted_code, confidence, is_conflict, reasoning,
-                          conflict_explanation }
+      self_lens: { is_consistent, consistency_score (float), intent_alignment_score (float),
+                   reasoning, definition_match, drift_warning, alternative_codes, suggestion }
+      inter_rater_lens: { predicted_code, predicted_code_confidence (float), is_conflict,
+                          conflict_severity_score (float), reasoning, conflict_explanation }
+      overall_severity_score: float [0.0–1.0]
       overall_severity: 'high' | 'medium' | 'low'
+      score_grounding_note: str
+      _escalation: { was_escalated, reason }
     """
-    prompt = build_coding_audit_prompt(
+    messages = build_coding_audit_prompt(
         user_history=user_history,
         code_definitions=code_definitions,
         new_quote=new_quote,
@@ -77,17 +99,65 @@ def run_coding_audit(
         document_context=document_context,
         user_code_definitions=user_code_definitions,
         existing_codes_on_span=existing_codes_on_span,
+        centroid_similarity=centroid_similarity,
+        codebook_prob_dist=codebook_prob_dist,
+        entropy=entropy,
+        temporal_drift=temporal_drift,
+        is_pseudo_centroid=is_pseudo_centroid,
+        segment_count=segment_count,
     )
-    result = _call_llm(prompt)
 
-    # Escalate to reasoning model if severity is high or self-lens score is low
-    severity = result.get("overall_severity", "medium")
-    self_score = result.get("self_lens", {}).get("consistency_score", "medium")
-    score_map = {"high": 0.9, "medium": 0.6, "low": 0.3}
-    numeric_score = score_map.get(self_score, 0.5) if isinstance(self_score, str) else float(self_score)
+    result = _call_llm(messages)  # fast model
 
-    if severity == "high" or numeric_score < settings.consistency_escalation_threshold:
-        result = _call_llm(prompt, model=settings.azure_deployment_reasoning)
+    # ── STAGE 3: Escalation — only when Stage 1 and Stage 2 diverge ──
+    llm_severity = result.get("overall_severity_score")
+    llm_consistency = result.get("self_lens", {}).get("consistency_score")
+    llm_conflict = result.get("inter_rater_lens", {}).get("conflict_severity_score")
+
+    # Coerce to float safely (in case LLM returns strings despite instructions)
+    def _to_float(val, default: float = 0.5) -> float:
+        if val is None:
+            return default
+        if isinstance(val, (int, float)):
+            return float(val)
+        # Handle ordinal fallback for robustness
+        score_map = {"high": 0.9, "medium": 0.6, "low": 0.3}
+        if isinstance(val, str) and val.lower() in score_map:
+            return score_map[val.lower()]
+        try:
+            return float(val)
+        except (ValueError, TypeError):
+            return default
+
+    llm_severity_f = _to_float(llm_severity, 0.5)
+    llm_consistency_f = _to_float(llm_consistency, 0.5)
+    llm_conflict_f = _to_float(llm_conflict, 0.0)
+
+    escalation_reason = None
+
+    # Condition 1: LLM contradicts the embedding evidence
+    if centroid_similarity is not None:
+        divergence = abs(centroid_similarity - llm_consistency_f)
+        if divergence > settings.stage_divergence_threshold:
+            escalation_reason = f"stage_divergence={divergence:.3f}"
+
+    # Condition 2: LLM itself says this is serious
+    if llm_severity_f >= 0.65:
+        escalation_reason = f"high_severity={llm_severity_f:.3f}"
+
+    # Condition 3: Embedding says ambiguous but LLM dismisses it
+    if entropy is not None and entropy > 0.7 and llm_conflict_f < 0.3:
+        escalation_reason = f"entropy_conflict: entropy={entropy:.3f}, llm_conflict={llm_conflict_f:.3f}"
+
+    was_escalated = escalation_reason is not None
+    if was_escalated:
+        result = _call_llm(messages, model=settings.azure_deployment_reasoning)
+
+    # Attach escalation metadata to result
+    result["_escalation"] = {
+        "was_escalated": was_escalated,
+        "reason": escalation_reason,
+    }
 
     return result
 

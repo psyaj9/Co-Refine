@@ -49,7 +49,7 @@ export interface AnalysisOut {
 }
 
 export interface AlertPayload {
-  type: "coding_audit" | "consistency" | "ghost_partner" | "analysis_updated" | "agents_started" | "agent_thinking" | "agents_done" | "agent_error" | "chat_stream_start" | "chat_token" | "chat_done" | "chat_error" | "batch_audit_started" | "batch_audit_progress" | "batch_audit_done";
+  type: "coding_audit" | "consistency" | "ghost_partner" | "analysis_updated" | "agents_started" | "agent_thinking" | "agents_done" | "agent_error" | "chat_stream_start" | "chat_token" | "chat_done" | "chat_error" | "batch_audit_started" | "batch_audit_progress" | "batch_audit_done" | "deterministic_scores" | "code_overlap_matrix";
   segment_id?: string;
   code_id?: string;
   code_label?: string;
@@ -60,6 +60,8 @@ export interface AlertPayload {
   token?: string;
   conversation_id?: string;
   agent?: string;
+  deterministic_scores?: DeterministicScores | null;
+  escalation?: { was_escalated: boolean; reason: string | null };
   data: Record<string, unknown>;
 }
 
@@ -80,7 +82,7 @@ export interface TextSelection {
 }
 
 export type ViewMode = "document" | "visualisation" | "history";
-export type VisTab = "frequencies" | "crosstab" | "analytics";
+export type VisTab = "frequencies" | "crosstab" | "analytics" | "scarf" | "agreement" | "scatter" | "cooccurrence" | "histogram";
 export type RightPanelTab = "alerts" | "chat";
 export type HistoryScope = "project" | "document";
 
@@ -113,3 +115,78 @@ export interface EditEventOut {
   created_at: string;
 }
 
+// ── Scoring Pipeline Types ──────────────────────────────────────────
+
+export interface DeterministicScores {
+  centroid_similarity: number | null;
+  is_pseudo_centroid: boolean;
+  codebook_prob_dist: Record<string, number> | null;
+  entropy: number | null;
+  conflict_score: number | null;
+  proposed_code_prob: number | null;
+  temporal_drift: number | null;
+  segment_count: number | null;
+}
+
+export interface ConsistencyScoreOut {
+  id: string;
+  segment_id: string;
+  code_id: string;
+  user_id: string;
+  project_id: string;
+  // Stage 1
+  centroid_similarity: number | null;
+  is_pseudo_centroid: boolean;
+  proposed_code_prob: number | null;
+  entropy: number | null;
+  conflict_score: number | null;
+  temporal_drift: number | null;
+  codebook_distribution: Record<string, number> | null;
+  // Stage 2
+  llm_consistency_score: number | null;
+  llm_intent_score: number | null;
+  llm_conflict_severity: number | null;
+  llm_overall_severity: number | null;
+  llm_predicted_code: string | null;
+  llm_predicted_confidence: number | null;
+  // Stage 3
+  was_escalated: boolean;
+  escalation_reason: string | null;
+  created_at: string;
+}
+
+export interface CodeOverlapEntry {
+  code_a: string;
+  code_b: string;
+  similarity: number;
+}
+
+export interface DriftTimelineEntry {
+  code_label: string;
+  drift: number | null;
+}
+
+export interface CooccurrenceEntry {
+  code_a: string;
+  code_b: string;
+  count: number;
+}
+
+export interface AgreementSummaryEntry {
+  code_id: string;
+  code_label: string;
+  colour: string;
+  total: number;
+  agree_count: number;
+  disagree_count: number;
+  avg_conflict_severity: number | null;
+  avg_confidence: number | null;
+}
+
+export interface DocumentStatEntry {
+  document_id: string;
+  document_title: string;
+  segment_count: number;
+  code_count: number;
+  codes: string[];
+}

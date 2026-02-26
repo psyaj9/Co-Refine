@@ -72,6 +72,7 @@ class CodedSegment(Base):
     document = relationship("Document", back_populates="segments")
     code = relationship("Code", back_populates="segments")
     alerts = relationship("AgentAlert", back_populates="segment", cascade="all, delete-orphan")
+    consistency_scores = relationship("ConsistencyScore", back_populates="segment", cascade="all, delete-orphan")
 
 
 class AnalysisResult(Base):
@@ -132,6 +133,46 @@ class EditEvent(Base):
     metadata_json = Column(JSON, nullable=True)        # snapshot context
     user_id = Column(String, nullable=False)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class ConsistencyScore(Base):
+    """
+    Append-only scoring record — one per coded segment.
+    Contains both Stage 1 (deterministic) and Stage 2 (LLM) scores.
+    Used for evaluation: export and compute kappa, precision/recall, drift.
+    """
+    __tablename__ = "consistency_scores"
+
+    id = Column(String, primary_key=True)
+    segment_id = Column(String, ForeignKey("coded_segments.id"), nullable=False)
+    code_id = Column(String, ForeignKey("codes.id"), nullable=False)
+    user_id = Column(String, nullable=False)
+    project_id = Column(String, ForeignKey("projects.id"), nullable=False, index=True)
+
+    # Stage 1: Deterministic (reproducible, no LLM)
+    centroid_similarity = Column(Float, nullable=True)      # cosine(segment, code_centroid) [0,1]
+    is_pseudo_centroid = Column(Boolean, default=False)       # cold-start fallback used?
+    proposed_code_prob = Column(Float, nullable=True)        # P(proposed_code) from softmax [0,1]
+    entropy = Column(Float, nullable=True)                   # normalised Shannon entropy [0,1]
+    conflict_score = Column(Float, nullable=True)            # 1 - proposed_code_prob [0,1]
+    temporal_drift = Column(Float, nullable=True)            # centroid drift for this code [0,1]
+    codebook_distribution = Column(JSON, nullable=True)      # full {code: probability} dict
+
+    # Stage 2: LLM-produced (grounded on Stage 1)
+    llm_consistency_score = Column(Float, nullable=True)     # [0.0–1.0]
+    llm_intent_score = Column(Float, nullable=True)          # [0.0–1.0]
+    llm_conflict_severity = Column(Float, nullable=True)     # [0.0–1.0]
+    llm_overall_severity = Column(Float, nullable=True)      # [0.0–1.0]
+    llm_predicted_code = Column(String, nullable=True)       # inter-rater prediction
+    llm_predicted_confidence = Column(Float, nullable=True)  # [0.0–1.0]
+
+    # Stage 3: Escalation metadata
+    was_escalated = Column(Boolean, default=False)
+    escalation_reason = Column(String, nullable=True)
+
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    segment = relationship("CodedSegment", back_populates="consistency_scores")
 
 
 

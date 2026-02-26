@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
 import uuid
 
-from database import get_db, CodedSegment, Code, Document, AnalysisResult, AgentAlert, EditEvent
+from database import get_db, CodedSegment, Code, Document, AnalysisResult, AgentAlert, EditEvent, ConsistencyScore
 from models import SegmentCreate, SegmentOut, AnalysisOut, AnalysisTrigger, AlertOut, BatchAuditRequest
 from services.ai_analyzer import run_coding_audit, analyze_quotes
 from services.vector_store import (
@@ -10,6 +10,7 @@ from services.vector_store import (
     find_diverse_segments,
     delete_segment_embedding,
 )
+from services.scoring import compute_stage1_scores, compute_code_overlap_matrix
 from services.ws_manager import ws_manager
 from config import settings
 from utils import PARSE_FAILED_SENTINEL
@@ -432,6 +433,8 @@ def _run_batch_audit_background(
                     "lens": a.lens or "",
                 }
 
+        all_code_labels = [c.label for c in all_codes]
+
         for i, code in enumerate(all_codes):
             # MMR-sampled diverse segments for this code
             diverse = find_diverse_segments(
@@ -458,6 +461,21 @@ def _run_batch_audit_background(
             history = [(s["code"], s["text"]) for s in diverse[1:]]
 
             try:
+                # Stage 1: deterministic scores for representative segment
+                stage1 = None
+                try:
+                    current_definition = code.definition or None
+                    stage1 = compute_stage1_scores(
+                        user_id=user_id,
+                        segment_text=representative["text"],
+                        code_label=code.label,
+                        all_code_labels=all_code_labels,
+                        code_definition=current_definition,
+                        softmax_temperature=settings.softmax_temperature,
+                    )
+                except Exception as e:
+                    print(f"[Scoring] Batch stage1 error for '{code.label}': {e}")
+
                 audit_result = run_coding_audit(
                     user_history=history,
                     code_definitions=code_definitions,
@@ -465,6 +483,12 @@ def _run_batch_audit_background(
                     proposed_code=code.label,
                     user_code_definitions=user_code_definitions,
                     existing_codes_on_span=[],
+                    centroid_similarity=stage1["centroid_similarity"] if stage1 else None,
+                    codebook_prob_dist=stage1["codebook_prob_dist"] if stage1 else None,
+                    entropy=stage1["entropy"] if stage1 else None,
+                    temporal_drift=stage1["temporal_drift"] if stage1 else None,
+                    is_pseudo_centroid=stage1["is_pseudo_centroid"] if stage1 else False,
+                    segment_count=stage1["segment_count"] if stage1 else None,
                 )
 
                 # Filter alternative codes to only those that exist in the codebook
@@ -487,6 +511,33 @@ def _run_batch_audit_background(
                     payload=audit_result,
                 )
                 db.add(alert)
+
+                # Persist ConsistencyScore
+                inter_rater = audit_result.get("inter_rater_lens", {})
+                escalation = audit_result.get("_escalation", {})
+                score_row = ConsistencyScore(
+                    id=str(uuid.uuid4()),
+                    segment_id=representative["id"],
+                    code_id=code.id,
+                    user_id=user_id,
+                    project_id=project_id,
+                    centroid_similarity=stage1["centroid_similarity"] if stage1 else None,
+                    is_pseudo_centroid=stage1["is_pseudo_centroid"] if stage1 else False,
+                    proposed_code_prob=stage1["proposed_code_prob"] if stage1 else None,
+                    entropy=stage1["entropy"] if stage1 else None,
+                    conflict_score=stage1["conflict_score"] if stage1 else None,
+                    temporal_drift=stage1["temporal_drift"] if stage1 else None,
+                    codebook_distribution=stage1["codebook_prob_dist"] if stage1 else None,
+                    llm_consistency_score=self_lens.get("consistency_score"),
+                    llm_intent_score=self_lens.get("intent_alignment_score"),
+                    llm_conflict_severity=inter_rater.get("conflict_severity_score"),
+                    llm_overall_severity=audit_result.get("overall_severity_score"),
+                    llm_predicted_code=inter_rater.get("predicted_code"),
+                    llm_predicted_confidence=inter_rater.get("predicted_code_confidence"),
+                    was_escalated=escalation.get("was_escalated", False),
+                    escalation_reason=escalation.get("reason"),
+                )
+                db.add(score_row)
                 db.commit()
 
                 _ws_send(user_id, {
@@ -496,6 +547,8 @@ def _run_batch_audit_background(
                     "code_id": code.id,
                     "code_label": code.label,
                     "batch": True,
+                    "deterministic_scores": stage1,
+                    "escalation": escalation,
                     "data": audit_result,
                 })
             except Exception as e:
@@ -505,6 +558,17 @@ def _run_batch_audit_background(
                 "type": "batch_audit_progress",
                 "data": {"completed": i + 1, "total": total, "code_label": code.label},
             })
+
+        # Compute and send code overlap matrix for the project
+        try:
+            overlap_matrix = compute_code_overlap_matrix(user_id, all_code_labels)
+            _ws_send(user_id, {
+                "type": "code_overlap_matrix",
+                "project_id": project_id,
+                "data": overlap_matrix,
+            })
+        except Exception as e:
+            print(f"[Scoring] Code overlap matrix error: {e}")
 
         _ws_send(user_id, {
             "type": "batch_audit_done",
@@ -588,7 +652,33 @@ def _run_background_agents(
             db.query(CodedSegment).filter(CodedSegment.user_id == user_id).count()
         )
 
-        # 2. Coding Audit — always run using MMR diversity sampling for history
+        # 2. Stage 1 — Deterministic embedding scores
+        stage1 = None
+        try:
+            all_code_labels = [c.label for c in all_codes]
+            current_definition = (
+                current_code.definition
+                if current_code and current_code.definition
+                else None
+            )
+            stage1 = compute_stage1_scores(
+                user_id=user_id,
+                segment_text=text,
+                code_label=code_label,
+                all_code_labels=all_code_labels,
+                code_definition=current_definition,
+                softmax_temperature=settings.softmax_temperature,
+            )
+            _ws_send(user_id, {
+                "type": "deterministic_scores",
+                "segment_id": segment_id,
+                "code_id": code_id,
+                "data": stage1,
+            })
+        except Exception as e:
+            print(f"[Scoring] Stage 1 deterministic scoring failed: {e}")
+
+        # 3. Coding Audit — always run using MMR diversity sampling for history
         _ws_send(user_id, {
             "type": "agent_thinking",
             "agent": "coding_audit",
@@ -622,6 +712,13 @@ def _run_background_agents(
                 document_context=document_context,
                 user_code_definitions=user_code_definitions,
                 existing_codes_on_span=existing_codes_on_span,
+                # Stage 1 grounding (None-safe — prompt handles missing scores)
+                centroid_similarity=stage1["centroid_similarity"] if stage1 else None,
+                codebook_prob_dist=stage1["codebook_prob_dist"] if stage1 else None,
+                entropy=stage1["entropy"] if stage1 else None,
+                temporal_drift=stage1["temporal_drift"] if stage1 else None,
+                is_pseudo_centroid=stage1["is_pseudo_centroid"] if stage1 else False,
+                segment_count=stage1["segment_count"] if stage1 else None,
             )
 
             # Post-process: filter alternative codes already on this span
@@ -651,6 +748,36 @@ def _run_background_agents(
                 payload=audit_result,
             )
             db.add(alert)
+
+            # Persist ConsistencyScore row (Stage 1 + Stage 2 + Stage 3)
+            escalation = audit_result.get("_escalation", {})
+
+            score_row = ConsistencyScore(
+                id=str(uuid.uuid4()),
+                segment_id=segment_id,
+                code_id=code_id,
+                user_id=user_id,
+                project_id=project_id or "",
+                # Stage 1
+                centroid_similarity=stage1["centroid_similarity"] if stage1 else None,
+                is_pseudo_centroid=stage1["is_pseudo_centroid"] if stage1 else False,
+                proposed_code_prob=stage1["proposed_code_prob"] if stage1 else None,
+                entropy=stage1["entropy"] if stage1 else None,
+                conflict_score=stage1["conflict_score"] if stage1 else None,
+                temporal_drift=stage1["temporal_drift"] if stage1 else None,
+                codebook_distribution=stage1["codebook_prob_dist"] if stage1 else None,
+                # Stage 2
+                llm_consistency_score=self_lens.get("consistency_score"),
+                llm_intent_score=self_lens.get("intent_alignment_score"),
+                llm_conflict_severity=inter_rater.get("conflict_severity_score"),
+                llm_overall_severity=audit_result.get("overall_severity_score"),
+                llm_predicted_code=inter_rater.get("predicted_code"),
+                llm_predicted_confidence=inter_rater.get("predicted_code_confidence"),
+                # Stage 3
+                was_escalated=escalation.get("was_escalated", False),
+                escalation_reason=escalation.get("reason"),
+            )
+            db.add(score_row)
             db.commit()
 
             _ws_send(user_id, {
@@ -661,6 +788,8 @@ def _run_background_agents(
                 "code_label": code_label,
                 "is_consistent": is_consistent,
                 "is_conflict": is_conflict,
+                "deterministic_scores": stage1,
+                "escalation": escalation,
                 "data": audit_result,
             })
         except Exception as e:

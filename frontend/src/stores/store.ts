@@ -12,6 +12,12 @@ import type {
   RightPanelTab,
   EditEventOut,
   HistoryScope,
+  ConsistencyScoreOut,
+  CodeOverlapEntry,
+  DriftTimelineEntry,
+  CooccurrenceEntry,
+  AgreementSummaryEntry,
+  DocumentStatEntry,
 } from "@/types";
 import * as api from "@/api/client";
 
@@ -114,6 +120,20 @@ interface AppState {
   historySelectedEventId: string | null;
   setHistorySelectedEventId: (id: string | null) => void;
   loadEditHistory: () => Promise<void>;
+
+  // Evaluation / Visualisation data
+  consistencyScores: ConsistencyScoreOut[];
+  codeOverlap: CodeOverlapEntry[];
+  driftTimeline: DriftTimelineEntry[];
+  cooccurrence: CooccurrenceEntry[];
+  agreementSummary: AgreementSummaryEntry[];
+  documentStats: DocumentStatEntry[];
+  loadConsistencyScores: (codeId?: string) => Promise<void>;
+  loadCodeOverlap: () => Promise<void>;
+  loadDriftTimeline: () => Promise<void>;
+  loadCooccurrence: () => Promise<void>;
+  loadAgreementSummary: () => Promise<void>;
+  loadDocumentStats: () => Promise<void>;
 }
 
 export const useStore = create<AppState>((set, get) => ({
@@ -488,6 +508,75 @@ export const useStore = create<AppState>((set, get) => ({
       set({ editHistory: events });
     } catch (e) {
       console.error("Failed to load edit history:", e);
+    }
+  },
+
+  // ── Evaluation / Visualisation data ────────────────────────────────
+  consistencyScores: [],
+  codeOverlap: [],
+  driftTimeline: [],
+  cooccurrence: [],
+  agreementSummary: [],
+  documentStats: [],
+
+  loadConsistencyScores: async (codeId) => {
+    const { activeProjectId } = get();
+    if (!activeProjectId) return;
+    try {
+      const data = await api.fetchConsistencyScores(activeProjectId, codeId);
+      set({ consistencyScores: data });
+    } catch (e) {
+      console.error("Failed to load consistency scores:", e);
+    }
+  },
+  loadCodeOverlap: async () => {
+    const { activeProjectId, currentUser } = get();
+    if (!activeProjectId) return;
+    try {
+      const data = await api.fetchCodeOverlap(activeProjectId, currentUser);
+      set({ codeOverlap: data });
+    } catch (e) {
+      console.error("Failed to load code overlap:", e);
+    }
+  },
+  loadDriftTimeline: async () => {
+    const { activeProjectId, currentUser } = get();
+    if (!activeProjectId) return;
+    try {
+      const data = await api.fetchDriftTimeline(activeProjectId, currentUser);
+      set({ driftTimeline: data });
+    } catch (e) {
+      console.error("Failed to load drift timeline:", e);
+    }
+  },
+  loadCooccurrence: async () => {
+    const { activeProjectId } = get();
+    if (!activeProjectId) return;
+    try {
+      const data = await api.fetchCodeCooccurrence(activeProjectId);
+      set({ cooccurrence: data });
+    } catch (e) {
+      console.error("Failed to load co-occurrence:", e);
+    }
+  },
+  loadAgreementSummary: async () => {
+    const { activeProjectId } = get();
+    if (!activeProjectId) return;
+    try {
+      const data = await api.fetchAgreementSummary(activeProjectId);
+      set({ agreementSummary: data });
+    } catch (e) {
+      console.error("Failed to load agreement summary:", e);
+    }
+  },
+  loadDocumentStats: async () => {
+    const { activeProjectId } = get();
+    if (!activeProjectId) return;
+    try {
+      const data = await api.fetchDocumentStats(activeProjectId);
+      set({ documentStats: data });
+    } catch (e) {
+      console.error("Failed to load document stats:", e);
     }
   },
 }));

@@ -8,6 +8,12 @@ import type {
   ChatMessageOut,
   ConversationPreview,
   EditEventOut,
+  ConsistencyScoreOut,
+  CodeOverlapEntry,
+  DriftTimelineEntry,
+  CooccurrenceEntry,
+  AgreementSummaryEntry,
+  DocumentStatEntry,
 } from "@/types";
 
 const BASE = "/api";
@@ -257,6 +263,51 @@ export async function fetchConversations(projectId: string, userId: string) {
 
 export async function deleteConversation(conversationId: string) {
   await fetch(`${BASE}/chat/conversations/${conversationId}`, { method: "DELETE" });
+}
+
+// ── Evaluation / Visualisation endpoints ────────────────────────────
+
+export async function fetchConsistencyScores(projectId: string, codeId?: string) {
+  const params = new URLSearchParams({ project_id: projectId });
+  if (codeId) params.set("code_id", codeId);
+  return json<ConsistencyScoreOut[]>(
+    await fetch(`${BASE}/evaluation/scores?${params.toString()}`)
+  );
+}
+
+export async function fetchCodeOverlap(projectId: string, userId = "default") {
+  const params = new URLSearchParams({ project_id: projectId, user_id: userId });
+  return json<CodeOverlapEntry[]>(
+    await fetch(`${BASE}/evaluation/code-overlap?${params.toString()}`)
+  );
+}
+
+export async function fetchDriftTimeline(projectId: string, userId = "default") {
+  const params = new URLSearchParams({ project_id: projectId, user_id: userId });
+  return json<DriftTimelineEntry[]>(
+    await fetch(`${BASE}/evaluation/drift-timeline?${params.toString()}`)
+  );
+}
+
+export async function fetchCodeCooccurrence(projectId: string) {
+  const params = new URLSearchParams({ project_id: projectId });
+  return json<CooccurrenceEntry[]>(
+    await fetch(`${BASE}/evaluation/code-cooccurrence?${params.toString()}`)
+  );
+}
+
+export async function fetchAgreementSummary(projectId: string) {
+  const params = new URLSearchParams({ project_id: projectId });
+  return json<AgreementSummaryEntry[]>(
+    await fetch(`${BASE}/evaluation/agreement-summary?${params.toString()}`)
+  );
+}
+
+export async function fetchDocumentStats(projectId: string) {
+  const params = new URLSearchParams({ project_id: projectId });
+  return json<DocumentStatEntry[]>(
+    await fetch(`${BASE}/evaluation/document-stats?${params.toString()}`)
+  );
 }
 
 export async function fetchEditHistory(

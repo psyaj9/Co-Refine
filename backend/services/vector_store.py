@@ -228,3 +228,17 @@ def get_segment_count(user_id: str) -> int:
         return _get_collection(user_id).count()
     except Exception:
         return 0
+
+
+# ---------------------------------------------------------------------------
+# Public wrappers — used by services.scoring for Stage 1 deterministic scoring
+# ---------------------------------------------------------------------------
+
+def get_collection(user_id: str) -> chromadb.Collection:
+    """Public access to the user's Chroma collection."""
+    return _get_collection(user_id)
+
+
+def embed_text(text: str) -> list[float]:
+    """Public embedding function. Uses local or Azure depending on config."""
+    return _embed_text(text)
