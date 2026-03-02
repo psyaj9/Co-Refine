@@ -55,8 +55,7 @@ describe("AlertsTab", () => {
       agentsRunning: true,
       alerts: [mockAlert({ type: "agent_thinking", agent: "coding_audit" })],
     });
-    expect(screen.getByText(/Agents analysing/i)).toBeInTheDocument();
-    expect(screen.getAllByText(/Coding Audit/i).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText(/Coding Audit Pipeline/i)).toBeInTheDocument();
   });
 
   it("shows segment text blockquote for coding_audit", () => {

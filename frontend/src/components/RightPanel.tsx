@@ -71,7 +71,7 @@ export default function RightPanel({ onCollapse }: { onCollapse?: () => void }) 
 
       <Tabs.Content
         value="alerts"
-        className="flex-1 overflow-hidden"
+        className="flex-1 overflow-hidden data-[state=inactive]:hidden"
         forceMount
       >
         {rightPanelTab === "alerts" && (
@@ -83,7 +83,7 @@ export default function RightPanel({ onCollapse }: { onCollapse?: () => void }) 
 
       <Tabs.Content
         value="chat"
-        className="flex-1 overflow-hidden"
+        className="flex-1 overflow-hidden data-[state=inactive]:hidden"
         forceMount
       >
         {rightPanelTab === "chat" && (

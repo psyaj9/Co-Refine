@@ -14,6 +14,7 @@ import type {
   CooccurrenceEntry,
   AgreementSummaryEntry,
   DocumentStatEntry,
+  ProjectSettings,
 } from "@/types";
 
 const BASE = "/api";
@@ -321,5 +322,26 @@ export async function fetchEditHistory(
   if (params?.offset) qs.set("offset", String(params.offset));
   return json<EditEventOut[]>(
     await fetch(`${BASE}/projects/${projectId}/edit-history?${qs.toString()}`)
+  );
+}
+
+// ── Project Settings (Perspectives) ─────────────────────────────────
+
+export async function fetchProjectSettings(projectId: string) {
+  return json<ProjectSettings>(
+    await fetch(`${BASE}/projects/${projectId}/settings`)
+  );
+}
+
+export async function updateProjectSettings(
+  projectId: string,
+  enabledPerspectives: string[],
+) {
+  return json<ProjectSettings>(
+    await fetch(`${BASE}/projects/${projectId}/settings`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ enabled_perspectives: enabledPerspectives }),
+    })
   );
 }

@@ -34,7 +34,7 @@ def cosine_similarity(a: list[float], b: list[float]) -> float:
 
 def _compute_centroid(embeddings: list[list[float]]) -> list[float]:
     """Compute L2-normalised mean of a list of embedding vectors."""
-    if not embeddings:
+    if embeddings is None or len(embeddings) == 0:
         return []
     dim = len(embeddings[0])
     centroid = [0.0] * dim
@@ -69,7 +69,7 @@ def get_code_centroid(user_id: str, code_label: str) -> list[float] | None:
         include=["embeddings"],
     )
     embeddings = results.get("embeddings")
-    if not embeddings or len(embeddings) == 0:
+    if embeddings is None or len(embeddings) == 0:
         return None
     return _compute_centroid(embeddings)
 
@@ -106,9 +106,9 @@ def get_code_centroid_with_fallback(
     )
     embeddings = results.get("embeddings")
 
-    if embeddings and len(embeddings) >= min_segments:
+    if embeddings is not None and len(embeddings) >= min_segments:
         return _compute_centroid(embeddings), False
-    elif embeddings and len(embeddings) > 0:
+    elif embeddings is not None and len(embeddings) > 0:
         # Sparse but usable — return real centroid, mark as not-pseudo
         return _compute_centroid(embeddings), False
     elif code_definition:
@@ -272,7 +272,7 @@ def compute_temporal_drift(
     embeddings = results.get("embeddings", [])
     metadatas = results.get("metadatas", [])
 
-    if not embeddings or len(embeddings) < (window_recent + window_old):
+    if embeddings is None or len(embeddings) < (window_recent + window_old):
         return None
 
     # Sort by created_at

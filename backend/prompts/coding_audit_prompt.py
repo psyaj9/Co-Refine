@@ -16,7 +16,8 @@ SCORING RULES — YOU MUST FOLLOW THESE EXACTLY:
    Semantic judgment, not just pattern matching. Can diverge from consistency_score.
 
 3. predicted_code_confidence: Float 0.0–1.0.
-   MUST be anchored to the softmax P() value for your predicted code as a floor.
+   For each predicted code in the ranked list, confidence MUST be anchored
+   to the softmax P() value for that code as a floor.
 
 4. conflict_severity_score: Float 0.0–1.0.
    0.0 = no conflict, 1.0 = maximum conflict.
@@ -47,11 +48,21 @@ Return JSON with EXACTLY this structure:
         "suggestion": "Brief constructive suggestion for the researcher"
     }},
     "inter_rater_lens": {{
-        "predicted_code": "The code an independent researcher would likely assign",
-        "predicted_code_confidence": 0.65,
+        "predicted_codes": [
+            {{
+                "code": "Most likely code an independent researcher would assign",
+                "confidence": 0.72,
+                "reasoning": "Brief rationale for why this code fits"
+            }},
+            {{
+                "code": "Second most likely code",
+                "confidence": 0.45,
+                "reasoning": "Brief rationale for this alternative"
+            }}
+        ],
         "is_conflict": true or false,
         "conflict_severity_score": 0.12,
-        "reasoning": "Step-by-step rationale based on codebook definitions and coding patterns",
+        "reasoning": "Step-by-step overall rationale based on codebook definitions and coding patterns",
         "conflict_explanation": "Why the second researcher would disagree, or empty string if no conflict"
     }},
     "overall_severity_score": 0.42,
@@ -104,9 +115,10 @@ Perform TWO analyses and return them together in a single JSON response.
 4. Are there better-fitting codes from the codebook? (NEVER suggest codes already applied to this segment)
 
 **LENS 2 — INTER-RATER (Independent Researcher Simulation):**
-1. Based on the codebook definitions and the coding history as representative examples, which code would an independent researcher assign?
-2. Does this differ from the researcher's proposed code AND all codes already applied to this segment?
-3. If so, flag it as a conflict and explain the disagreement.
+1. Based on the codebook definitions and the coding history as representative examples, rank up to 5 codes from the codebook that an independent researcher might assign to this segment, ordered by fit.
+2. For each candidate code, provide a confidence score (anchored to softmax P() as floor) and a brief reason why it fits.
+3. The top-ranked code is the primary prediction. If it differs from the researcher's proposed code AND all codes already applied, flag is_conflict=true.
+4. Explain the overall disagreement if there is a conflict.
 
 Additional:
 - For alternative_codes, NEVER include: {co_applied_label_list}
@@ -190,12 +202,19 @@ def build_coding_audit_prompt(
     temporal_drift: float | None = None,
     is_pseudo_centroid: bool = False,
     segment_count: int | None = None,
+    # Perspectives configuration
+    enabled_perspectives: list[str] | None = None,
 ) -> list[dict]:
     """Build the coding audit prompt as a list of messages (system + user).
 
     When Stage 1 scores are provided, they are injected as FACTS that the
     LLM must ground its judgment on. When they are None, the prompt tells
     the LLM to be conservative (cold-start handling).
+
+    enabled_perspectives controls which lenses are included:
+      - "self_consistency" → includes LENS 1 (Self-Consistency)
+      - "inter_rater" → includes LENS 2 (Inter-Rater)
+      If None or empty, defaults to both.
 
     Returns list[dict] with 'role' and 'content' keys.
     """
@@ -277,7 +296,32 @@ def build_coding_audit_prompt(
         co_applied_label_list=co_applied_label_list,
     )
 
+    # Resolve enabled perspectives (default: both)
+    perspectives = enabled_perspectives or ["self_consistency", "inter_rater"]
+    has_self = "self_consistency" in perspectives
+    has_inter = "inter_rater" in perspectives
+
+    system_prompt = _SYSTEM_PROMPT
+
+    # If only one perspective is enabled, trim the prompt
+    if has_self and not has_inter:
+        # Remove inter-rater from system + user prompt
+        system_prompt = system_prompt.replace(
+            '  2. INTER-RATER RELIABILITY — what would an independent second researcher code this segment as?\n',
+            ''
+        )
+        # Add note about single perspective
+        user_content += "\n\nNOTE: Only the Self-Consistency lens is enabled. " \
+            "Set inter_rater_lens to null in your JSON response."
+    elif has_inter and not has_self:
+        system_prompt = system_prompt.replace(
+            '  1. SELF-CONSISTENCY — did the researcher apply this code consistently with their own past decisions?\n',
+            ''
+        )
+        user_content += "\n\nNOTE: Only the Inter-Rater Reliability lens is enabled. " \
+            "Set self_lens to null in your JSON response."
+
     return [
-        {"role": "system", "content": _SYSTEM_PROMPT},
+        {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_content},
     ]

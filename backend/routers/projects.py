@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 import uuid
 
 from database import get_db, Project, Document, Code, CodedSegment, AgentAlert
-from models import ProjectCreate, ProjectOut
+from models import ProjectCreate, ProjectOut, ProjectSettingsOut, ProjectSettingsUpdate, AVAILABLE_PERSPECTIVES
 from services.vector_store import delete_segment_embedding
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
@@ -63,3 +63,38 @@ def delete_project(project_id: str, user_id: str = "default", db: Session = Depe
     db.delete(project)
     db.commit()
     return {"status": "deleted"}
+
+
+@router.get("/{project_id}/settings", response_model=ProjectSettingsOut)
+def get_project_settings(project_id: str, db: Session = Depends(get_db)):
+    """Get project settings including enabled perspectives."""
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    perspectives = project.enabled_perspectives or ["self_consistency", "inter_rater"]
+    return ProjectSettingsOut(
+        enabled_perspectives=perspectives,
+        available_perspectives=AVAILABLE_PERSPECTIVES,
+    )
+
+
+@router.put("/{project_id}/settings", response_model=ProjectSettingsOut)
+def update_project_settings(
+    project_id: str, body: ProjectSettingsUpdate, db: Session = Depends(get_db)
+):
+    """Update project settings (e.g. enabled perspectives)."""
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    valid_ids = {p["id"] for p in AVAILABLE_PERSPECTIVES}
+    invalid = [p for p in body.enabled_perspectives if p not in valid_ids]
+    if invalid:
+        raise HTTPException(status_code=400, detail=f"Invalid perspectives: {invalid}")
+    if not body.enabled_perspectives:
+        raise HTTPException(status_code=400, detail="At least one perspective must be enabled")
+    project.enabled_perspectives = body.enabled_perspectives
+    db.commit()
+    return ProjectSettingsOut(
+        enabled_perspectives=project.enabled_perspectives,
+        available_perspectives=AVAILABLE_PERSPECTIVES,
+    )

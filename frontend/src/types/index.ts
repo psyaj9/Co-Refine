@@ -117,6 +117,13 @@ export interface EditEventOut {
 
 // ── Scoring Pipeline Types ──────────────────────────────────────────
 
+/** A single candidate code predicted by the inter-rater lens */
+export interface PredictedCode {
+  code: string;
+  confidence: number;
+  reasoning: string;
+}
+
 export interface DeterministicScores {
   centroid_similarity: number | null;
   is_pseudo_centroid: boolean;
@@ -149,6 +156,7 @@ export interface ConsistencyScoreOut {
   llm_overall_severity: number | null;
   llm_predicted_code: string | null;
   llm_predicted_confidence: number | null;
+  llm_predicted_codes_json: PredictedCode[] | null;
   // Stage 3
   was_escalated: boolean;
   escalation_reason: string | null;
@@ -189,4 +197,17 @@ export interface DocumentStatEntry {
   segment_count: number;
   code_count: number;
   codes: string[];
+}
+
+// ── Project Settings (Perspectives) ─────────────────────────────────
+
+export interface Perspective {
+  id: string;
+  label: string;
+  description: string;
+}
+
+export interface ProjectSettings {
+  enabled_perspectives: string[];
+  available_perspectives: Perspective[];
 }

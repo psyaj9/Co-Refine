@@ -133,6 +133,13 @@ export function defaultStoreState() {
     agentsRunning: false,
     batchAuditRunning: false,
     batchAuditProgress: null,
+    auditStage: {
+      current: 0 as 0 | 1 | 2 | 3,
+      stage1Scores: null,
+      escalation: null,
+      confidence: null,
+    },
+    projectSettings: null,
     codeSearchQuery: "",
     docSearchQuery: "",
     chatMessages: [] as ChatMessageOut[],
@@ -183,6 +190,8 @@ export function defaultStoreState() {
     setHistoryScope: vi.fn(),
     setHistorySelectedEventId: vi.fn(),
     loadEditHistory: vi.fn().mockResolvedValue(undefined),
+    loadProjectSettings: vi.fn().mockResolvedValue(undefined),
+    updateProjectSettings: vi.fn().mockResolvedValue(undefined),
   };
 }
 

@@ -18,6 +18,7 @@ import type {
   CooccurrenceEntry,
   AgreementSummaryEntry,
   DocumentStatEntry,
+  ProjectSettings,
 } from "@/types";
 import * as api from "@/api/client";
 
@@ -100,6 +101,19 @@ interface AppState {
   batchAuditRunning: boolean;
   batchAuditProgress: { completed: number; total: number } | null;
 
+  // Audit stage tracking (3-stage pipeline progress)
+  auditStage: {
+    current: 0 | 1 | 2 | 3;
+    stage1Scores: Record<string, unknown> | null;
+    escalation: { was_escalated: boolean; reason: string | null } | null;
+    confidence: {
+      centroid_similarity: number | null;
+      consistency_score: number | null;
+      overall_severity: string | null;
+      overall_severity_score: number | null;
+    } | null;
+  };
+
   codeSearchQuery: string;
   setCodeSearchQuery: (q: string) => void;
   docSearchQuery: string;
@@ -134,6 +148,11 @@ interface AppState {
   loadCooccurrence: () => Promise<void>;
   loadAgreementSummary: () => Promise<void>;
   loadDocumentStats: () => Promise<void>;
+
+  // Project settings (perspectives)
+  projectSettings: ProjectSettings | null;
+  loadProjectSettings: () => Promise<void>;
+  updateProjectSettings: (perspectives: string[]) => Promise<void>;
 }
 
 export const useStore = create<AppState>((set, get) => ({
@@ -181,8 +200,8 @@ export const useStore = create<AppState>((set, get) => ({
       showUploadPage: false,
     });
     setTimeout(async () => {
-      const { loadDocuments, loadCodes, loadAnalyses } = get();
-      await Promise.all([loadDocuments(), loadCodes(), loadAnalyses()]);
+      const { loadDocuments, loadCodes, loadAnalyses, loadProjectSettings } = get();
+      await Promise.all([loadDocuments(), loadCodes(), loadAnalyses(), loadProjectSettings()]);
     }, 0);
   },
   createProject: async (name) => {
@@ -341,14 +360,36 @@ export const useStore = create<AppState>((set, get) => ({
       return { batchAuditRunning: false, batchAuditProgress: null };
     }
     if (a.type === "agents_started") {
-      return { agentsRunning: true, alerts: [a, ...s.alerts].slice(0, 50) };
+      return {
+        agentsRunning: true,
+        auditStage: { current: 1, stage1Scores: null, escalation: null, confidence: null },
+        alerts: [a, ...s.alerts].slice(0, 50),
+      };
     }
     if (a.type === "agents_done") {
       return {
         agentsRunning: false,
+        auditStage: { current: 0, stage1Scores: null, escalation: null, confidence: null },
         alerts: s.alerts.filter(
           (al) => al.type !== "agents_started" && al.type !== "agent_thinking"
         ),
+      };
+    }
+    // Track Stage 1 completion → move to Stage 2
+    if (a.type === "deterministic_scores") {
+      return {
+        auditStage: {
+          ...s.auditStage,
+          current: 2 as const,
+          stage1Scores: a.data || null,
+          confidence: {
+            centroid_similarity: (a.data?.centroid_similarity as number) ?? null,
+            consistency_score: null,
+            overall_severity: null,
+            overall_severity_score: null,
+          },
+        },
+        alerts: [a, ...s.alerts].slice(0, 50),
       };
     }
     if (a.type === "coding_audit" || a.type === "consistency" || a.type === "ghost_partner" || a.type === "analysis_updated" || a.type === "agent_error") {
@@ -368,11 +409,27 @@ export const useStore = create<AppState>((set, get) => ({
         const selfLens = a.data?.self_lens as Record<string, any> | undefined;
         const interLens = a.data?.inter_rater_lens as Record<string, any> | undefined;
         const isFlagged = selfLens?.is_consistent === false || interLens?.is_conflict === true;
+
+        // Update audit stage with confidence + escalation data
+        const escalation = a.escalation ?? (a.data?._escalation as { was_escalated: boolean; reason: string | null } | undefined) ?? null;
+        const auditStageUpdate = {
+          ...s.auditStage,
+          current: (escalation?.was_escalated ? 3 : s.auditStage.current) as 0 | 1 | 2 | 3,
+          escalation: escalation,
+          confidence: {
+            centroid_similarity: s.auditStage.confidence?.centroid_similarity ?? null,
+            consistency_score: (selfLens?.consistency_score as number) ?? null,
+            overall_severity: (a.data?.overall_severity as string) ?? null,
+            overall_severity_score: (a.data?.overall_severity_score as number) ?? null,
+          },
+        };
+
         if (isFlagged) {
           const newSet = new Set(s.inconsistentSegmentIds);
           newSet.add(a.segment_id);
-          return { inconsistentSegmentIds: newSet, alerts: [a, ...filtered].slice(0, 50) };
+          return { inconsistentSegmentIds: newSet, auditStage: auditStageUpdate, alerts: [a, ...filtered].slice(0, 50) };
         }
+        return { auditStage: auditStageUpdate, alerts: [a, ...filtered].slice(0, 50) };
       }
       return { alerts: [a, ...filtered].slice(0, 50) };
     }
@@ -430,6 +487,8 @@ export const useStore = create<AppState>((set, get) => ({
 
   batchAuditRunning: false,
   batchAuditProgress: null,
+
+  auditStage: { current: 0, stage1Scores: null, escalation: null, confidence: null },
 
   chatMessages: [],
   chatConversationId: null,
@@ -577,6 +636,29 @@ export const useStore = create<AppState>((set, get) => ({
       set({ documentStats: data });
     } catch (e) {
       console.error("Failed to load document stats:", e);
+    }
+  },
+
+  // Project settings (perspectives)
+  projectSettings: null,
+  loadProjectSettings: async () => {
+    const { activeProjectId } = get();
+    if (!activeProjectId) return;
+    try {
+      const data = await api.fetchProjectSettings(activeProjectId);
+      set({ projectSettings: data });
+    } catch (e) {
+      console.error("Failed to load project settings:", e);
+    }
+  },
+  updateProjectSettings: async (perspectives: string[]) => {
+    const { activeProjectId } = get();
+    if (!activeProjectId) return;
+    try {
+      const data = await api.updateProjectSettings(activeProjectId, perspectives);
+      set({ projectSettings: data });
+    } catch (e) {
+      console.error("Failed to update project settings:", e);
     }
   },
 }));

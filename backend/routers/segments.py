@@ -628,6 +628,14 @@ def _run_background_agents(
             db.query(Code).filter(Code.project_id == project_id).all()
             if project_id else []
         )
+
+        # Fetch project-level perspective settings
+        enabled_perspectives = None
+        if project_id:
+            from database import Project
+            project_row = db.query(Project).filter(Project.id == project_id).first()
+            if project_row and project_row.enabled_perspectives:
+                enabled_perspectives = project_row.enabled_perspectives
         user_code_definitions: dict[str, str] = {
             c.label: (c.definition or "") for c in all_codes
         }
@@ -719,6 +727,7 @@ def _run_background_agents(
                 temporal_drift=stage1["temporal_drift"] if stage1 else None,
                 is_pseudo_centroid=stage1["is_pseudo_centroid"] if stage1 else False,
                 segment_count=stage1["segment_count"] if stage1 else None,
+                enabled_perspectives=enabled_perspectives,
             )
 
             # Post-process: filter alternative codes already on this span
@@ -736,6 +745,14 @@ def _run_background_agents(
             if predicted in all_codes_on_span:
                 inter_rater["is_conflict"] = False
                 inter_rater["conflict_explanation"] = ""
+
+            # Filter predicted_codes: remove any already applied on this span
+            predicted_codes_raw = inter_rater.get("predicted_codes", [])
+            if isinstance(predicted_codes_raw, list):
+                inter_rater["predicted_codes"] = [
+                    pc for pc in predicted_codes_raw
+                    if pc.get("code") not in all_codes_on_span
+                ]
 
             is_consistent = self_lens.get("is_consistent", True)
             is_conflict = inter_rater.get("is_conflict", False)
@@ -773,6 +790,7 @@ def _run_background_agents(
                 llm_overall_severity=audit_result.get("overall_severity_score"),
                 llm_predicted_code=inter_rater.get("predicted_code"),
                 llm_predicted_confidence=inter_rater.get("predicted_code_confidence"),
+                llm_predicted_codes_json=inter_rater.get("predicted_codes"),
                 # Stage 3
                 was_escalated=escalation.get("was_escalated", False),
                 escalation_reason=escalation.get("reason"),

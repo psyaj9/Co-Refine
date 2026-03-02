@@ -25,7 +25,7 @@ POST /api/codes/{code_id}/propagate
 2. For each document in the project, retrieve text content from `file_parser`.
 3. Use the ChromaDB vector store to find the top-K most similar chunks (embedding similarity) to the existing coded segments.
 4. Filter out any chunks that already overlap with existing segments for this code.
-5. Send each candidate through a lightweight LLM confirmation call (Gemini Flash Lite) to verify the passage genuinely fits the code's definition.
+5. Send each candidate through a lightweight LLM confirmation call to verify the passage genuinely fits the code's definition.
 6. Return confirmed candidates as `propagation_suggestion` WebSocket alerts.
 
 ### 1.2 Trigger Points

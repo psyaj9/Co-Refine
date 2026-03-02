@@ -22,3 +22,40 @@ export const AGENT_LABELS: Record<string, string> = {
   ghost_partner: "Ghost Partner",
   consistency: "Self-Consistency",
 };
+
+/**
+ * Plain-language explanations for each metric shown in alerts.
+ * Designed for non-technical qualitative researchers.
+ */
+export const METRIC_EXPLANATIONS: Record<string, string> = {
+  similarity:
+    "How closely this segment matches past examples of the same code. Higher means a better fit (0 = no match, 1 = perfect match).",
+  entropy:
+    "How ambiguous this segment is — whether it could reasonably belong to several different codes. Higher means more ambiguity.",
+  drift:
+    "Measures whether the meaning of this code has been shifting over time. A high value suggests your recent coding decisions differ from earlier ones.",
+  consistency:
+    "How well this coding decision aligns with your own past decisions for this code. Higher is better.",
+  severity_low:
+    "The coding looks fine — no significant issues detected.",
+  severity_medium:
+    "Minor issues detected — you may want to double-check this decision.",
+  severity_high:
+    "The AI strongly recommends reviewing this decision — significant inconsistency or conflict detected.",
+  escalation:
+    "This decision was flagged for a second, more thorough AI review because the initial checks found something unexpected.",
+  pseudo_centroid:
+    "Not enough real data to compare against — the AI is using the code's written definition as a stand-in, so metrics may be less reliable.",
+  sparse_data:
+    "Very few segments have been coded with this code, so the AI has limited examples to learn from. Metrics will become more reliable as you code more.",
+  predicted_confidence:
+    "How confident the simulated second researcher is about their suggested code. Higher means more certain.",
+  conflict_severity:
+    "How significant the disagreement is between you and the simulated second researcher. Higher means a more meaningful disagreement.",
+  intent_alignment:
+    "How well the segment matches the intended meaning of the code, based on its definition — not just surface-level similarity.",
+  self_consistency_lens:
+    "Checks whether you are applying this code consistently with your own past coding decisions.",
+  inter_rater_lens:
+    "Simulates an independent second researcher coding the same segment to check if they would agree with your choice.",
+};

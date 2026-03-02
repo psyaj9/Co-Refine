@@ -174,6 +174,7 @@ class ConsistencyScoreOut(BaseModel):
     llm_overall_severity: Optional[float] = None
     llm_predicted_code: Optional[str] = None
     llm_predicted_confidence: Optional[float] = None
+    llm_predicted_codes_json: Optional[list[dict]] = None
     # Stage 3
     was_escalated: bool = False
     escalation_reason: Optional[str] = None
@@ -219,3 +220,28 @@ class DocumentStatEntry(BaseModel):
     segment_count: int
     code_count: int
     codes: list[str]
+
+
+# ── Perspectives Configuration ───────────────────────────────────────
+
+AVAILABLE_PERSPECTIVES = [
+    {
+        "id": "self_consistency",
+        "label": "Self-Consistency",
+        "description": "Did you apply this code consistently with your own past decisions?",
+    },
+    {
+        "id": "inter_rater",
+        "label": "Inter-Rater Reliability",
+        "description": "What would an independent second researcher code this segment as?",
+    },
+]
+
+
+class ProjectSettingsOut(BaseModel):
+    enabled_perspectives: list[str]
+    available_perspectives: list[dict[str, str]]
+
+
+class ProjectSettingsUpdate(BaseModel):
+    enabled_perspectives: list[str]

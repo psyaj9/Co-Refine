@@ -107,7 +107,8 @@ describe("alertBody", () => {
       ...base,
       data: { self_lens: { suggestion: "Consider re-coding" } },
     };
-    expect(alertBody(alert)).toBe("Consider re-coding");
+    // Body now includes a plain-language opening line followed by the suggestion
+    expect(alertBody(alert)).toContain("Consider re-coding");
   });
 
   it("returns reasoning for consistency", () => {

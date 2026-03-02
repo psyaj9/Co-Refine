@@ -19,6 +19,7 @@ class Project(Base):
 
     id = Column(String, primary_key=True)
     name = Column(String, nullable=False)
+    enabled_perspectives = Column(JSON, default=lambda: ["self_consistency", "inter_rater"])
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     documents = relationship("Document", back_populates="project", cascade="all, delete-orphan")
@@ -163,8 +164,9 @@ class ConsistencyScore(Base):
     llm_intent_score = Column(Float, nullable=True)          # [0.0–1.0]
     llm_conflict_severity = Column(Float, nullable=True)     # [0.0–1.0]
     llm_overall_severity = Column(Float, nullable=True)      # [0.0–1.0]
-    llm_predicted_code = Column(String, nullable=True)       # inter-rater prediction
+    llm_predicted_code = Column(String, nullable=True)       # inter-rater top prediction
     llm_predicted_confidence = Column(Float, nullable=True)  # [0.0–1.0]
+    llm_predicted_codes_json = Column(JSON, nullable=True)   # ranked list [{code, confidence, reasoning}]
 
     # Stage 3: Escalation metadata
     was_escalated = Column(Boolean, default=False)
@@ -176,9 +178,30 @@ class ConsistencyScore(Base):
 
 
 
+def _migrate_add_columns():
+    """Add columns introduced after initial schema (idempotent)."""
+    from sqlalchemy import inspect, text
+    insp = inspect(engine)
+    if "projects" in insp.get_table_names():
+        cols = {c["name"] for c in insp.get_columns("projects")}
+        if "enabled_perspectives" not in cols:
+            with engine.begin() as conn:
+                conn.execute(text(
+                    "ALTER TABLE projects ADD COLUMN enabled_perspectives JSON DEFAULT '[]'"
+                ))
+    if "consistency_scores" in insp.get_table_names():
+        cols = {c["name"] for c in insp.get_columns("consistency_scores")}
+        if "llm_predicted_codes_json" not in cols:
+            with engine.begin() as conn:
+                conn.execute(text(
+                    "ALTER TABLE consistency_scores ADD COLUMN llm_predicted_codes_json JSON"
+                ))
+
+
 def init_db():
-    """Create all tables."""
+    """Create all tables and run lightweight migrations."""
     Base.metadata.create_all(bind=engine)
+    _migrate_add_columns()
 
 
 def get_db():

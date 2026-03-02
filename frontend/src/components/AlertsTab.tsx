@@ -2,44 +2,64 @@ import {
   CheckCircle2,
   Loader2,
   X,
+  Zap,
+  Brain,
+  ShieldAlert,
+  TrendingUp,
+  AlertTriangle as AlertTriangleIcon,
 } from "lucide-react";
 import { useStore } from "@/stores/store";
 import { cn } from "@/lib/utils";
-import { AGENT_LABELS } from "@/lib/constants";
-import { alertStyle, alertIcon, alertTitle, alertBody } from "@/lib/alert-helpers";
+import { AGENT_LABELS, METRIC_EXPLANATIONS } from "@/lib/constants";
+import { alertStyle, alertIcon, alertTitle, alertBody, alertMetrics } from "@/lib/alert-helpers";
+import MetricTooltip from "@/components/MetricTooltip";
+import CodingAuditDetail from "@/components/CodingAuditDetail";
+
+const STAGES = [
+  { key: 1, label: "Embedding Analysis", Icon: Zap, description: "Computing semantic similarity & codebook distribution" },
+  { key: 2, label: "LLM Audit", Icon: Brain, description: "Self-consistency & inter-rater review" },
+  { key: 3, label: "Escalation Review", Icon: ShieldAlert, description: "Re-evaluating with stronger model" },
+] as const;
+
+function SeverityBadge({ severity, score }: { severity: string | null; score: number | null }) {
+  if (!severity) return null;
+  const colors: Record<string, string> = {
+    low: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
+    medium: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
+    high: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
+  };
+  const explanationKey = `severity_${severity}` as keyof typeof METRIC_EXPLANATIONS;
+  const explanation = METRIC_EXPLANATIONS[explanationKey] || "";
+  return (
+    <MetricTooltip explanation={explanation}>
+      <span className={cn("text-2xs px-1.5 py-0.5 rounded font-medium", colors[severity] || colors.low)}>
+        {severity}{score != null ? ` (${score.toFixed(2)})` : ""}
+      </span>
+    </MetricTooltip>
+  );
+}
 
 export default function AlertsTab(): React.ReactElement {
   const alerts = useStore((s) => s.alerts);
   const agentsRunning = useStore((s) => s.agentsRunning);
+  const auditStage = useStore((s) => s.auditStage);
   const dismissAlert = useStore((s) => s.dismissAlert);
   const applySuggestedCode = useStore((s) => s.applySuggestedCode);
   const keepMyCode = useStore((s) => s.keepMyCode);
   const codes = useStore((s) => s.codes);
 
   const visibleAlerts = alerts.filter(
-    (a) => a.type !== "agents_started" && a.type !== "agents_done"
+    (a) => a.type !== "agents_started" && a.type !== "agents_done" && a.type !== "deterministic_scores"
   );
 
-  const agentSteps = agentsRunning
-    ? (["coding_audit", "analysis"] as const).map((key) => {
-        const label = AGENT_LABELS[key];
-        const isThinking = alerts.some(
-          (a) => a.type === "agent_thinking" && a.agent === key
-        );
-        const hasResult = alerts.some(
-          (a) =>
-            a.type === key ||
-            (a.type === "analysis_updated" && key === "analysis") ||
-            (a.type === "agent_error" && (a as unknown as Record<string, unknown>).agent === key)
-        );
-        const status: "pending" | "running" | "done" = hasResult
-          ? "done"
-          : isThinking
-            ? "running"
-            : "pending";
-        return { key, label, status };
-      })
-    : [];
+  // Analysis agent status (derived from alerts, separate from 3-stage pipeline)
+  const analysisStatus: "pending" | "running" | "done" = alerts.some(
+    (a) => a.type === "analysis_updated" || (a.type === "agent_error" && (a as unknown as Record<string, unknown>).agent === "analysis")
+  )
+    ? "done"
+    : alerts.some((a) => a.type === "agent_thinking" && a.agent === "analysis")
+      ? "running"
+      : "pending";
 
   if (visibleAlerts.length === 0 && !agentsRunning) {
     return (
@@ -58,35 +78,133 @@ export default function AlertsTab(): React.ReactElement {
           <div className="flex items-center gap-2 mb-2">
             <Loader2 size={12} className="text-brand-500 animate-spin" aria-hidden="true" />
             <span className="text-2xs font-semibold text-brand-700 dark:text-brand-300">
-              Agents analysing your coding…
+              Coding Audit Pipeline
+            </span>
+            <span className="text-2xs text-surface-400 dark:text-surface-500 ml-auto">
+              Stage {auditStage.current}/3
             </span>
           </div>
-          <div className="space-y-1" role="list" aria-label="Agent status">
-            {agentSteps.map((step) => (
-              <div key={step.key} className="flex items-center gap-2" role="listitem">
-                {step.status === "running" ? (
-                  <Loader2 size={10} className="text-brand-500 animate-spin flex-shrink-0" aria-hidden="true" />
-                ) : step.status === "done" ? (
-                  <CheckCircle2 size={10} className="text-green-500 flex-shrink-0" aria-hidden="true" />
-                ) : (
-                  <span className="w-2.5 h-2.5 rounded-full border border-surface-300 dark:border-surface-600 flex-shrink-0" aria-hidden="true" />
-                )}
-                <span
+
+          {/* 3-Stage Progress Bar */}
+          <div className="flex gap-0.5 mb-2" role="progressbar" aria-valuenow={auditStage.current} aria-valuemin={0} aria-valuemax={3} aria-label="Audit pipeline progress">
+            {STAGES.map((stage) => {
+              const isActive = auditStage.current === stage.key;
+              const isDone = auditStage.current > stage.key;
+              // Stage 3 only lights up if escalation was triggered
+              const isHidden = stage.key === 3 && !auditStage.escalation?.was_escalated && auditStage.current < 3;
+              if (isHidden) return null;
+              return (
+                <div
+                  key={stage.key}
                   className={cn(
-                    "text-2xs",
-                    step.status === "running"
-                      ? "text-brand-600 dark:text-brand-400 font-medium"
-                      : step.status === "done"
-                        ? "text-green-600 dark:text-green-400"
-                        : "text-surface-400 dark:text-surface-500"
+                    "h-1.5 rounded-full flex-1 transition-all duration-500",
+                    isDone
+                      ? "bg-green-500"
+                      : isActive
+                        ? "bg-brand-500 animate-pulse"
+                        : "bg-surface-200 dark:bg-surface-700"
                   )}
-                >
-                  {step.label}
-                  {step.status === "running" && "…"}
-                </span>
-              </div>
-            ))}
+                />
+              );
+            })}
           </div>
+
+          {/* Stage Details */}
+          <div className="space-y-1" role="list" aria-label="Pipeline stages">
+            {STAGES.map((stage) => {
+              const isActive = auditStage.current === stage.key;
+              const isDone = auditStage.current > stage.key;
+              const isHidden = stage.key === 3 && !auditStage.escalation?.was_escalated && auditStage.current < 3;
+              if (isHidden) return null;
+              const StageIcon = stage.Icon;
+              return (
+                <div key={stage.key} className="flex items-center gap-2" role="listitem">
+                  {isDone ? (
+                    <CheckCircle2 size={10} className="text-green-500 flex-shrink-0" aria-hidden="true" />
+                  ) : isActive ? (
+                    <Loader2 size={10} className="text-brand-500 animate-spin flex-shrink-0" aria-hidden="true" />
+                  ) : (
+                    <span className="w-2.5 h-2.5 rounded-full border border-surface-300 dark:border-surface-600 flex-shrink-0" aria-hidden="true" />
+                  )}
+                  <StageIcon size={9} className={cn(
+                    isActive ? "text-brand-600 dark:text-brand-400" : isDone ? "text-green-600 dark:text-green-400" : "text-surface-400"
+                  )} aria-hidden="true" />
+                  <div className="flex-1 min-w-0">
+                    <span className={cn(
+                      "text-2xs",
+                      isActive ? "text-brand-600 dark:text-brand-400 font-medium" : isDone ? "text-green-600 dark:text-green-400" : "text-surface-400 dark:text-surface-500"
+                    )}>
+                      {stage.label}
+                      {isActive && "…"}
+                    </span>
+                    {isActive && (
+                      <p className="text-[9px] text-surface-400 dark:text-surface-500 leading-tight">{stage.description}</p>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* Inductive Analysis (separate from 3-stage pipeline) */}
+            <div className="flex items-center gap-2" role="listitem">
+              {analysisStatus === "done" ? (
+                <CheckCircle2 size={10} className="text-green-500 flex-shrink-0" aria-hidden="true" />
+              ) : analysisStatus === "running" ? (
+                <Loader2 size={10} className="text-brand-500 animate-spin flex-shrink-0" aria-hidden="true" />
+              ) : (
+                <span className="w-2.5 h-2.5 rounded-full border border-surface-300 dark:border-surface-600 flex-shrink-0" aria-hidden="true" />
+              )}
+              <span className={cn(
+                "text-2xs",
+                analysisStatus === "running" ? "text-brand-600 dark:text-brand-400 font-medium" : analysisStatus === "done" ? "text-green-600 dark:text-green-400" : "text-surface-400 dark:text-surface-500"
+              )}>
+                {AGENT_LABELS.analysis}
+                {analysisStatus === "running" && "…"}
+              </span>
+            </div>
+          </div>
+
+          {/* Confidence Summary Card */}
+          {auditStage.confidence && (auditStage.confidence.centroid_similarity != null || auditStage.confidence.consistency_score != null) && (
+            <div className="mt-2 rounded border border-surface-200 dark:border-surface-700 bg-white dark:bg-surface-800 px-2 py-1.5">
+              <span className="text-2xs font-semibold text-surface-500 dark:text-surface-400">Confidence Metrics</span>
+              <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 mt-1">
+                {auditStage.confidence.centroid_similarity != null && (
+                  <MetricTooltip explanation={METRIC_EXPLANATIONS.similarity}>
+                    <div className="flex items-center gap-1">
+                      <TrendingUp size={8} className="text-surface-400" aria-hidden="true" />
+                      <span className="text-2xs text-surface-500 dark:text-surface-400">Similarity:</span>
+                      <span className="text-2xs font-medium text-surface-700 dark:text-surface-200">{auditStage.confidence.centroid_similarity.toFixed(3)}</span>
+                    </div>
+                  </MetricTooltip>
+                )}
+                {auditStage.confidence.consistency_score != null && (
+                  <MetricTooltip explanation={METRIC_EXPLANATIONS.consistency}>
+                    <div className="flex items-center gap-1">
+                      <CheckCircle2 size={8} className="text-surface-400" aria-hidden="true" />
+                      <span className="text-2xs text-surface-500 dark:text-surface-400">Consistency:</span>
+                      <span className="text-2xs font-medium text-surface-700 dark:text-surface-200">{auditStage.confidence.consistency_score.toFixed(2)}</span>
+                    </div>
+                  </MetricTooltip>
+                )}
+              </div>
+              {auditStage.confidence.overall_severity && (
+                <div className="mt-1">
+                  <SeverityBadge severity={auditStage.confidence.overall_severity} score={auditStage.confidence.overall_severity_score} />
+                </div>
+              )}
+              {auditStage.escalation?.was_escalated && (
+                <MetricTooltip explanation={METRIC_EXPLANATIONS.escalation}>
+                  <div className="mt-1 flex items-center gap-1">
+                    <AlertTriangleIcon size={8} className="text-amber-500" aria-hidden="true" />
+                    <span className="text-2xs text-amber-600 dark:text-amber-400 italic">
+                      Escalated: {auditStage.escalation.reason || "stage divergence detected"}
+                    </span>
+                  </div>
+                </MetricTooltip>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -129,6 +247,77 @@ export default function AlertsTab(): React.ReactElement {
                 <p className="text-2xs text-surface-600 dark:text-surface-300">
                   {alertBody(alert)}
                 </p>
+                {/* Enriched metrics strip */}
+                {(() => {
+                  const m = alertMetrics(alert);
+                  const hasMetrics = m.centroidSimilarity != null || m.entropy != null || m.severity != null;
+                  if (!hasMetrics) return null;
+                  return (
+                    <div className="mt-1.5 rounded border border-indigo-100 dark:border-indigo-900 bg-indigo-50/50 dark:bg-indigo-900/10 px-2 py-1">
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5">
+                        {m.centroidSimilarity != null && (
+                          <MetricTooltip explanation={METRIC_EXPLANATIONS.similarity}>
+                            <span className="text-[9px] text-surface-500 dark:text-surface-400">
+                              Similarity: <span className="font-medium text-surface-700 dark:text-surface-200">{m.centroidSimilarity.toFixed(3)}</span>
+                            </span>
+                          </MetricTooltip>
+                        )}
+                        {m.entropy != null && (
+                          <MetricTooltip explanation={METRIC_EXPLANATIONS.entropy}>
+                            <span className="text-[9px] text-surface-500 dark:text-surface-400">
+                              Entropy: <span className={cn("font-medium", m.entropy > 0.6 ? "text-amber-600 dark:text-amber-400" : "text-surface-700 dark:text-surface-200")}>{m.entropy.toFixed(3)}</span>
+                              {m.entropy > 0.6 && <span className="text-amber-500 ml-0.5">⚠</span>}
+                            </span>
+                          </MetricTooltip>
+                        )}
+                        {m.temporalDrift != null && m.temporalDrift > 0.3 && (
+                          <MetricTooltip explanation={METRIC_EXPLANATIONS.drift}>
+                            <span className="text-[9px] text-amber-600 dark:text-amber-400">
+                              Drift: <span className="font-medium">{m.temporalDrift.toFixed(3)}</span> ⚠
+                            </span>
+                          </MetricTooltip>
+                        )}
+                        {m.isPseudoCentroid && (
+                          <MetricTooltip explanation={METRIC_EXPLANATIONS.pseudo_centroid}>
+                            <span className="text-[9px] text-surface-400 italic">pseudo-centroid</span>
+                          </MetricTooltip>
+                        )}
+                        {m.segmentCount != null && m.segmentCount < 3 && (
+                          <MetricTooltip explanation={METRIC_EXPLANATIONS.sparse_data}>
+                            <span className="text-[9px] text-surface-400 italic">sparse ({m.segmentCount} seg{m.segmentCount !== 1 ? "s" : ""})</span>
+                          </MetricTooltip>
+                        )}
+                      </div>
+                      {m.severity && (
+                        <div className="mt-0.5 flex items-center gap-1.5">
+                          <span className={cn(
+                            "text-[9px] px-1 py-0 rounded font-medium",
+                            m.severity === "high" ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" :
+                            m.severity === "medium" ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" :
+                            "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                          )}>
+                            {m.severity}
+                          </span>
+                          {m.wasEscalated && (
+                            <MetricTooltip explanation={METRIC_EXPLANATIONS.escalation}>
+                              <span className="text-[9px] text-amber-600 dark:text-amber-400 italic flex items-center gap-0.5">
+                                <ShieldAlert size={7} aria-hidden="true" />
+                                escalated{m.escalationReason ? `: ${m.escalationReason}` : ""}
+                              </span>
+                            </MetricTooltip>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+                <CodingAuditDetail
+                  alert={alert}
+                  alertIdx={alerts.indexOf(alert)}
+                  codes={codes}
+                  applySuggestedCode={applySuggestedCode}
+                  keepMyCode={keepMyCode}
+                />
               </div>
             )}
 

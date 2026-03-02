@@ -78,6 +78,7 @@ def run_coding_audit(
     temporal_drift: float | None = None,
     is_pseudo_centroid: bool = False,
     segment_count: int | None = None,
+    enabled_perspectives: list[str] | None = None,
 ) -> dict:
     """Multi-stage coding audit: Stage 1 scores ground Stage 2 LLM judgment.
 
@@ -105,6 +106,7 @@ def run_coding_audit(
         temporal_drift=temporal_drift,
         is_pseudo_centroid=is_pseudo_centroid,
         segment_count=segment_count,
+        enabled_perspectives=enabled_perspectives,
     )
 
     result = _call_llm(messages)  # fast model
@@ -152,6 +154,31 @@ def run_coding_audit(
     was_escalated = escalation_reason is not None
     if was_escalated:
         result = _call_llm(messages, model=settings.azure_deployment_reasoning)
+
+    # ── Normalise inter-rater lens: migrate predicted_codes ↔ predicted_code ──
+    inter_rater = result.get("inter_rater_lens") or {}
+
+    # If LLM returned new predicted_codes array, backfill legacy single fields
+    predicted_codes = inter_rater.get("predicted_codes")
+    if isinstance(predicted_codes, list) and len(predicted_codes) > 0:
+        # Sort by confidence descending (in case LLM didn't)
+        predicted_codes.sort(key=lambda c: -(c.get("confidence") or 0))
+        # Trim to top 5
+        inter_rater["predicted_codes"] = predicted_codes[:5]
+        # Backfill legacy single-code fields for backward compat
+        top = predicted_codes[0]
+        inter_rater.setdefault("predicted_code", top.get("code"))
+        inter_rater.setdefault("predicted_code_confidence", top.get("confidence"))
+    elif inter_rater.get("predicted_code"):
+        # Legacy single-code response → normalise into predicted_codes array
+        inter_rater["predicted_codes"] = [{
+            "code": inter_rater["predicted_code"],
+            "confidence": inter_rater.get("predicted_code_confidence", 0.5),
+            "reasoning": inter_rater.get("reasoning", ""),
+        }]
+
+    if inter_rater:
+        result["inter_rater_lens"] = inter_rater
 
     # Attach escalation metadata to result
     result["_escalation"] = {

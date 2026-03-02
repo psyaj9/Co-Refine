@@ -1,6 +1,11 @@
 import { useStore } from "@/stores/store";
-import { FileText, Hash, FolderOpen, Loader2 } from "lucide-react";
+import { FileText, Hash, FolderOpen, Loader2, Eye, Users } from "lucide-react";
 import { AGENT_LABELS } from "@/lib/constants";
+
+const PERSPECTIVE_LABELS: Record<string, { short: string; icon: typeof Eye }> = {
+  self_consistency: { short: "Self-Consistency", icon: Eye },
+  inter_rater: { short: "Inter-Rater", icon: Users },
+};
 
 export default function StatusBar() {
   const activeProjectId = useStore((s) => s.activeProjectId);
@@ -10,6 +15,8 @@ export default function StatusBar() {
   const segments = useStore((s) => s.segments);
   const agentsRunning = useStore((s) => s.agentsRunning);
   const alerts = useStore((s) => s.alerts);
+  const projectSettings = useStore((s) => s.projectSettings);
+  const auditStage = useStore((s) => s.auditStage);
 
   const activeProject = projects.find((p) => p.id === activeProjectId);
 
@@ -17,6 +24,8 @@ export default function StatusBar() {
   const activeAgentLabel = activeAgent
     ? AGENT_LABELS[activeAgent.agent ?? ""] || activeAgent.agent || "Agent"
     : null;
+
+  const stageLabels = ["", "Embedding", "LLM Audit", "Escalation"];
 
   return (
     <footer className="h-6 flex items-center justify-between px-3 border-t panel-border panel-bg text-2xs text-surface-400 dark:text-surface-500 flex-shrink-0 select-none" role="contentinfo">
@@ -38,6 +47,22 @@ export default function StatusBar() {
             <span>
               {segments.length} segment{segments.length !== 1 ? "s" : ""}
             </span>
+            {/* Active perspectives indicator */}
+            {projectSettings && (
+              <span className="flex items-center gap-1 border-l pl-2 ml-1 panel-border" title="Active AI perspectives">
+                {projectSettings.enabled_perspectives.map((p) => {
+                  const meta = PERSPECTIVE_LABELS[p];
+                  if (!meta) return null;
+                  const Icon = meta.icon;
+                  return (
+                    <span key={p} className="flex items-center gap-0.5" title={meta.short}>
+                      <Icon size={10} aria-hidden="true" />
+                      <span className="hidden sm:inline">{meta.short}</span>
+                    </span>
+                  );
+                })}
+              </span>
+            )}
           </>
         ) : (
           <span>No project selected</span>
@@ -48,7 +73,11 @@ export default function StatusBar() {
         {agentsRunning && (
           <span className="flex items-center gap-1 text-brand-500 dark:text-brand-400">
             <Loader2 size={10} className="animate-spin" aria-hidden="true" />
-            {activeAgentLabel ? `${activeAgentLabel} running` : "Agents running"}
+            {auditStage.current > 0
+              ? `Stage ${auditStage.current}: ${stageLabels[auditStage.current]}`
+              : activeAgentLabel
+                ? `${activeAgentLabel} running`
+                : "Agents running"}
           </span>
         )}
         <span className="text-surface-300 dark:text-surface-600">v1.0</span>

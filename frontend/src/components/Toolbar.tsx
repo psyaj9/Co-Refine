@@ -1,4 +1,4 @@
-import { useRef, useCallback } from "react";
+import { useRef, useCallback, useState } from "react";
 import { useStore } from "@/stores/store";
 import {
   FilePlus,
@@ -7,8 +7,10 @@ import {
   LayoutGrid,
   FileText,
   Sparkles,
+  Settings2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import AgentSettingsModal from "./AgentSettingsModal";
 
 export default function Toolbar() {
   const viewMode = useStore((s) => s.viewMode);
@@ -17,6 +19,7 @@ export default function Toolbar() {
   const activeDocumentId = useStore((s) => s.activeDocumentId);
   const showUploadPage = useStore((s) => s.showUploadPage);
   const setShowUploadPage = useStore((s) => s.setShowUploadPage);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   // "Document View" is active only when actually viewing a document (not upload page)
   const isDocumentViewActive = viewMode === "document" && !!activeDocumentId && !showUploadPage;
@@ -90,6 +93,14 @@ export default function Toolbar() {
       </div>
 
       <div className="flex items-center gap-1 justify-self-end">
+        {activeProjectId && (
+          <ToolbarButton
+            icon={Settings2}
+            label="Agent Settings"
+            active={settingsOpen}
+            onClick={() => setSettingsOpen(true)}
+          />
+        )}
         {activeProjectId && activeDocumentId && !showUploadPage && (
           <ToolbarButton
             icon={History}
@@ -99,6 +110,7 @@ export default function Toolbar() {
           />
         )}
       </div>
+      <AgentSettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </header>
   );
 }

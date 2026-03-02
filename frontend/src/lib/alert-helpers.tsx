@@ -62,7 +62,14 @@ export function alertTitle(alert: AlertPayload): string {
       const consistentFlag =
         selfLens?.is_consistent === false ? " (drift)" : "";
       const conflictFlag = interLens?.is_conflict ? " (conflict)" : "";
-      return `${baseLabel}${consistentFlag}${conflictFlag}`;
+      // Include top predicted code in title for quick scanning
+      const predictedCodes = interLens?.predicted_codes as Array<Record<string, unknown>> | undefined;
+      const topPredicted = predictedCodes?.[0]?.code as string | undefined
+        || interLens?.predicted_code as string | undefined;
+      const predictedSuffix = interLens?.is_conflict && topPredicted
+        ? ` \u2192 ${topPredicted}`
+        : "";
+      return `${baseLabel}${consistentFlag}${conflictFlag}${predictedSuffix}`;
     }
     case "consistency":
       return alert.is_consistent === false
@@ -95,15 +102,42 @@ export function alertBody(alert: AlertPayload): string {
   if (alert.type === "coding_audit") {
     const self = data.self_lens as Record<string, unknown> | undefined;
     const inter = data.inter_rater_lens as Record<string, unknown> | undefined;
+
+    // Build a plain-language opening line explaining WHY this alert matters
+    const severity = data.overall_severity as string | undefined;
+    const isConsistent = self?.is_consistent !== false;
+    const isConflict = inter?.is_conflict === true;
+    let openingLine = "";
+    if (severity === "high") {
+      openingLine = isConflict && !isConsistent
+        ? "This needs attention: your coding appears inconsistent and a second researcher would likely disagree."
+        : isConflict
+          ? "A second researcher would likely code this differently — consider reviewing."
+          : "Your coding pattern seems to have shifted — this decision may be inconsistent with your earlier ones.";
+    } else if (severity === "medium") {
+      openingLine = isConflict
+        ? "A second researcher might code this differently, but the disagreement is minor."
+        : !isConsistent
+          ? "There are small differences from how you’ve applied this code before."
+          : "The coding looks broadly fine, but a few things are worth noting.";
+    } else {
+      openingLine = isConflict
+        ? "A second researcher might choose a different code, but your decision is reasonable."
+        : "Your coding is consistent with your past decisions — no issues found.";
+    }
+
     const selfText =
       (self?.suggestion as string) || (self?.reasoning as string) || "";
     const interText = inter?.is_conflict
       ? (inter?.conflict_explanation as string) || ""
       : "";
-    return (
-      [selfText, interText].filter(Boolean).join(" \u2022 ") ||
-      "See details below."
-    );
+    const parts = [openingLine, selfText, interText].filter(Boolean);
+
+    // Add score grounding note if available
+    const groundingNote = data.score_grounding_note as string | undefined;
+    if (groundingNote) parts.push(groundingNote);
+
+    return parts.join(" \u2022 ") || "See details below.";
   }
   if (alert.type === "consistency")
     return (
@@ -128,4 +162,35 @@ export function alertBody(alert: AlertPayload): string {
   if (alert.type === "analysis_updated")
     return (data.definition as string) || "Definition updated";
   return JSON.stringify(data).slice(0, 200);
+}
+
+/** Build enriched metrics summary for coding audit alerts */
+export function alertMetrics(alert: AlertPayload): {
+  centroidSimilarity: number | null;
+  entropy: number | null;
+  conflictScore: number | null;
+  temporalDrift: number | null;
+  severity: string | null;
+  severityScore: number | null;
+  wasEscalated: boolean;
+  escalationReason: string | null;
+  isPseudoCentroid: boolean;
+  segmentCount: number | null;
+} {
+  const scores = alert.deterministic_scores;
+  const escalation = alert.escalation;
+  const data = alert.data || {};
+
+  return {
+    centroidSimilarity: scores?.centroid_similarity ?? null,
+    entropy: scores?.entropy ?? null,
+    conflictScore: scores?.conflict_score ?? null,
+    temporalDrift: scores?.temporal_drift ?? null,
+    severity: (data.overall_severity as string) ?? null,
+    severityScore: (data.overall_severity_score as number) ?? null,
+    wasEscalated: escalation?.was_escalated ?? false,
+    escalationReason: escalation?.reason ?? null,
+    isPseudoCentroid: scores?.is_pseudo_centroid ?? false,
+    segmentCount: scores?.segment_count ?? null,
+  };
 }
