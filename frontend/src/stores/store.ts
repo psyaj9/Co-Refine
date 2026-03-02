@@ -332,6 +332,13 @@ export const useStore = create<AppState>((set, get) => ({
       const remaining = clickedSegments.filter((s) => s.id !== segmentId);
       set({ clickedSegments: remaining.length > 0 ? remaining : null });
     }
+    // Clean up stale alerts referencing the deleted segment
+    set((s) => {
+      const newAlerts = s.alerts.filter((al) => al.segment_id !== segmentId);
+      const newInconsistent = new Set(s.inconsistentSegmentIds);
+      newInconsistent.delete(segmentId);
+      return { alerts: newAlerts, inconsistentSegmentIds: newInconsistent };
+    });
   },
 
   analyses: [],
@@ -401,9 +408,19 @@ export const useStore = create<AppState>((set, get) => ({
         agent_error: a.agent || "",
       };
       const agentName = agentMap[a.type];
-      const filtered = s.alerts.filter(
+      let filtered = s.alerts.filter(
         (al) => !(al.type === "agent_thinking" && al.agent === agentName)
       );
+      // Replace stale audit card if this is a sibling re-audit
+      if (a.type === "coding_audit" && a.replaces_segment_id && a.replaces_code_id) {
+        filtered = filtered.filter(
+          (al) => !(
+            al.type === "coding_audit" &&
+            al.segment_id === a.replaces_segment_id &&
+            al.code_id === a.replaces_code_id
+          )
+        );
+      }
       // Track inconsistent segment IDs for red highlights in document viewer
       if (a.type === "coding_audit" && a.segment_id) {
         const selfLens = a.data?.self_lens as Record<string, any> | undefined;

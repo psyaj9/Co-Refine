@@ -121,7 +121,8 @@ Perform TWO analyses and return them together in a single JSON response.
 4. Explain the overall disagreement if there is a conflict.
 
 Additional:
-- For alternative_codes, NEVER include: {co_applied_label_list}
+- HARD CONSTRAINT: NEVER include any of these codes in alternative_codes or predicted_codes: {co_applied_label_list}
+  These codes are already applied to this segment — suggesting them adds no value.
 - If the inter_rater predicted_code matches any code already applied to this segment, set is_conflict to false
 """
 
@@ -239,8 +240,11 @@ def build_coding_audit_prompt(
     if existing_codes_on_span:
         co_codes = ", ".join(f'"{c}"' for c in existing_codes_on_span)
         co_applied_section = (
-            f"OTHER CODES ALREADY APPLIED TO THIS SEGMENT: {co_codes}\n"
-            f"Do NOT suggest any of these as alternatives."
+            f"CODES ALREADY APPLIED TO THIS SEGMENT: {co_codes}\n"
+            f"HARD CONSTRAINT: These codes are already applied to the exact same text span. "
+            f"You MUST NOT include any of them in alternative_codes or predicted_codes. "
+            f"If the most likely independent-researcher prediction matches one of these, "
+            f"set is_conflict=false and move to the next-best prediction."
         )
     else:
         co_applied_section = "(No other codes applied to this segment)"

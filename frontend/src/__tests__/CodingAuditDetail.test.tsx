@@ -51,53 +51,7 @@ describe("CodingAuditDetail", () => {
     expect(container.firstChild).toBeNull();
   });
 
-  it("shows inter-rater section when present", () => {
-    const alertWithInter = mockAlert({
-      type: "coding_audit",
-      segment_id: "seg-1",
-      code_label: "Theme A",
-      data: {
-        inter_rater_lens: {
-          is_conflict: true,
-          predicted_code: "Theme B",
-          conflict_explanation: "Different interpretation",
-        },
-      },
-    });
-    render(
-      <CodingAuditDetail
-        {...baseProps}
-        alert={alertWithInter}
-      />
-    );
-    expect(screen.getByText(/Inter-Rater/i)).toBeInTheDocument();
-  });
-
-  it("calls applySuggestedCode for inter-rater apply button", () => {
-    const applySuggestedCode = vi.fn();
-    const alertWithInter = mockAlert({
-      type: "coding_audit",
-      segment_id: "seg-1",
-      code_label: "Theme A",
-      data: {
-        inter_rater_lens: {
-          is_conflict: true,
-          predicted_code: "Theme B",
-          conflict_explanation: "Different interpretation",
-        },
-      },
-    });
-    render(
-      <CodingAuditDetail
-        {...baseProps}
-        alert={alertWithInter}
-        codes={[mockCode(), mockCode({ id: "c2", label: "Theme B" })]}
-        applySuggestedCode={applySuggestedCode}
-      />
-    );
-    fireEvent.click(screen.getByLabelText(/toggle inter-rater/i));
-    const applyBtn = screen.getByText(/Apply.*Theme B/i);
-    fireEvent.click(applyBtn);
-    expect(applySuggestedCode).toHaveBeenCalledWith("seg-1", "Theme B", 0);
-  });
+  // Inter-rater lens tests — commented out while feature is disabled
+  // it("shows inter-rater section when present", () => { ... });
+  // it("calls applySuggestedCode for inter-rater apply button", () => { ... });
 });

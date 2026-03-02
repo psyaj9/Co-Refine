@@ -30,9 +30,9 @@ def _get_collection(user_id: str) -> chromadb.Collection:
 
 
 def _embed_text(text: str) -> list[float]:
-    if settings.embedding_model == "local":
-        return _embed_local(text)
-    return _embed_api(text)
+    if settings.azure_embedding_model:
+        return _embed_api(text)
+    return _embed_local(text)
 
 
 def _embed_local(text: str) -> list[float]:
@@ -46,7 +46,7 @@ def _embed_local(text: str) -> list[float]:
 
 
 def _embed_api(text: str) -> list[float]:
-    """API-based embeddings (fallback when embedding_model != 'local')."""
+    """Azure OpenAI embeddings using the configured embedding deployment."""
     from openai import AzureOpenAI
     client = AzureOpenAI(
         azure_endpoint=settings.azure_endpoint,
@@ -54,7 +54,7 @@ def _embed_api(text: str) -> list[float]:
         api_version=settings.azure_api_version,
     )
     response = client.embeddings.create(
-        model=settings.embedding_model,
+        model=settings.azure_embedding_model,
         input=text,
     )
     return response.data[0].embedding

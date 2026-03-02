@@ -57,6 +57,8 @@ export interface AlertPayload {
   is_conflict?: boolean;
   segment_text?: string;
   batch?: boolean;
+  replaces_segment_id?: string;
+  replaces_code_id?: string;
   token?: string;
   conversation_id?: string;
   agent?: string;

@@ -1,14 +1,15 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import {
   ChevronDown,
   ChevronRight as ChevronRightIcon,
   ShieldCheck,
-  Users,
+  // Users,  // inter-rater disabled for now
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { METRIC_EXPLANATIONS } from "@/lib/constants";
 import MetricTooltip from "@/components/MetricTooltip";
 import type { AlertPayload, CodeOut } from "@/types";
+import { useStore } from "@/stores/store";
 
 interface CodingAuditDetailProps {
   alert: AlertPayload;
@@ -26,15 +27,36 @@ export default function CodingAuditDetail({
   keepMyCode,
 }: CodingAuditDetailProps): React.ReactElement | null {
   const [selfOpen, setSelfOpen] = useState(false);
-  const [interOpen, setInterOpen] = useState(false);
+  // const [interOpen, setInterOpen] = useState(false);  // inter-rater disabled for now
 
   const selfLens = alert.data?.self_lens as Record<string, unknown> | undefined;
-  const interLens = alert.data?.inter_rater_lens as Record<string, unknown> | undefined;
-  if (!selfLens && !interLens) return null;
+  // const interLens = alert.data?.inter_rater_lens as Record<string, unknown> | undefined;
+  if (!selfLens) return null;
+
+  // Display-time safety filter: exclude codes already applied to the same span
+  const segments = useStore((s) => s.segments);
+  const coAppliedLabels = useMemo(() => {
+    if (!alert.segment_id) return new Set<string>();
+    // Find the segment this audit is about
+    const thisSeg = segments.find((s) => s.id === alert.segment_id);
+    if (!thisSeg) return new Set<string>();
+    // Find all codes on overlapping spans (including this segment's own code)
+    const labels = new Set<string>();
+    for (const seg of segments) {
+      if (
+        seg.document_id === thisSeg.document_id &&
+        seg.start_index < thisSeg.end_index &&
+        seg.end_index > thisSeg.start_index
+      ) {
+        labels.add(seg.code_label);
+      }
+    }
+    return labels;
+  }, [segments, alert.segment_id]);
 
   const altCodes: string[] = Array.isArray(selfLens?.alternative_codes)
-    ? (selfLens.alternative_codes as string[]).filter((c) =>
-        codes.some((code) => code.label === c)
+    ? (selfLens.alternative_codes as string[]).filter(
+        (c) => codes.some((code) => code.label === c) && !coAppliedLabels.has(c)
       )
     : [];
 
@@ -105,6 +127,7 @@ export default function CodingAuditDetail({
         </div>
       )}
 
+      {/* Inter-Rater lens — commented out for now
       {interLens && (
         <div className="rounded border border-purple-200 dark:border-purple-800 overflow-hidden">
           <button
@@ -133,9 +156,11 @@ export default function CodingAuditDetail({
                 This simulates what another researcher might code this segment as.
               </p>
 
-              {/* Ranked predicted codes list */}
               {(() => {
-                const predictedCodes = interLens.predicted_codes as Array<Record<string, unknown>> | undefined;
+                const rawPredictedCodes = interLens.predicted_codes as Array<Record<string, unknown>> | undefined;
+                const predictedCodes = rawPredictedCodes?.filter(
+                  (pc) => !coAppliedLabels.has(String(pc.code || ""))
+                );
                 if (predictedCodes && predictedCodes.length > 0) {
                   return (
                     <div className="space-y-1.5">
@@ -179,7 +204,6 @@ export default function CodingAuditDetail({
                                 </span>
                               </MetricTooltip>
                             </div>
-                            {/* Confidence bar */}
                             <div className="mt-1 h-1 rounded-full bg-surface-200 dark:bg-surface-700 overflow-hidden">
                               <div
                                 className={cn(
@@ -222,7 +246,6 @@ export default function CodingAuditDetail({
                   );
                 }
 
-                // Fallback: legacy single predicted_code
                 return (
                   <>
                     {interLens.predicted_code ? (
@@ -270,6 +293,7 @@ export default function CodingAuditDetail({
           )}
         </div>
       )}
+      */}
     </div>
   );
 }

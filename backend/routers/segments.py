@@ -147,15 +147,23 @@ def list_segments(
 
 
 @router.delete("/{segment_id}")
-def delete_segment(segment_id: str, user_id: str = "default", db: Session = Depends(get_db)):
+def delete_segment(
+    segment_id: str,
+    user_id: str = "default",
+    background_tasks: BackgroundTasks = None,
+    db: Session = Depends(get_db),
+):
     seg = db.query(CodedSegment).filter(CodedSegment.id == segment_id).first()
     if not seg:
         raise HTTPException(status_code=404, detail="Segment not found")
 
-    # Snapshot before deletion for edit history
+    # Snapshot before deletion for edit history + sibling re-audit
     code = db.query(Code).filter(Code.id == seg.code_id).first()
     doc = db.query(Document).filter(Document.id == seg.document_id).first()
     project_id = code.project_id if code else (doc.project_id if doc else None)
+    seg_document_id = seg.document_id
+    seg_start = seg.start_index
+    seg_end = seg.end_index
 
     if project_id:
         db.add(EditEvent(
@@ -179,6 +187,18 @@ def delete_segment(segment_id: str, user_id: str = "default", db: Session = Depe
     delete_segment_embedding(user_id, segment_id)
     db.delete(seg)
     db.commit()
+
+    # Re-audit siblings — their co-applied context just changed (code removed)
+    if settings.azure_api_key and background_tasks is not None:
+        background_tasks.add_task(
+            _reaudit_siblings_background,
+            document_id=seg_document_id,
+            start_index=seg_start,
+            end_index=seg_end,
+            exclude_segment_id=segment_id,
+            user_id=user_id,
+        )
+
     return {"status": "deleted"}
 
 
@@ -476,13 +496,34 @@ def _run_batch_audit_background(
                 except Exception as e:
                     print(f"[Scoring] Batch stage1 error for '{code.label}': {e}")
 
+                # --- Query co-applied codes on the same text span ---
+                existing_codes_on_span: list[str] = []
+                rep_seg = db.query(CodedSegment).filter(
+                    CodedSegment.id == representative["id"]
+                ).first()
+                if rep_seg:
+                    overlapping = (
+                        db.query(CodedSegment, Code)
+                        .join(Code, CodedSegment.code_id == Code.id)
+                        .filter(
+                            CodedSegment.document_id == rep_seg.document_id,
+                            CodedSegment.id != rep_seg.id,
+                            CodedSegment.start_index < rep_seg.end_index,
+                            CodedSegment.end_index > rep_seg.start_index,
+                        )
+                        .all()
+                    )
+                    existing_codes_on_span = list({
+                        c.label for _seg, c in overlapping
+                    })
+
                 audit_result = run_coding_audit(
                     user_history=history,
                     code_definitions=code_definitions,
                     new_quote=representative["text"],
                     proposed_code=code.label,
                     user_code_definitions=user_code_definitions,
-                    existing_codes_on_span=[],
+                    existing_codes_on_span=existing_codes_on_span,
                     centroid_similarity=stage1["centroid_similarity"] if stage1 else None,
                     codebook_prob_dist=stage1["codebook_prob_dist"] if stage1 else None,
                     entropy=stage1["entropy"] if stage1 else None,
@@ -491,12 +532,29 @@ def _run_batch_audit_background(
                     segment_count=stage1["segment_count"] if stage1 else None,
                 )
 
-                # Filter alternative codes to only those that exist in the codebook
+                # Post-process: filter alternative codes already on span + codebook check
+                all_codes_on_span = set(existing_codes_on_span) | {code.label}
                 self_lens = audit_result.get("self_lens", {})
                 alt_codes = self_lens.get("alternative_codes", [])
                 if alt_codes:
                     self_lens["alternative_codes"] = [
-                        c for c in alt_codes if c in user_code_definitions
+                        c for c in alt_codes
+                        if c in user_code_definitions and c not in all_codes_on_span
+                    ]
+
+                # Post-process: force is_conflict=False if predicted code already applied
+                inter_rater = audit_result.get("inter_rater_lens", {})
+                predicted = inter_rater.get("predicted_code", "")
+                if predicted in all_codes_on_span:
+                    inter_rater["is_conflict"] = False
+                    inter_rater["conflict_explanation"] = ""
+
+                # Filter predicted_codes: remove any already applied on this span
+                predicted_codes_raw = inter_rater.get("predicted_codes", [])
+                if isinstance(predicted_codes_raw, list):
+                    inter_rater["predicted_codes"] = [
+                        pc for pc in predicted_codes_raw
+                        if pc.get("code") not in all_codes_on_span
                     ]
 
                 audit_result["code_id"] = code.id
@@ -580,6 +638,267 @@ def _run_batch_audit_background(
             "type": "batch_audit_done",
             "data": {"error": str(e)},
         })
+    finally:
+        db.close()
+
+
+def _reaudit_siblings(
+    *,
+    db: Session,
+    document_id: str,
+    start_index: int,
+    end_index: int,
+    exclude_segment_id: str,
+    user_id: str,
+):
+    """Re-run coding audit for every sibling segment on the same text span.
+
+    Called after a code is added or removed so that existing audit cards
+    reflect the updated set of co-applied codes. Reuses existing Stage 1
+    scores (embeddings don't change when co-applied codes change) and only
+    re-runs the Stage 2 LLM audit.
+
+    Sends 'coding_audit' WS messages with ``replaces_segment_id`` and
+    ``replaces_code_id`` so the frontend can swap stale cards.
+    """
+    from database import Project
+
+    siblings = (
+        db.query(CodedSegment, Code)
+        .join(Code, CodedSegment.code_id == Code.id)
+        .filter(
+            CodedSegment.document_id == document_id,
+            CodedSegment.id != exclude_segment_id,
+            CodedSegment.start_index < end_index,
+            CodedSegment.end_index > start_index,
+        )
+        .all()
+    )
+    if not siblings:
+        return
+
+    for sib_seg, sib_code in siblings:
+        try:
+            project_id = sib_code.project_id
+            all_codes = (
+                db.query(Code).filter(Code.project_id == project_id).all()
+                if project_id else []
+            )
+            user_code_definitions: dict[str, str] = {
+                c.label: (c.definition or "") for c in all_codes
+            }
+
+            # Fetch project-level perspective settings
+            enabled_perspectives = None
+            if project_id:
+                project_row = db.query(Project).filter(Project.id == project_id).first()
+                if project_row and project_row.enabled_perspectives:
+                    enabled_perspectives = project_row.enabled_perspectives
+
+            # Current co-applied codes on the span (excluding this sibling itself)
+            overlapping = (
+                db.query(CodedSegment, Code)
+                .join(Code, CodedSegment.code_id == Code.id)
+                .filter(
+                    CodedSegment.document_id == document_id,
+                    CodedSegment.id != sib_seg.id,
+                    CodedSegment.start_index < sib_seg.end_index,
+                    CodedSegment.end_index > sib_seg.start_index,
+                )
+                .all()
+            )
+            existing_codes_on_span: list[str] = list({
+                c.label for _s, c in overlapping
+            })
+
+            # Reuse existing Stage 1 scores from ConsistencyScore table
+            existing_score = (
+                db.query(ConsistencyScore)
+                .filter(
+                    ConsistencyScore.segment_id == sib_seg.id,
+                    ConsistencyScore.code_id == sib_code.id,
+                )
+                .first()
+            )
+            stage1_centroid = existing_score.centroid_similarity if existing_score else None
+            stage1_entropy = existing_score.entropy if existing_score else None
+            stage1_drift = existing_score.temporal_drift if existing_score else None
+            stage1_pseudo = existing_score.is_pseudo_centroid if existing_score else False
+            stage1_dist = existing_score.codebook_distribution if existing_score else None
+            # Segment count from scoring table or fallback to DB count
+            stage1_seg_count = None
+            if existing_score and existing_score.codebook_distribution:
+                # Not stored directly — use current count
+                stage1_seg_count = (
+                    db.query(CodedSegment)
+                    .filter(CodedSegment.code_id == sib_code.id, CodedSegment.user_id == user_id)
+                    .count()
+                )
+
+            # Build history via MMR
+            diverse = find_diverse_segments(
+                user_id=user_id,
+                query_text=sib_seg.text,
+                code_filter=sib_code.label,
+                n=10,
+            )
+            user_history = [(s["code"], s["text"]) for s in diverse]
+
+            # AI-inferred definitions
+            analyses = db.query(AnalysisResult).all()
+            code_definitions: dict[str, dict] = {}
+            for a in analyses:
+                code_obj = db.query(Code).filter(Code.id == a.code_id).first()
+                if code_obj:
+                    code_definitions[code_obj.label] = {
+                        "definition": a.definition or "",
+                        "lens": a.lens or "",
+                    }
+
+            # Build document context
+            doc = db.query(Document).filter(Document.id == document_id).first()
+            document_context = ""
+            if doc and doc.full_text:
+                document_context = _extract_window(
+                    doc.full_text, sib_seg.start_index, sib_seg.end_index
+                )
+
+            audit_result = run_coding_audit(
+                user_history=user_history,
+                code_definitions=code_definitions,
+                new_quote=sib_seg.text,
+                proposed_code=sib_code.label,
+                document_context=document_context,
+                user_code_definitions=user_code_definitions,
+                existing_codes_on_span=existing_codes_on_span,
+                centroid_similarity=stage1_centroid,
+                codebook_prob_dist=stage1_dist,
+                entropy=stage1_entropy,
+                temporal_drift=stage1_drift,
+                is_pseudo_centroid=stage1_pseudo,
+                segment_count=stage1_seg_count,
+                enabled_perspectives=enabled_perspectives,
+            )
+
+            # Post-process: filter codes already on span
+            all_codes_on_span = set(existing_codes_on_span) | {sib_code.label}
+            self_lens = audit_result.get("self_lens", {})
+            alt_codes = self_lens.get("alternative_codes", [])
+            if alt_codes:
+                self_lens["alternative_codes"] = [
+                    c for c in alt_codes if c not in all_codes_on_span
+                ]
+
+            inter_rater = audit_result.get("inter_rater_lens", {})
+            predicted = inter_rater.get("predicted_code", "")
+            if predicted in all_codes_on_span:
+                inter_rater["is_conflict"] = False
+                inter_rater["conflict_explanation"] = ""
+
+            predicted_codes_raw = inter_rater.get("predicted_codes", [])
+            if isinstance(predicted_codes_raw, list):
+                inter_rater["predicted_codes"] = [
+                    pc for pc in predicted_codes_raw
+                    if pc.get("code") not in all_codes_on_span
+                ]
+
+            # Delete stale alert + consistency score
+            db.query(AgentAlert).filter(
+                AgentAlert.segment_id == sib_seg.id,
+                AgentAlert.alert_type == "coding_audit",
+            ).delete()
+            db.query(ConsistencyScore).filter(
+                ConsistencyScore.segment_id == sib_seg.id,
+                ConsistencyScore.code_id == sib_code.id,
+            ).delete()
+
+            # Persist new alert
+            alert = AgentAlert(
+                id=str(uuid.uuid4()),
+                user_id=user_id,
+                segment_id=sib_seg.id,
+                alert_type="coding_audit",
+                payload=audit_result,
+            )
+            db.add(alert)
+
+            # Persist new ConsistencyScore
+            escalation = audit_result.get("_escalation", {})
+            score_row = ConsistencyScore(
+                id=str(uuid.uuid4()),
+                segment_id=sib_seg.id,
+                code_id=sib_code.id,
+                user_id=user_id,
+                project_id=project_id or "",
+                centroid_similarity=stage1_centroid,
+                is_pseudo_centroid=stage1_pseudo,
+                proposed_code_prob=existing_score.proposed_code_prob if existing_score else None,
+                entropy=stage1_entropy,
+                conflict_score=existing_score.conflict_score if existing_score else None,
+                temporal_drift=stage1_drift,
+                codebook_distribution=stage1_dist,
+                llm_consistency_score=self_lens.get("consistency_score"),
+                llm_intent_score=self_lens.get("intent_alignment_score"),
+                llm_conflict_severity=inter_rater.get("conflict_severity_score"),
+                llm_overall_severity=audit_result.get("overall_severity_score"),
+                llm_predicted_code=inter_rater.get("predicted_code"),
+                llm_predicted_confidence=inter_rater.get("predicted_code_confidence"),
+                llm_predicted_codes_json=inter_rater.get("predicted_codes"),
+                was_escalated=escalation.get("was_escalated", False),
+                escalation_reason=escalation.get("reason"),
+            )
+            db.add(score_row)
+            db.commit()
+
+            is_consistent = self_lens.get("is_consistent", True)
+            is_conflict = inter_rater.get("is_conflict", False)
+
+            # Send updated audit card — frontend uses replaces_* to swap stale card
+            _ws_send(user_id, {
+                "type": "coding_audit",
+                "segment_id": sib_seg.id,
+                "segment_text": sib_seg.text,
+                "code_id": sib_code.id,
+                "code_label": sib_code.label,
+                "is_consistent": is_consistent,
+                "is_conflict": is_conflict,
+                "replaces_segment_id": sib_seg.id,
+                "replaces_code_id": sib_code.id,
+                "deterministic_scores": {
+                    "centroid_similarity": stage1_centroid,
+                    "entropy": stage1_entropy,
+                    "temporal_drift": stage1_drift,
+                } if stage1_centroid is not None else None,
+                "escalation": escalation,
+                "data": audit_result,
+            })
+            print(f"[Agent] Re-audited sibling segment {sib_seg.id} (code: {sib_code.label})")
+        except Exception as e:
+            print(f"[Agent] Sibling re-audit error for {sib_seg.id}: {e}")
+
+
+def _reaudit_siblings_background(
+    *,
+    document_id: str,
+    start_index: int,
+    end_index: int,
+    exclude_segment_id: str,
+    user_id: str,
+):
+    """Background-task wrapper for _reaudit_siblings (creates its own DB session)."""
+    from database import SessionLocal
+    db = SessionLocal()
+    try:
+        _reaudit_siblings(
+            db=db,
+            document_id=document_id,
+            start_index=start_index,
+            end_index=end_index,
+            exclude_segment_id=exclude_segment_id,
+            user_id=user_id,
+        )
+    except Exception as e:
+        print(f"[Agent] Background sibling re-audit error: {e}")
     finally:
         db.close()
 
@@ -819,7 +1138,21 @@ def _run_background_agents(
                 "data": {"message": str(e)},
             })
 
-        # 3. Auto-analysis
+        # 3b. Re-audit sibling segments on the same span (their co-applied context changed)
+        if existing_codes_on_span:
+            try:
+                _reaudit_siblings(
+                    db=db,
+                    document_id=document_id,
+                    start_index=start_index,
+                    end_index=end_index,
+                    exclude_segment_id=segment_id,
+                    user_id=user_id,
+                )
+            except Exception as e:
+                print(f"[Agent] Sibling re-audit batch error: {e}")
+
+        # 4. Auto-analysis
         code_segment_count = (
             db.query(CodedSegment)
             .filter(CodedSegment.code_id == code_id, CodedSegment.user_id == user_id)

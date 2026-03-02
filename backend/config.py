@@ -11,6 +11,7 @@ class Settings(BaseSettings):
 
     azure_deployment_fast: str = ""
     azure_deployment_reasoning: str = ""
+    azure_embedding_model: str = ""
     fast_model: str = "gpt-5-mini"
     reasoning_model: str = "gpt-5.2"
     embedding_model: str = "local"
