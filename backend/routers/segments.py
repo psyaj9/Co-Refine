@@ -1313,6 +1313,25 @@ def _run_background_agents(
             db.add(score_row)
             db.commit()
 
+            # ---- Facet Analysis (runs after Stage 1 scores committed) ----
+            try:
+                from services.facet_clustering import run_facet_analysis
+                facet_result = run_facet_analysis(
+                    db=db,
+                    user_id=user_id,
+                    code_id=code_id,
+                    project_id=project_id or "",
+                )
+                if facet_result["status"] == "success":
+                    _ws_send(user_id, {
+                        "type": "facet_updated",
+                        "code_id": code_id,
+                        "facet_count": facet_result["facet_count"],
+                        "segment_count": facet_result["segment_count"],
+                    })
+            except Exception as e:
+                print(f"[Facet] Facet analysis error: {e}")
+
             _ws_send(user_id, {
                 "type": "coding_audit",
                 "segment_id": segment_id,

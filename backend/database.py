@@ -25,6 +25,7 @@ class Project(Base):
 
     documents = relationship("Document", back_populates="project", cascade="all, delete-orphan")
     codes = relationship("Code", back_populates="project", cascade="all, delete-orphan")
+    facets = relationship("Facet", back_populates="project", cascade="all, delete-orphan")
 
 
 class Document(Base):
@@ -57,6 +58,7 @@ class Code(Base):
     project = relationship("Project", back_populates="codes")
     segments = relationship("CodedSegment", back_populates="code", cascade="all, delete-orphan")
     analyses = relationship("AnalysisResult", back_populates="code", cascade="all, delete-orphan")
+    facets = relationship("Facet", back_populates="code", cascade="all, delete-orphan")
 
 
 class CodedSegment(Base):
@@ -71,11 +73,15 @@ class CodedSegment(Base):
     user_id = Column(String, nullable=False)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
+    tsne_x = Column(Float, nullable=True)
+    tsne_y = Column(Float, nullable=True)
+
     document = relationship("Document", back_populates="segments")
     code = relationship("Code", back_populates="segments")
     alerts = relationship("AgentAlert", back_populates="segment", cascade="all, delete-orphan")
     consistency_scores = relationship("ConsistencyScore", back_populates="segment", cascade="all, delete-orphan")
     human_feedback = relationship("HumanFeedback", back_populates="segment", cascade="all, delete-orphan")
+    facet_assignments = relationship("FacetAssignment", back_populates="segment", cascade="all, delete-orphan")
 
 
 class AnalysisResult(Base):
@@ -208,6 +214,39 @@ class HumanFeedback(Base):
     segment = relationship("CodedSegment", back_populates="human_feedback")
 
 
+class Facet(Base):
+    """A latent sub-meaning cluster discovered within a code via KMeans embedding clustering."""
+    __tablename__ = "facets"
+
+    id = Column(String, primary_key=True)
+    code_id = Column(String, ForeignKey("codes.id"), nullable=False)
+    project_id = Column(String, ForeignKey("projects.id"), nullable=False)
+    label = Column(String, nullable=False)           # e.g. "immediate shock"
+    centroid_json = Column(Text, nullable=False)     # JSON list of floats (embedding vector)
+    segment_count = Column(Integer, default=0)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    is_active = Column(Boolean, default=True)
+
+    code = relationship("Code", back_populates="facets")
+    project = relationship("Project", back_populates="facets")
+    assignments = relationship("FacetAssignment", back_populates="facet", cascade="all, delete-orphan")
+
+
+class FacetAssignment(Base):
+    """Links a coded segment to a facet (cluster centroid)."""
+    __tablename__ = "facet_assignments"
+
+    id = Column(String, primary_key=True)
+    segment_id = Column(String, ForeignKey("coded_segments.id"), nullable=False)
+    facet_id = Column(String, ForeignKey("facets.id"), nullable=False)
+    similarity_score = Column(Float, nullable=False)  # cosine sim to facet centroid
+    is_dominant = Column(Boolean, default=True)
+    assigned_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    segment = relationship("CodedSegment", back_populates="facet_assignments")
+    facet = relationship("Facet", back_populates="assignments")
+
 
 def _migrate_add_columns():
     """Add columns introduced after initial schema (idempotent)."""
@@ -245,6 +284,14 @@ def _migrate_add_columns():
                 with engine.begin() as conn:
                     conn.execute(text(
                         f"ALTER TABLE consistency_scores ADD COLUMN {col_name} {col_type}"
+                    ))
+    if "coded_segments" in insp.get_table_names():
+        cols = {c["name"] for c in insp.get_columns("coded_segments")}
+        for col_name in ("tsne_x", "tsne_y"):
+            if col_name not in cols:
+                with engine.begin() as conn:
+                    conn.execute(text(
+                        f"ALTER TABLE coded_segments ADD COLUMN {col_name} FLOAT"
                     ))
 
 

@@ -31,6 +31,10 @@ interface AppState {
   showUploadPage: boolean;
   setShowUploadPage: (v: boolean) => void;
 
+  // Visualisations cross-filter
+  selectedVisCodeId: string | null;
+  setSelectedVisCodeId: (id: string | null) => void;
+
   // Projects
   projects: ProjectOut[];
   activeProjectId: string | null;
@@ -157,6 +161,9 @@ export const useStore = create<AppState>((set, get) => ({
 
   showUploadPage: false,
   setShowUploadPage: (v) => set({ showUploadPage: v }),
+
+  selectedVisCodeId: null,
+  setSelectedVisCodeId: (id) => set({ selectedVisCodeId: id }),
 
   codeSearchQuery: "",
   setCodeSearchQuery: (q) => set({ codeSearchQuery: q }),

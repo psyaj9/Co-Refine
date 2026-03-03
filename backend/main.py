@@ -4,7 +4,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
 from database import init_db
-from routers import documents, codes, segments, projects, chat, edit_history, evaluation
+from routers import documents, codes, segments, projects, chat, edit_history, evaluation, vis
 from services.ws_manager import ws_manager
 from config import settings
 
@@ -35,6 +35,7 @@ app.include_router(segments.router)
 app.include_router(chat.router)
 app.include_router(edit_history.router)
 app.include_router(evaluation.router)
+app.include_router(vis.router)
 
 
 @app.websocket("/ws/{user_id}")

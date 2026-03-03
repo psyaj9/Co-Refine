@@ -43,6 +43,11 @@ export function useWebSocket() {
             return;
           }
 
+          // facet_updated is informational only — no alert needed
+          if (msg.type === "facet_updated") {
+            return;
+          }
+
           pushAlert(msg);
 
           if (msg.type === "analysis_updated") {

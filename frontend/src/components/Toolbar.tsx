@@ -84,7 +84,7 @@ export default function Toolbar() {
             />
             <ToolbarButton
               icon={BarChart3}
-              label="Consistency Dashboard"
+              label="Visualisations"
               active={viewMode === "dashboard"}
               onClick={() => setViewMode("dashboard")}
             />

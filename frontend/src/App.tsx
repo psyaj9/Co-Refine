@@ -15,7 +15,7 @@ import StatusBar from "@/components/StatusBar";
 import LeftPanel from "@/components/LeftPanel";
 import DocumentUpload from "@/components/DocumentUpload";
 import DocumentViewer from "@/components/DocumentViewer";
-import ConsistencyDashboard from "@/components/ConsistencyDashboard";
+import Visualisations from "@/components/Visualisations";
 import EditHistoryView from "@/components/EditHistoryView";
 import RightPanel from "@/components/RightPanel";
 import HighlightPopover from "@/components/HighlightPopover";
@@ -145,7 +145,7 @@ export default function App() {
                 </div>
               ) : viewMode === "dashboard" ? (
                 <div className="h-full view-enter">
-                  <ConsistencyDashboard />
+                  <Visualisations projectId={activeProjectId} />
                 </div>
               ) : viewMode === "history" ? (
                 <div className="h-full view-enter">
