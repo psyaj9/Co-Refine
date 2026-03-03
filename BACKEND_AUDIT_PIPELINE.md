@@ -10,13 +10,15 @@
 2. [Trigger: How an Audit Starts](#trigger-how-an-audit-starts)
 3. [Stage 1 — Deterministic Embedding Scores](#stage-1--deterministic-embedding-scores)
 4. [Stage 2 — LLM Judgment (Coding Audit)](#stage-2--llm-judgment-coding-audit)
-5. [Stage 3 — Escalation to Reasoning Model](#stage-3--escalation-to-reasoning-model)
-6. [Analysis Agent (Separate Pipeline)](#analysis-agent-separate-pipeline)
-7. [Batch Audit](#batch-audit)
-8. [Data Model](#data-model)
-9. [Configuration Reference](#configuration-reference)
-10. [WebSocket Event Reference](#websocket-event-reference)
-11. [Literature Grounding](#literature-grounding)
+5. [Stage 2b — Self-Consistency Reflection Loop](#stage-2b--self-consistency-reflection-loop-feature-6)
+6. [Human Challenge](#human-challenge-feature-6b)
+7. [Stage 3 — Escalation to Reasoning Model](#stage-3--escalation-to-reasoning-model)
+8. [Analysis Agent (Separate Pipeline)](#analysis-agent-separate-pipeline)
+9. [Batch Audit](#batch-audit)
+10. [Data Model](#data-model)
+11. [Configuration Reference](#configuration-reference)
+12. [WebSocket Event Reference](#websocket-event-reference)
+13. [Literature Grounding](#literature-grounding)
 
 ---
 
@@ -45,8 +47,12 @@ User highlights text in document
         │         Fast model (gpt-5-mini). Grounded on Stage 1.          │
         │         Two lenses: Self-Consistency + Inter-Rater              │
         │         │                                                      │
+        │         ├── STAGE 2b: Reflection Loop (Feature 6)              │
+        │         │    Same model re-reviews with fresh MMR sample        │
+        │         │    → WS event: "reflection_complete"                  │
+        │         │                                                      │
         │         └── STAGE 3: Escalation check                          │
-        │              If Stage 1 ↔ Stage 2 diverge → re-run on          │
+        │              If Stage 1 ↔ Stage 2b diverge → re-run on         │
         │              reasoning model (gpt-5.2)                         │
         │         → WS event: "coding_audit"                             │
         │         → Persist: AgentAlert + ConsistencyScore               │
@@ -366,6 +372,129 @@ After the LLM returns, `_run_background_agents()` applies corrections:
 2. **Force is_conflict=False**: If the predicted top code is already applied to the span, there's no real conflict
 3. **Filter predicted_codes list**: Remove any codes already applied to the span
 4. **Normalise predicted_codes format**: Handle both single-code (legacy) and ranked-list (current) LLM response formats
+
+---
+
+## Stage 2b — Self-Consistency Reflection Loop (Feature 6)
+
+**Files**: `backend/services/ai_analyzer.py` → inside `run_coding_audit()`, `backend/prompts/coding_audit_prompt.py` → `build_reflection_prompt()`  
+**Model**: Same fast model (`gpt-5-mini`) — true self-consistency  
+**Literature**: Wang et al. (2022) — Self-Consistency improves chain-of-thought reasoning
+
+### What It Does
+
+Stage 2 is now a **2-pass loop**. After the initial judgment (pass 1 / Stage 2a), the model reviews its own output with fresh evidence (pass 2 / Stage 2b). This catches snap judgments and improves accuracy without escalation.
+
+### Pass 1 → Pass 2 Flow
+
+```
+Pass 1 (2a): Normal audit → Initial judgment + scores
+                │
+                ▼
+Pass 2 (2b): Reflection prompt with:
+              • The model's own initial judgment (full JSON)
+              • Stage 1 deterministic scores
+              • A NEW independent MMR sample (fresh examples)
+                │
+                ▼
+              Reflected judgment → Final scores (may change or stay same)
+```
+
+### Reflection Prompt Design
+
+The reflection prompt (`build_reflection_prompt()`) provides:
+
+1. **Initial judgment**: The complete JSON output from pass 1
+2. **Stage 1 evidence**: The same deterministic scores that grounded pass 1
+3. **Fresh MMR examples**: A **new, independent** MMR sample (10–15 diverse segments) — NOT the same examples shown in pass 1. This gives the model genuinely new evidence to reconsider against.
+
+The system prompt instructs the model to:
+- Re-examine its initial judgment critically
+- Consider whether fresh examples change its assessment
+- Pay attention to consistency_score and is_consistent alignment
+- Provide updated scores and reasoning
+- Use the same JSON output schema as pass 1
+
+### Score Delta Tracking
+
+Both initial and reflected scores are preserved:
+
+| Metadata Field | Type | Description |
+|---|---|---|
+| `_reflection.was_reflected` | bool | Whether reflection pass ran |
+| `_reflection.initial_scores` | dict | Scores from pass 1 |
+| `_reflection.reflected_scores` | dict | Scores from pass 2 |
+| `_reflection.score_delta` | dict | Difference (reflected − initial) for each metric |
+
+### Database Columns (ConsistencyScore)
+
+| Column | Type | Description |
+|---|---|---|
+| `initial_consistency_score` | Float | Pass 1 consistency score (null if not reflected) |
+| `initial_intent_score` | Float | Pass 1 intent alignment score |
+| `initial_severity_score` | Float | Pass 1 overall severity score |
+| `was_reflected` | Boolean | Whether reflection occurred |
+
+### Escalation Uses Reflected Scores
+
+Stage 3 escalation now evaluates the **reflected** scores (pass 2), not the initial scores. This means:
+- If reflection resolves a divergence, escalation may be avoided (saving cost)
+- If reflection confirms a problem, escalation runs on the already-reconsidered judgment
+
+### Batch Audit Skips Reflection
+
+For `POST /api/segments/batch-audit`, reflection is disabled (`enable_reflection=False`) to keep batch operations fast.
+
+---
+
+## Human Challenge (Feature 6b)
+
+**Files**: `backend/services/ai_analyzer.py` → `run_challenge_cycle()`, `backend/prompts/coding_audit_prompt.py` → `build_challenge_prompt()`, `backend/routers/segments.py` → `POST /{segment_id}/challenge-reflection`
+
+### What It Does
+
+After viewing the AI's reflected judgment, the researcher can **challenge** it by providing written feedback. The AI then reconsiders its judgment with the researcher's reasoning as a first-class input.
+
+### Endpoint
+
+`POST /api/segments/{segment_id}/challenge-reflection`
+
+**Request body**: `{ "feedback": "...", "user_id": "..." }`
+
+### Challenge Flow
+
+1. Fetch the segment, latest audit alert, and co-applied codes
+2. Build a challenge prompt that includes:
+   - The complete reflected judgment (from the alert payload)
+   - The researcher's feedback text
+   - MMR history for context
+3. Call the fast model with the challenge prompt
+4. Persist a `HumanFeedback` row (feedback_type: "challenge_reflection")
+5. Update the `ConsistencyScore` row (was_challenged: True, new LLM scores)
+6. Update the alert payload with the new judgment
+7. Send `"challenge_result"` WS event
+
+### HumanFeedback Table
+
+| Column | Type | Description |
+|---|---|---|
+| `id` | String (PK) | UUID |
+| `segment_id` | String (FK) | Which segment was challenged |
+| `code_id` | String (FK) | Which code was challenged |
+| `user_id` | String | Who challenged |
+| `project_id` | String (FK) | Project context |
+| `feedback_type` | String | "challenge_reflection" |
+| `feedback_text` | String | Researcher's written feedback |
+| `context_json` | JSON | Snapshot of the reflected judgment before challenge |
+| `result_json` | JSON | The challenged judgment result |
+| `created_at` | DateTime | Timestamp |
+
+### WebSocket Events
+
+| Event | When | Data |
+|---|---|---|
+| `reflection_complete` | After pass 2 finishes | `{ was_reflected, initial_scores, reflected_scores, score_delta }` |
+| `challenge_result` | After challenge endpoint returns | Full audit result with `_challenge` metadata |
 
 ---
 

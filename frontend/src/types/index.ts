@@ -49,11 +49,12 @@ export interface AnalysisOut {
 }
 
 export interface AlertPayload {
-  type: "coding_audit" | "consistency" | "ghost_partner" | "analysis_updated" | "agents_started" | "agent_thinking" | "agents_done" | "agent_error" | "chat_stream_start" | "chat_token" | "chat_done" | "chat_error" | "batch_audit_started" | "batch_audit_progress" | "batch_audit_done" | "deterministic_scores" | "code_overlap_matrix";
+  type: "coding_audit" | "consistency" | "ghost_partner" | "analysis_updated" | "agents_started" | "agent_thinking" | "agents_done" | "agent_error" | "chat_stream_start" | "chat_token" | "chat_done" | "chat_error" | "batch_audit_started" | "batch_audit_progress" | "batch_audit_done" | "deterministic_scores" | "code_overlap_matrix" | "reflection_started" | "reflection_complete" | "challenge_result";
   segment_id?: string;
   code_id?: string;
   code_label?: string;
   is_consistent?: boolean;
+  is_conflict?: boolean;
   segment_text?: string;
   batch?: boolean;
   replaces_segment_id?: string;
@@ -64,6 +65,51 @@ export interface AlertPayload {
   deterministic_scores?: DeterministicScores | null;
   escalation?: { was_escalated: boolean; reason: string | null };
   data: Record<string, unknown>;
+}
+
+// ── Reflection Metadata (Feature 6) ────────────────────────────────
+
+export interface ScoreDelta {
+  consistency_score: number;
+  intent_alignment_score: number;
+  overall_severity_score: number;
+}
+
+export interface ReflectionMeta {
+  was_reflected: boolean;
+  initial_scores: {
+    consistency_score: number;
+    intent_alignment_score: number;
+    overall_severity_score: number;
+  };
+  reflected_scores: {
+    consistency_score: number;
+    intent_alignment_score: number;
+    overall_severity_score: number;
+  };
+  score_delta: ScoreDelta;
+}
+
+export interface ChallengeMeta {
+  was_challenged: boolean;
+  researcher_feedback: string;
+  pre_challenge_scores: {
+    consistency_score: number;
+    intent_alignment_score: number;
+    overall_severity_score: number;
+  };
+  post_challenge_scores: {
+    consistency_score: number;
+    intent_alignment_score: number;
+    overall_severity_score: number;
+  };
+  score_delta: ScoreDelta;
+}
+
+export interface ChallengeReflectionResponse {
+  audit_result: Record<string, unknown>;
+  challenge: ChallengeMeta;
+  human_feedback_id: string;
 }
 
 export interface AlertOut {

@@ -7,6 +7,7 @@ import {
   ShieldAlert,
   TrendingUp,
   AlertTriangle as AlertTriangleIcon,
+  RotateCw,
 } from "lucide-react";
 import { useStore } from "@/stores/store";
 import { cn } from "@/lib/utils";
@@ -17,7 +18,11 @@ import CodingAuditDetail from "@/components/CodingAuditDetail";
 
 const STAGES = [
   { key: 1, label: "Embedding Analysis", Icon: Zap, description: "Computing semantic similarity & codebook distribution" },
-  { key: 2, label: "LLM Audit", Icon: Brain, description: "Self-consistency & inter-rater review" },
+  { key: 2, label: "LLM Audit", Icon: Brain, description: "Self-consistency & inter-rater review",
+    substages: [
+      { key: "initial", label: "Initial Judgment", description: "First-pass audit with LLM" },
+      { key: "reflected", label: "Reflection", description: "Second-pass self-review with fresh examples" },
+    ] },
   { key: 3, label: "Escalation Review", Icon: ShieldAlert, description: "Re-evaluating with stronger model" },
 ] as const;
 
@@ -85,7 +90,7 @@ export default function AlertsTab(): React.ReactElement {
             </span>
           </div>
 
-          {/* 3-Stage Progress Bar */}
+          {/* 3-Stage Progress Bar (Stage 2 split into sub-stages) */}
           <div className="flex gap-0.5 mb-2" role="progressbar" aria-valuenow={auditStage.current} aria-valuemin={0} aria-valuemax={3} aria-label="Audit pipeline progress">
             {STAGES.map((stage) => {
               const isActive = auditStage.current === stage.key;
@@ -93,6 +98,34 @@ export default function AlertsTab(): React.ReactElement {
               // Stage 3 only lights up if escalation was triggered
               const isHidden = stage.key === 3 && !auditStage.escalation?.was_escalated && auditStage.current < 3;
               if (isHidden) return null;
+
+              // Stage 2 gets split into two sub-bars
+              if (stage.key === 2 && "substages" in stage) {
+                return stage.substages.map((sub) => {
+                  const subDone = isDone || (isActive && (
+                    sub.key === "initial" ? (auditStage.substage === "reflecting" || auditStage.substage === "reflected") :
+                    sub.key === "reflected" ? auditStage.substage === "reflected" : false
+                  ));
+                  const subActive = isActive && !subDone && (
+                    sub.key === "initial" ? auditStage.substage === "initial" :
+                    sub.key === "reflected" ? auditStage.substage === "reflecting" : false
+                  );
+                  return (
+                    <div
+                      key={`2-${sub.key}`}
+                      className={cn(
+                        "h-1.5 rounded-full flex-1 transition-all duration-500",
+                        subDone
+                          ? "bg-green-500"
+                          : subActive
+                            ? "bg-brand-500 animate-pulse"
+                            : "bg-surface-200 dark:bg-surface-700"
+                      )}
+                    />
+                  );
+                });
+              }
+
               return (
                 <div
                   key={stage.key}
@@ -117,6 +150,61 @@ export default function AlertsTab(): React.ReactElement {
               const isHidden = stage.key === 3 && !auditStage.escalation?.was_escalated && auditStage.current < 3;
               if (isHidden) return null;
               const StageIcon = stage.Icon;
+
+              // Stage 2: show sub-stages instead of single line
+              if (stage.key === 2 && "substages" in stage && isActive) {
+                return (
+                  <div key={stage.key} className="space-y-0.5">
+                    <div className="flex items-center gap-2" role="listitem">
+                      <Loader2 size={10} className="text-brand-500 animate-spin flex-shrink-0" aria-hidden="true" />
+                      <StageIcon size={9} className="text-brand-600 dark:text-brand-400" aria-hidden="true" />
+                      <span className="text-2xs text-brand-600 dark:text-brand-400 font-medium">
+                        {stage.label}…
+                      </span>
+                    </div>
+                    <div className="ml-5 space-y-0.5">
+                      {stage.substages.map((sub) => {
+                        const subDone = sub.key === "initial"
+                          ? (auditStage.substage === "reflecting" || auditStage.substage === "reflected")
+                          : auditStage.substage === "reflected";
+                        const subActive = !subDone && (
+                          sub.key === "initial" ? auditStage.substage === "initial" :
+                          sub.key === "reflected" ? auditStage.substage === "reflecting" : false
+                        );
+                        return (
+                          <div key={sub.key} className="flex items-center gap-1.5">
+                            {subDone ? (
+                              <CheckCircle2 size={8} className="text-green-500 flex-shrink-0" aria-hidden="true" />
+                            ) : subActive ? (
+                              <Loader2 size={8} className="text-brand-500 animate-spin flex-shrink-0" aria-hidden="true" />
+                            ) : (
+                              <span className="w-2 h-2 rounded-full border border-surface-300 dark:border-surface-600 flex-shrink-0" aria-hidden="true" />
+                            )}
+                            {sub.key === "reflected" && <RotateCw size={7} className={cn(subActive ? "text-brand-500" : subDone ? "text-green-500" : "text-surface-400")} aria-hidden="true" />}
+                            <span className={cn(
+                              "text-[10px]",
+                              subActive ? "text-brand-600 dark:text-brand-400 font-medium" : subDone ? "text-green-600 dark:text-green-400" : "text-surface-400 dark:text-surface-500"
+                            )}>
+                              {sub.label}{subActive ? "…" : ""}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {/* Reflection score delta summary */}
+                    {auditStage.reflection?.was_reflected && (
+                      <div className="ml-5 mt-0.5 rounded border border-blue-100 dark:border-blue-900 bg-blue-50/50 dark:bg-blue-900/10 px-1.5 py-0.5">
+                        <span className="text-[9px] text-blue-600 dark:text-blue-400 font-medium">Reflection delta: </span>
+                        <span className="text-[9px] text-surface-500 dark:text-surface-400">
+                          consistency {auditStage.reflection.score_delta.consistency_score >= 0 ? "+" : ""}{auditStage.reflection.score_delta.consistency_score.toFixed(2)},
+                          {" "}intent {auditStage.reflection.score_delta.intent_alignment_score >= 0 ? "+" : ""}{auditStage.reflection.score_delta.intent_alignment_score.toFixed(2)}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+
               return (
                 <div key={stage.key} className="flex items-center gap-2" role="listitem">
                   {isDone ? (

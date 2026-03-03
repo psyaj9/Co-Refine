@@ -156,6 +156,43 @@ class DeterministicScores(BaseModel):
     segment_count: Optional[int] = None
 
 
+# ── Reflection / Challenge Models (Feature 6) ────────────────────────
+
+
+class ChallengeReflectionRequest(BaseModel):
+    """Request body for POST /segments/{id}/challenge-reflection."""
+    feedback: str
+    user_id: str
+
+
+class ScoreDelta(BaseModel):
+    consistency_score: float = 0.0
+    intent_alignment_score: float = 0.0
+    overall_severity_score: float = 0.0
+
+
+class ReflectionMeta(BaseModel):
+    was_reflected: bool = False
+    initial_scores: Optional[dict[str, float]] = None
+    reflected_scores: Optional[dict[str, float]] = None
+    score_delta: Optional[dict[str, float]] = None
+
+
+class ChallengeMeta(BaseModel):
+    was_challenged: bool = False
+    researcher_feedback: Optional[str] = None
+    pre_challenge_scores: Optional[dict[str, float]] = None
+    post_challenge_scores: Optional[dict[str, float]] = None
+    score_delta: Optional[dict[str, float]] = None
+
+
+class ChallengeReflectionResponse(BaseModel):
+    """Response from the challenge-reflection endpoint."""
+    audit_result: dict
+    challenge: ChallengeMeta
+    human_feedback_id: str
+
+
 
 # ── Perspectives Configuration ───────────────────────────────────────
 

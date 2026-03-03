@@ -75,6 +75,7 @@ class CodedSegment(Base):
     code = relationship("Code", back_populates="segments")
     alerts = relationship("AgentAlert", back_populates="segment", cascade="all, delete-orphan")
     consistency_scores = relationship("ConsistencyScore", back_populates="segment", cascade="all, delete-orphan")
+    human_feedback = relationship("HumanFeedback", back_populates="segment", cascade="all, delete-orphan")
 
 
 class AnalysisResult(Base):
@@ -169,6 +170,13 @@ class ConsistencyScore(Base):
     llm_predicted_confidence = Column(Float, nullable=True)  # [0.0–1.0]
     llm_predicted_codes_json = Column(JSON, nullable=True)   # ranked list [{code, confidence, reasoning}]
 
+    # Reflection loop (Feature 6)
+    initial_consistency_score = Column(Float, nullable=True)    # pre-reflection score
+    initial_intent_score = Column(Float, nullable=True)         # pre-reflection intent
+    initial_severity_score = Column(Float, nullable=True)       # pre-reflection severity
+    was_reflected = Column(Boolean, default=False)
+    was_challenged = Column(Boolean, default=False)
+
     # Stage 3: Escalation metadata
     was_escalated = Column(Boolean, default=False)
     escalation_reason = Column(String, nullable=True)
@@ -176,6 +184,28 @@ class ConsistencyScore(Base):
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     segment = relationship("CodedSegment", back_populates="consistency_scores")
+
+
+class HumanFeedback(Base):
+    """Logs every human decision on AI outputs — challenge, accept, reject, override.
+
+    Part of Feature 6 (Self-Consistency Reflection Loop) and the broader
+    human-in-the-loop framework described in the feature spec.
+    """
+    __tablename__ = "human_feedback"
+
+    id = Column(String, primary_key=True)
+    segment_id = Column(String, ForeignKey("coded_segments.id"), nullable=True)
+    code_id = Column(String, ForeignKey("codes.id"), nullable=True)
+    user_id = Column(String, nullable=False)
+    project_id = Column(String, ForeignKey("projects.id"), nullable=False, index=True)
+    feedback_type = Column(String, nullable=False)   # "challenge_reflection" | "accept" | "reject" | "override"
+    feedback_text = Column(Text, nullable=True)       # the researcher's reasoning
+    context_json = Column(JSON, nullable=True)        # snapshot of the audit state
+    result_json = Column(JSON, nullable=True)         # 3rd-pass result if challenge
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    segment = relationship("CodedSegment", back_populates="human_feedback")
 
 
 
@@ -202,6 +232,20 @@ def _migrate_add_columns():
                 conn.execute(text(
                     "ALTER TABLE consistency_scores ADD COLUMN llm_predicted_codes_json JSON"
                 ))
+        # Feature 6: Reflection loop columns
+        for col_name, col_default in [
+            ("initial_consistency_score", "NULL"),
+            ("initial_intent_score", "NULL"),
+            ("initial_severity_score", "NULL"),
+            ("was_reflected", "0"),
+            ("was_challenged", "0"),
+        ]:
+            if col_name not in cols:
+                col_type = "FLOAT" if "score" in col_name else "BOOLEAN DEFAULT 0"
+                with engine.begin() as conn:
+                    conn.execute(text(
+                        f"ALTER TABLE consistency_scores ADD COLUMN {col_name} {col_type}"
+                    ))
 
 
 def init_db():

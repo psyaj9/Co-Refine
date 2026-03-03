@@ -19,7 +19,7 @@ import ConsistencyDashboard from "@/components/ConsistencyDashboard";
 import EditHistoryView from "@/components/EditHistoryView";
 import RightPanel from "@/components/RightPanel";
 import HighlightPopover from "@/components/HighlightPopover";
-import PendingApplicationsBar from "@/components/PendingApplicationsBar";
+
 
 const PANEL_IDS = ["left-panel", "center-panel", "right-panel"];
 
@@ -196,8 +196,6 @@ export default function App() {
           </>
         )}
       </Group>
-
-      <PendingApplicationsBar />
 
       <StatusBar />
 

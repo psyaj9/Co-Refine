@@ -14,6 +14,7 @@ import type {
   HistoryScope,
   ProjectSettings,
   PendingApplication,
+  ReflectionMeta,
 } from "@/types";
 import * as api from "@/api/client";
 
@@ -106,8 +107,11 @@ interface AppState {
   // Audit stage tracking (3-stage pipeline progress)
   auditStage: {
     current: 0 | 1 | 2 | 3;
+    /** Sub-stage for Stage 2: "initial" = pass 1 (2a), "reflecting" = pass 2 in progress, "reflected" = pass 2 done (2b) */
+    substage: "initial" | "reflecting" | "reflected" | null;
     stage1Scores: Record<string, unknown> | null;
     escalation: { was_escalated: boolean; reason: string | null } | null;
+    reflection: ReflectionMeta | null;
     confidence: {
       centroid_similarity: number | null;
       consistency_score: number | null;
@@ -349,7 +353,13 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   selection: null,
-  setSelection: (s) => set({ selection: s, clickedSegments: null }),
+  setSelection: (s) => {
+    // Clear pending applications when selection changes to avoid orphaned queued codes
+    if (get().pendingApplications.length > 0) {
+      set({ pendingApplications: [] });
+    }
+    set({ selection: s, clickedSegments: null });
+  },
 
   clickedSegments: null,
   setClickedSegments: (segs) => set({ clickedSegments: segs, selection: null }),
@@ -401,25 +411,26 @@ export const useStore = create<AppState>((set, get) => ({
     if (a.type === "agents_started") {
       return {
         agentsRunning: true,
-        auditStage: { current: 1, stage1Scores: null, escalation: null, confidence: null },
+        auditStage: { current: 1, substage: null, stage1Scores: null, escalation: null, reflection: null, confidence: null },
         alerts: [a, ...s.alerts].slice(0, 50),
       };
     }
     if (a.type === "agents_done") {
       return {
         agentsRunning: false,
-        auditStage: { current: 0, stage1Scores: null, escalation: null, confidence: null },
+        auditStage: { current: 0, substage: null, stage1Scores: null, escalation: null, reflection: null, confidence: null },
         alerts: s.alerts.filter(
           (al) => al.type !== "agents_started" && al.type !== "agent_thinking"
         ),
       };
     }
-    // Track Stage 1 completion → move to Stage 2
+    // Track Stage 1 completion → move to Stage 2 (initial judgment = pass 1)
     if (a.type === "deterministic_scores") {
       return {
         auditStage: {
           ...s.auditStage,
           current: 2 as const,
+          substage: "initial" as const,
           stage1Scores: a.data || null,
           confidence: {
             centroid_similarity: (a.data?.centroid_similarity as number) ?? null,
@@ -430,6 +441,26 @@ export const useStore = create<AppState>((set, get) => ({
         },
         alerts: [a, ...s.alerts].slice(0, 50),
       };
+    }
+    // Track reflection completion → Stage 2b done
+    if (a.type === "reflection_complete") {
+      const reflectionData = a.data as unknown as ReflectionMeta | undefined;
+      return {
+        auditStage: {
+          ...s.auditStage,
+          substage: "reflected" as const,
+          reflection: reflectionData ?? null,
+        },
+      };
+    }
+    // Handle challenge result — update the matching audit alert in place
+    if (a.type === "challenge_result" && a.segment_id) {
+      const updatedAlerts = s.alerts.map((al) =>
+        al.type === "coding_audit" && al.segment_id === a.segment_id
+          ? { ...al, data: a.data }
+          : al
+      );
+      return { alerts: updatedAlerts };
     }
     if (a.type === "coding_audit" || a.type === "consistency" || a.type === "ghost_partner" || a.type === "analysis_updated" || a.type === "agent_error") {
       const agentMap: Record<string, string> = {
@@ -458,12 +489,15 @@ export const useStore = create<AppState>((set, get) => ({
         const selfLens = a.data?.self_lens as Record<string, any> | undefined;
         const isFlagged = selfLens?.is_consistent === false;
 
-        // Update audit stage with confidence + escalation data
+        // Update audit stage with confidence + escalation + reflection data
         const escalation = a.escalation ?? (a.data?._escalation as { was_escalated: boolean; reason: string | null } | undefined) ?? null;
+        const reflectionMeta = (a.data?._reflection as ReflectionMeta | undefined) ?? null;
         const auditStageUpdate = {
           ...s.auditStage,
           current: (escalation?.was_escalated ? 3 : s.auditStage.current) as 0 | 1 | 2 | 3,
+          substage: reflectionMeta?.was_reflected ? "reflected" as const : s.auditStage.substage,
           escalation: escalation,
+          reflection: reflectionMeta ?? s.auditStage.reflection,
           confidence: {
             centroid_similarity: s.auditStage.confidence?.centroid_similarity ?? null,
             consistency_score: (selfLens?.consistency_score as number) ?? null,
@@ -536,7 +570,7 @@ export const useStore = create<AppState>((set, get) => ({
   batchAuditRunning: false,
   batchAuditProgress: null,
 
-  auditStage: { current: 0, stage1Scores: null, escalation: null, confidence: null },
+  auditStage: { current: 0, substage: null, stage1Scores: null, escalation: null, reflection: null, confidence: null },
 
   chatMessages: [],
   chatConversationId: null,

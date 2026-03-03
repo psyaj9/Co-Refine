@@ -2,9 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
 import uuid
 
-from database import get_db, CodedSegment, Code, Document, AnalysisResult, AgentAlert, EditEvent, ConsistencyScore
-from models import SegmentCreate, SegmentOut, AnalysisOut, AnalysisTrigger, AlertOut, BatchAuditRequest, BatchSegmentCreate
-from services.ai_analyzer import run_coding_audit, analyze_quotes
+from database import get_db, CodedSegment, Code, Document, AnalysisResult, AgentAlert, EditEvent, ConsistencyScore, HumanFeedback
+from models import SegmentCreate, SegmentOut, AnalysisOut, AnalysisTrigger, AlertOut, BatchAuditRequest, BatchSegmentCreate, ChallengeReflectionRequest, ChallengeReflectionResponse, ChallengeMeta
+from services.ai_analyzer import run_coding_audit, analyze_quotes, run_challenge_cycle
 from services.vector_store import (
     add_segment_embedding,
     find_diverse_segments,
@@ -612,6 +612,8 @@ def _run_batch_audit_background(
                     temporal_drift=stage1["temporal_drift"] if stage1 else None,
                     is_pseudo_centroid=stage1["is_pseudo_centroid"] if stage1 else False,
                     segment_count=stage1["segment_count"] if stage1 else None,
+                    # Batch audit skips reflection for speed
+                    enable_reflection=False,
                 )
 
                 # Post-process: filter alternative codes already on span + codebook check
@@ -799,6 +801,15 @@ def _reaudit_siblings(
             )
             user_history = [(s["code"], s["text"]) for s in diverse]
 
+            # Fresh MMR sample for reflection pass
+            reflection_diverse = find_diverse_segments(
+                user_id=user_id,
+                query_text=sib_seg.text,
+                code_filter=sib_code.label,
+                n=10,
+            )
+            reflection_history = [(s["code"], s["text"]) for s in reflection_diverse]
+
             # AI-inferred definitions
             analyses = db.query(AnalysisResult).all()
             code_definitions: dict[str, dict] = {}
@@ -832,6 +843,9 @@ def _reaudit_siblings(
                 temporal_drift=stage1_drift,
                 is_pseudo_centroid=stage1_pseudo,
                 segment_count=stage1_seg_count,
+                # Reflection loop enabled for sibling re-audits
+                enable_reflection=True,
+                reflection_history=reflection_history,
             )
 
             # Post-process: filter codes already on span
@@ -865,6 +879,7 @@ def _reaudit_siblings(
 
             # Persist new ConsistencyScore
             escalation = audit_result.get("_escalation", {})
+            reflection = audit_result.get("_reflection", {})
             score_row = ConsistencyScore(
                 id=str(uuid.uuid4()),
                 segment_id=sib_seg.id,
@@ -881,6 +896,11 @@ def _reaudit_siblings(
                 llm_consistency_score=self_lens.get("consistency_score"),
                 llm_intent_score=self_lens.get("intent_alignment_score"),
                 llm_overall_severity=audit_result.get("overall_severity_score"),
+                # Reflection (Feature 6)
+                initial_consistency_score=reflection.get("initial_scores", {}).get("consistency_score") if reflection.get("was_reflected") else None,
+                initial_intent_score=reflection.get("initial_scores", {}).get("intent_alignment_score") if reflection.get("was_reflected") else None,
+                initial_severity_score=reflection.get("initial_scores", {}).get("overall_severity_score") if reflection.get("was_reflected") else None,
+                was_reflected=reflection.get("was_reflected", False),
                 was_escalated=escalation.get("was_escalated", False),
                 escalation_reason=escalation.get("reason"),
             )
@@ -936,6 +956,147 @@ def _reaudit_siblings_background(
         print(f"[Agent] Background sibling re-audit error: {e}")
     finally:
         db.close()
+
+
+# ── Challenge Reflection Endpoint (Feature 6) ────────────────────────
+
+
+@router.post("/{segment_id}/challenge-reflection", response_model=ChallengeReflectionResponse)
+async def challenge_reflection(
+    segment_id: str,
+    body: ChallengeReflectionRequest,
+    db: Session = Depends(get_db),
+):
+    """Human-triggered 3rd cycle: researcher challenges the AI's reflected judgment.
+
+    The researcher provides text feedback explaining why the reflection is wrong.
+    The model reconsiders, weighting the researcher's expertise heavily.
+    A HumanFeedback row is persisted for the audit trail.
+    """
+    # Fetch the segment
+    segment = db.query(CodedSegment).filter(CodedSegment.id == segment_id).first()
+    if not segment:
+        raise HTTPException(status_code=404, detail="Segment not found")
+
+    code = db.query(Code).filter(Code.id == segment.code_id).first()
+    if not code:
+        raise HTTPException(status_code=404, detail="Code not found")
+
+    # Get the latest audit alert for this segment
+    latest_alert = (
+        db.query(AgentAlert)
+        .filter(
+            AgentAlert.segment_id == segment_id,
+            AgentAlert.alert_type == "coding_audit",
+        )
+        .order_by(AgentAlert.created_at.desc())
+        .first()
+    )
+    if not latest_alert:
+        raise HTTPException(status_code=404, detail="No audit found for this segment")
+
+    reflected_judgment = latest_alert.payload
+
+    # Fetch existing ConsistencyScore for Stage 1 data
+    existing_score = (
+        db.query(ConsistencyScore)
+        .filter(
+            ConsistencyScore.segment_id == segment_id,
+            ConsistencyScore.code_id == code.id,
+        )
+        .order_by(ConsistencyScore.created_at.desc())
+        .first()
+    )
+
+    # Fetch co-applied codes
+    overlapping = (
+        db.query(CodedSegment, Code)
+        .join(Code, CodedSegment.code_id == Code.id)
+        .filter(
+            CodedSegment.document_id == segment.document_id,
+            CodedSegment.id != segment.id,
+            CodedSegment.start_index < segment.end_index,
+            CodedSegment.end_index > segment.start_index,
+        )
+        .all()
+    )
+    existing_codes_on_span = list({c.label for _seg, c in overlapping})
+
+    # Fetch MMR history for challenge context
+    diverse = find_diverse_segments(
+        user_id=body.user_id,
+        query_text=segment.text,
+        code_filter=code.label,
+        n=10,
+    )
+    history = [(s["code"], s["text"]) for s in diverse]
+
+    # Run the challenge cycle (3rd pass)
+    challenge_result = run_challenge_cycle(
+        reflected_judgment=reflected_judgment,
+        researcher_feedback=body.feedback,
+        history=history,
+        new_quote=segment.text,
+        proposed_code=code.label,
+        existing_codes_on_span=existing_codes_on_span,
+        centroid_similarity=existing_score.centroid_similarity if existing_score else None,
+        codebook_prob_dist=existing_score.codebook_distribution if existing_score else None,
+        entropy=existing_score.entropy if existing_score else None,
+        temporal_drift=existing_score.temporal_drift if existing_score else None,
+        is_pseudo_centroid=existing_score.is_pseudo_centroid if existing_score else False,
+        segment_count=None,
+    )
+
+    challenge_meta = challenge_result.get("_challenge", {})
+
+    # Persist HumanFeedback row
+    feedback_id = str(uuid.uuid4())
+    feedback = HumanFeedback(
+        id=feedback_id,
+        segment_id=segment_id,
+        code_id=code.id,
+        user_id=body.user_id,
+        project_id=code.project_id,
+        feedback_type="challenge_reflection",
+        feedback_text=body.feedback,
+        context_json={
+            "reflected_judgment": reflected_judgment,
+            "stage1": {
+                "centroid_similarity": existing_score.centroid_similarity if existing_score else None,
+                "entropy": existing_score.entropy if existing_score else None,
+                "temporal_drift": existing_score.temporal_drift if existing_score else None,
+            },
+        },
+        result_json=challenge_result,
+    )
+    db.add(feedback)
+
+    # Update ConsistencyScore with challenged result
+    if existing_score:
+        self_lens = challenge_result.get("self_lens", {})
+        existing_score.llm_consistency_score = self_lens.get("consistency_score")
+        existing_score.llm_intent_score = self_lens.get("intent_alignment_score")
+        existing_score.llm_overall_severity = challenge_result.get("overall_severity_score")
+        existing_score.was_challenged = True
+
+    # Update the alert payload with challenged result
+    latest_alert.payload = challenge_result
+    db.commit()
+
+    # Send WS notification
+    _ws_send(body.user_id, {
+        "type": "challenge_result",
+        "segment_id": segment_id,
+        "code_id": code.id,
+        "code_label": code.label,
+        "data": challenge_result,
+    })
+
+    return ChallengeReflectionResponse(
+        audit_result=challenge_result,
+        challenge=ChallengeMeta(**challenge_meta),
+        human_feedback_id=feedback_id,
+    )
 
 
 def _run_background_agents(
@@ -1050,6 +1211,15 @@ def _run_background_agents(
             )
             user_history = [(s["code"], s["text"]) for s in diverse]
 
+            # Fetch a SECOND independent MMR sample for the reflection pass
+            reflection_diverse = find_diverse_segments(
+                user_id=user_id,
+                query_text=text,
+                code_filter=code_label,
+                n=10,
+            )
+            reflection_history = [(s["code"], s["text"]) for s in reflection_diverse]
+
             analyses = db.query(AnalysisResult).all()
             code_definitions: dict[str, dict] = {}
             for a in analyses:
@@ -1075,7 +1245,19 @@ def _run_background_agents(
                 temporal_drift=stage1["temporal_drift"] if stage1 else None,
                 is_pseudo_centroid=stage1["is_pseudo_centroid"] if stage1 else False,
                 segment_count=stage1["segment_count"] if stage1 else None,
+                # Reflection loop
+                enable_reflection=True,
+                reflection_history=reflection_history,
             )
+
+            # Send reflection WS events if reflection occurred
+            reflection_meta = audit_result.get("_reflection", {})
+            if reflection_meta.get("was_reflected"):
+                _ws_send(user_id, {
+                    "type": "reflection_complete",
+                    "segment_id": segment_id,
+                    "data": reflection_meta,
+                })
 
             # Post-process: filter alternative codes already on this span
             all_codes_on_span = set(existing_codes_on_span) | {code_label}
@@ -1097,8 +1279,9 @@ def _run_background_agents(
             )
             db.add(alert)
 
-            # Persist ConsistencyScore row (Stage 1 + Stage 2 + Stage 3)
+            # Persist ConsistencyScore row (Stage 1 + Stage 2 + Stage 3 + Reflection)
             escalation = audit_result.get("_escalation", {})
+            reflection = audit_result.get("_reflection", {})
 
             score_row = ConsistencyScore(
                 id=str(uuid.uuid4()),
@@ -1114,10 +1297,15 @@ def _run_background_agents(
                 conflict_score=stage1["conflict_score"] if stage1 else None,
                 temporal_drift=stage1["temporal_drift"] if stage1 else None,
                 codebook_distribution=stage1["codebook_prob_dist"] if stage1 else None,
-                # Stage 2
+                # Stage 2 (reflected scores if reflection happened, otherwise initial)
                 llm_consistency_score=self_lens.get("consistency_score"),
                 llm_intent_score=self_lens.get("intent_alignment_score"),
                 llm_overall_severity=audit_result.get("overall_severity_score"),
+                # Reflection (Feature 6)
+                initial_consistency_score=reflection.get("initial_scores", {}).get("consistency_score") if reflection.get("was_reflected") else None,
+                initial_intent_score=reflection.get("initial_scores", {}).get("intent_alignment_score") if reflection.get("was_reflected") else None,
+                initial_severity_score=reflection.get("initial_scores", {}).get("overall_severity_score") if reflection.get("was_reflected") else None,
+                was_reflected=reflection.get("was_reflected", False),
                 # Stage 3
                 was_escalated=escalation.get("was_escalated", False),
                 escalation_reason=escalation.get("reason"),

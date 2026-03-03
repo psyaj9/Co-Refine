@@ -10,6 +10,7 @@ import type {
   EditEventOut,
   ProjectSettings,
   ThresholdDefinition,
+  ChallengeReflectionResponse,
 } from "@/types";
 
 const BASE = "/api";
@@ -318,5 +319,21 @@ export async function updateProjectSettings(
 export async function fetchThresholdDefinitions() {
   return json<ThresholdDefinition[]>(
     await fetch(`${BASE}/projects/threshold-definitions`)
+  );
+}
+
+// ── Reflection Challenge (Feature 6) ────────────────────────────────
+
+export async function challengeReflection(
+  segmentId: string,
+  feedback: string,
+  userId: string,
+) {
+  return json<ChallengeReflectionResponse>(
+    await fetch(`${BASE}/segments/${segmentId}/challenge-reflection`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ feedback, user_id: userId }),
+    })
   );
 }

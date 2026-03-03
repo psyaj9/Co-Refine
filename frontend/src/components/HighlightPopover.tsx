@@ -1,6 +1,6 @@
 import { useStore } from "@/stores/store";
-import { Check, X, Trash2, GripHorizontal, Plus } from "lucide-react";
-import { useEffect, useRef, useCallback } from "react";
+import { Check, X, Trash2, GripHorizontal, Plus, Loader2 } from "lucide-react";
+import { useEffect, useRef, useCallback, useState } from "react";
 import { useDraggable } from "@/hooks/useDraggable";
 import { getContrastColor } from "@/lib/utils";
 
@@ -44,9 +44,14 @@ export default function HighlightPopover({ containerRef }: Props = {}) {
   const activeCodeId = useStore((s) => s.activeCodeId);
   const queueCodeApplication = useStore((s) => s.queueCodeApplication);
   const pendingApplications = useStore((s) => s.pendingApplications);
+  const removePendingApplication = useStore((s) => s.removePendingApplication);
+  const clearPendingApplications = useStore((s) => s.clearPendingApplications);
+  const confirmPendingApplications = useStore((s) => s.confirmPendingApplications);
   const setSelection = useStore((s) => s.setSelection);
   const setClickedSegments = useStore((s) => s.setClickedSegments);
   const removeSegment = useStore((s) => s.removeSegment);
+
+  const [applying, setApplying] = useState(false);
 
   const [dx, dy] = defaultPosition(selection, containerRef);
   const { pos, onPointerDown, onPointerMove, onPointerUp } = useDraggable(dx, dy);
@@ -54,6 +59,18 @@ export default function HighlightPopover({ containerRef }: Props = {}) {
   const popoverRef = useRef<HTMLDivElement>(null);
 
   const dismiss = () => {
+    clearPendingApplications();
+    setSelection(null);
+    setClickedSegments(null);
+  };
+
+  const handleApply = async () => {
+    setApplying(true);
+    try {
+      await confirmPendingApplications();
+    } finally {
+      setApplying(false);
+    }
     setSelection(null);
     setClickedSegments(null);
   };
@@ -210,7 +227,6 @@ export default function HighlightPopover({ containerRef }: Props = {}) {
 
   const availableCodes = codes.filter((c) => !appliedCodeIds.has(c.id) && !pendingCodeIds.has(c.id));
   const appliedCodes = codes.filter((c) => appliedCodeIds.has(c.id));
-  const pendingCodes = codes.filter((c) => pendingCodeIds.has(c.id));
 
   return (
     <div
@@ -267,20 +283,27 @@ export default function HighlightPopover({ containerRef }: Props = {}) {
         </button>
       )}
 
-      {pendingCodes.length > 0 && (
+      {pendingForSpan.length > 0 && (
         <div className="mb-2">
           <p className="text-[10px] uppercase tracking-wider text-surface-400 mb-1">
             Queued codes
           </p>
           <div className="flex flex-wrap gap-1">
-            {pendingCodes.map((code) => (
+            {pendingForSpan.map((p) => (
               <span
-                key={code.id}
-                className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium opacity-80"
-                style={{ backgroundColor: code.colour, color: getContrastColor(code.colour) }}
+                key={p.id}
+                className="inline-flex items-center gap-1 rounded-full pl-2 pr-1 py-0.5 text-[11px] font-medium"
+                style={{ backgroundColor: p.codeColour, color: getContrastColor(p.codeColour) }}
               >
                 <Plus size={10} aria-hidden="true" />
-                {code.label}
+                {p.codeLabel}
+                <button
+                  onClick={() => removePendingApplication(p.id)}
+                  className="rounded-full p-0.5 hover:bg-black/20 transition-colors flex-shrink-0 ml-0.5"
+                  aria-label={`Remove queued ${p.codeLabel}`}
+                >
+                  <X size={10} />
+                </button>
               </span>
             ))}
           </div>
@@ -290,7 +313,7 @@ export default function HighlightPopover({ containerRef }: Props = {}) {
       {availableCodes.filter((c) => c.id !== activeCodeId).length > 0 && (
         <>
           <p className="text-[10px] uppercase tracking-wider text-surface-400 mb-1">
-            {appliedCodes.length > 0 || pendingCodes.length > 0 ? "Add another code" : "Choose a code"}
+            {appliedCodes.length > 0 || pendingForSpan.length > 0 ? "Add another code" : "Choose a code"}
           </p>
           <ul className="max-h-40 overflow-auto space-y-0.5" aria-label="Available codes">
             {availableCodes
@@ -314,10 +337,36 @@ export default function HighlightPopover({ containerRef }: Props = {}) {
         </>
       )}
 
-      {availableCodes.length === 0 && (appliedCodes.length > 0 || pendingCodes.length > 0) && (
+      {availableCodes.length === 0 && (appliedCodes.length > 0 || pendingForSpan.length > 0) && (
         <p className="text-xs text-green-600 text-center py-2 font-medium" role="status">
           All codes applied to this segment
         </p>
+      )}
+
+      {pendingForSpan.length > 0 && (
+        <div className="flex items-center gap-2 mt-2">
+          <button
+            onClick={handleApply}
+            disabled={applying}
+            aria-label={`Apply ${pendingForSpan.length} queued code${pendingForSpan.length > 1 ? "s" : ""}`}
+            className="flex-1 flex items-center justify-center gap-1.5 rounded-lg disabled:opacity-60 text-white text-xs font-medium px-3 py-1.5 transition-colors"
+            style={{ backgroundColor: "#2563eb", color: "#ffffff" }}
+          >
+            {applying ? (
+              <Loader2 size={13} className="animate-spin" aria-hidden="true" />
+            ) : (
+              <Check size={13} aria-hidden="true" />
+            )}
+            {applying ? "Applying…" : `Apply ${pendingForSpan.length} code${pendingForSpan.length > 1 ? "s" : ""}`}
+          </button>
+          <button
+            onClick={() => clearPendingApplications()}
+            className="flex items-center gap-1 text-xs text-surface-400 hover:text-red-500 transition-colors"
+            aria-label="Clear all queued codes"
+          >
+            <Trash2 size={13} />
+          </button>
+        </div>
       )}
 
       {doneButton}

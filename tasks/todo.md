@@ -1,4 +1,35 @@
-# Span-Aware Audit Lifecycle
+# Feature 6: Self-Consistency Reflection Loop
+
+## Decisions (from planning session)
+
+- **Reflection input**: Initial judgment + Stage 1 scores + fresh MMR sample
+- **MMR strategy**: New independent MMR sample per reflection pass
+- **Frontend UX**: Visible sub-stages 2a→2b within Stage 2 progress bar
+- **Human challenge**: Full implementation with HumanFeedback table + new endpoint
+- **Score persistence**: Both pre- and post-reflection in ConsistencyScore (new columns), show delta
+- **Score logic**: Keep both scores, display delta (not replace)
+- **Escalation timing**: Evaluated against reflected scores (not initial)
+- **Reflection model**: Same fast model (gpt-5-mini)
+- **Batch audit**: Skip reflection for speed
+
+## Implementation Progress
+
+- [x] Backend prompts (reflection + challenge)
+- [x] Backend ai_analyzer (2-pass + challenge cycle)
+- [x] Backend DB schema (new columns + HumanFeedback table)
+- [x] Backend Pydantic models
+- [x] Backend segments router (pipeline + challenge endpoint)
+- [x] Frontend types (ReflectionMeta, ChallengeMeta, ChallengeReflectionResponse)
+- [x] Frontend store (substage + reflection/challenge WS event handlers)
+- [x] Frontend AlertsTab (2a→2b sub-stage progress bar with score delta)
+- [x] Frontend CodingAuditDetail (reflection section + challenge button/textarea)
+- [x] Frontend API client (`challengeReflection`) + constants (3 new metric explanations)
+- [x] Documentation (BACKEND_AUDIT_PIPELINE.md — Stage 2b + Human Challenge sections)
+- [x] Verification (0 TS errors, 20/21 test files pass — 1 pre-existing Toolbar failure)
+
+---
+
+# Span-Aware Audit Lifecycle (Previous)
 
 ## Completed
 - [x] **Batch audit co-applied codes** — Query overlapping segments in `_run_batch_audit_background` and pass `existing_codes_on_span` (was `[]`). Added same post-processing filters as real-time path.
