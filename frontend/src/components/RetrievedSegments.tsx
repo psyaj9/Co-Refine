@@ -27,7 +27,6 @@ export default function RetrievedSegments() {
     );
   }
 
-  // Group by document
   const byDoc = new Map<string, typeof retrievedSegments>();
   for (const seg of retrievedSegments) {
     if (!byDoc.has(seg.document_id)) byDoc.set(seg.document_id, []);
@@ -41,18 +40,8 @@ export default function RetrievedSegments() {
           className="w-3 h-3 rounded-full flex-shrink-0 ring-1 ring-black/10"
           style={{ backgroundColor: activeCode.colour }}
         />
-        <div className="flex-1 min-w-0">
-          <p className="text-xs font-semibold text-surface-700 dark:text-surface-200 truncate">
-            {activeCode.label}
-          </p>
-          <p className="text-2xs text-surface-400">
-            {retrievedSegments.length} segment{retrievedSegments.length !== 1 ? "s" : ""} across{" "}
-            {byDoc.size} document{byDoc.size !== 1 ? "s" : ""}
-          </p>
-        </div>
         <button
           onClick={clearRetrievedSegments}
-          className="text-surface-400 hover:text-surface-600 dark:hover:text-surface-300 transition-colors"
           title="Close"
           aria-label="Close segments panel"
         >

@@ -12,13 +12,8 @@ import type {
   RightPanelTab,
   EditEventOut,
   HistoryScope,
-  ConsistencyScoreOut,
-  CodeOverlapEntry,
-  DriftTimelineEntry,
-  CooccurrenceEntry,
-  AgreementSummaryEntry,
-  DocumentStatEntry,
   ProjectSettings,
+  PendingApplication,
 } from "@/types";
 import * as api from "@/api/client";
 
@@ -67,6 +62,13 @@ interface AppState {
   segments: SegmentOut[];
   loadSegments: (docId?: string) => Promise<void>;
   applyCode: (sel: TextSelection, codeId?: string) => Promise<void>;
+
+  // Pending code applications (select-then-confirm)
+  pendingApplications: PendingApplication[];
+  queueCodeApplication: (sel: TextSelection, codeId: string) => void;
+  removePendingApplication: (id: string) => void;
+  clearPendingApplications: () => void;
+  confirmPendingApplications: () => Promise<void>;
 
   // Retrieved segments (for code-based retrieval panel)
   retrievedSegments: SegmentOut[];
@@ -135,21 +137,7 @@ interface AppState {
   setHistorySelectedEventId: (id: string | null) => void;
   loadEditHistory: () => Promise<void>;
 
-  // Evaluation / Visualisation data
-  consistencyScores: ConsistencyScoreOut[];
-  codeOverlap: CodeOverlapEntry[];
-  driftTimeline: DriftTimelineEntry[];
-  cooccurrence: CooccurrenceEntry[];
-  agreementSummary: AgreementSummaryEntry[];
-  documentStats: DocumentStatEntry[];
-  loadConsistencyScores: (codeId?: string) => Promise<void>;
-  loadCodeOverlap: () => Promise<void>;
-  loadDriftTimeline: () => Promise<void>;
-  loadCooccurrence: () => Promise<void>;
-  loadAgreementSummary: () => Promise<void>;
-  loadDocumentStats: () => Promise<void>;
-
-  // Project settings (perspectives)
+  // Project settings
   projectSettings: ProjectSettings | null;
   loadProjectSettings: () => Promise<void>;
   updateProjectSettings: (perspectives: string[]) => Promise<void>;
@@ -295,6 +283,50 @@ export const useStore = create<AppState>((set, get) => ({
   },
   clearRetrievedSegments: () => set({ retrievedSegments: [], retrievedCodeId: null }),
 
+  // ── Pending code applications (select-then-confirm) ──
+  pendingApplications: [],
+  queueCodeApplication: (sel, codeId) => {
+    const { codes, activeDocumentId } = get();
+    if (!activeDocumentId) return;
+    const code = codes.find((c) => c.id === codeId);
+    if (!code) return;
+    const pending: PendingApplication = {
+      id: `pa-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      documentId: activeDocumentId,
+      text: sel.text,
+      startIndex: sel.startIndex,
+      endIndex: sel.endIndex,
+      codeId: code.id,
+      codeLabel: code.label,
+      codeColour: code.colour,
+    };
+    set((s) => ({ pendingApplications: [...s.pendingApplications, pending] }));
+  },
+  removePendingApplication: (id) =>
+    set((s) => ({ pendingApplications: s.pendingApplications.filter((p) => p.id !== id) })),
+  clearPendingApplications: () => set({ pendingApplications: [] }),
+  confirmPendingApplications: async () => {
+    const { pendingApplications, currentUser, loadSegments, loadCodes, activeDocumentId } = get();
+    if (pendingApplications.length === 0) return;
+    try {
+      await api.batchCreateSegments(
+        pendingApplications.map((p) => ({
+          document_id: p.documentId,
+          text: p.text,
+          start_index: p.startIndex,
+          end_index: p.endIndex,
+          code_id: p.codeId,
+          user_id: currentUser,
+        }))
+      );
+      set({ pendingApplications: [] });
+      if (activeDocumentId) await loadSegments(activeDocumentId);
+      await loadCodes();
+    } catch (e) {
+      console.error("Failed to confirm pending applications:", e);
+    }
+  },
+
   scrollToSegmentId: null,
   setScrollToSegmentId: (id) => set({ scrollToSegmentId: id }),
 
@@ -424,8 +456,7 @@ export const useStore = create<AppState>((set, get) => ({
       // Track inconsistent segment IDs for red highlights in document viewer
       if (a.type === "coding_audit" && a.segment_id) {
         const selfLens = a.data?.self_lens as Record<string, any> | undefined;
-        const interLens = a.data?.inter_rater_lens as Record<string, any> | undefined;
-        const isFlagged = selfLens?.is_consistent === false || interLens?.is_conflict === true;
+        const isFlagged = selfLens?.is_consistent === false;
 
         // Update audit stage with confidence + escalation data
         const escalation = a.escalation ?? (a.data?._escalation as { was_escalated: boolean; reason: string | null } | undefined) ?? null;
@@ -587,76 +618,7 @@ export const useStore = create<AppState>((set, get) => ({
     }
   },
 
-  // ── Evaluation / Visualisation data ────────────────────────────────
-  consistencyScores: [],
-  codeOverlap: [],
-  driftTimeline: [],
-  cooccurrence: [],
-  agreementSummary: [],
-  documentStats: [],
-
-  loadConsistencyScores: async (codeId) => {
-    const { activeProjectId } = get();
-    if (!activeProjectId) return;
-    try {
-      const data = await api.fetchConsistencyScores(activeProjectId, codeId);
-      set({ consistencyScores: data });
-    } catch (e) {
-      console.error("Failed to load consistency scores:", e);
-    }
-  },
-  loadCodeOverlap: async () => {
-    const { activeProjectId, currentUser } = get();
-    if (!activeProjectId) return;
-    try {
-      const data = await api.fetchCodeOverlap(activeProjectId, currentUser);
-      set({ codeOverlap: data });
-    } catch (e) {
-      console.error("Failed to load code overlap:", e);
-    }
-  },
-  loadDriftTimeline: async () => {
-    const { activeProjectId, currentUser } = get();
-    if (!activeProjectId) return;
-    try {
-      const data = await api.fetchDriftTimeline(activeProjectId, currentUser);
-      set({ driftTimeline: data });
-    } catch (e) {
-      console.error("Failed to load drift timeline:", e);
-    }
-  },
-  loadCooccurrence: async () => {
-    const { activeProjectId } = get();
-    if (!activeProjectId) return;
-    try {
-      const data = await api.fetchCodeCooccurrence(activeProjectId);
-      set({ cooccurrence: data });
-    } catch (e) {
-      console.error("Failed to load co-occurrence:", e);
-    }
-  },
-  loadAgreementSummary: async () => {
-    const { activeProjectId } = get();
-    if (!activeProjectId) return;
-    try {
-      const data = await api.fetchAgreementSummary(activeProjectId);
-      set({ agreementSummary: data });
-    } catch (e) {
-      console.error("Failed to load agreement summary:", e);
-    }
-  },
-  loadDocumentStats: async () => {
-    const { activeProjectId } = get();
-    if (!activeProjectId) return;
-    try {
-      const data = await api.fetchDocumentStats(activeProjectId);
-      set({ documentStats: data });
-    } catch (e) {
-      console.error("Failed to load document stats:", e);
-    }
-  },
-
-  // Project settings (perspectives)
+  // Project settings
   projectSettings: null,
   loadProjectSettings: async () => {
     const { activeProjectId } = get();
@@ -672,7 +634,7 @@ export const useStore = create<AppState>((set, get) => ({
     const { activeProjectId } = get();
     if (!activeProjectId) return;
     try {
-      const data = await api.updateProjectSettings(activeProjectId, perspectives);
+      const data = await api.updateProjectSettings(activeProjectId, { enabled_perspectives: perspectives });
       set({ projectSettings: data });
     } catch (e) {
       console.error("Failed to update project settings:", e);

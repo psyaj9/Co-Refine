@@ -4,7 +4,7 @@ import {
   FilePlus,
   Search,
   History,
-  LayoutGrid,
+  BarChart3,
   FileText,
   Sparkles,
   Settings2,
@@ -83,10 +83,10 @@ export default function Toolbar() {
               onClick={() => { setViewMode("document"); setShowUploadPage(false); }}
             />
             <ToolbarButton
-              icon={LayoutGrid}
-              label="Visualisations"
-              active={viewMode === "visualisation"}
-              onClick={() => setViewMode("visualisation")}
+              icon={BarChart3}
+              label="Consistency Dashboard"
+              active={viewMode === "dashboard"}
+              onClick={() => setViewMode("dashboard")}
             />
           </>
         )}
@@ -96,7 +96,7 @@ export default function Toolbar() {
         {activeProjectId && (
           <ToolbarButton
             icon={Settings2}
-            label="Agent Settings"
+            label="Settings"
             active={settingsOpen}
             onClick={() => setSettingsOpen(true)}
           />

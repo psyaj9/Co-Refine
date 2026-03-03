@@ -8,13 +8,8 @@ import type {
   ChatMessageOut,
   ConversationPreview,
   EditEventOut,
-  ConsistencyScoreOut,
-  CodeOverlapEntry,
-  DriftTimelineEntry,
-  CooccurrenceEntry,
-  AgreementSummaryEntry,
-  DocumentStatEntry,
   ProjectSettings,
+  ThresholdDefinition,
 } from "@/types";
 
 const BASE = "/api";
@@ -154,6 +149,25 @@ export async function codeSegment(body: {
   );
 }
 
+export async function batchCreateSegments(
+  items: {
+    document_id: string;
+    text: string;
+    start_index: number;
+    end_index: number;
+    code_id: string;
+    user_id: string;
+  }[]
+) {
+  return json<{ created: number }>(
+    await fetch(`${BASE}/segments/batch`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ items }),
+    })
+  );
+}
+
 export async function fetchSegments(documentId?: string, userId?: string) {
   const params = new URLSearchParams();
   if (documentId) params.set("document_id", documentId);
@@ -266,51 +280,6 @@ export async function deleteConversation(conversationId: string) {
   await fetch(`${BASE}/chat/conversations/${conversationId}`, { method: "DELETE" });
 }
 
-// ── Evaluation / Visualisation endpoints ────────────────────────────
-
-export async function fetchConsistencyScores(projectId: string, codeId?: string) {
-  const params = new URLSearchParams({ project_id: projectId });
-  if (codeId) params.set("code_id", codeId);
-  return json<ConsistencyScoreOut[]>(
-    await fetch(`${BASE}/evaluation/scores?${params.toString()}`)
-  );
-}
-
-export async function fetchCodeOverlap(projectId: string, userId = "default") {
-  const params = new URLSearchParams({ project_id: projectId, user_id: userId });
-  return json<CodeOverlapEntry[]>(
-    await fetch(`${BASE}/evaluation/code-overlap?${params.toString()}`)
-  );
-}
-
-export async function fetchDriftTimeline(projectId: string, userId = "default") {
-  const params = new URLSearchParams({ project_id: projectId, user_id: userId });
-  return json<DriftTimelineEntry[]>(
-    await fetch(`${BASE}/evaluation/drift-timeline?${params.toString()}`)
-  );
-}
-
-export async function fetchCodeCooccurrence(projectId: string) {
-  const params = new URLSearchParams({ project_id: projectId });
-  return json<CooccurrenceEntry[]>(
-    await fetch(`${BASE}/evaluation/code-cooccurrence?${params.toString()}`)
-  );
-}
-
-export async function fetchAgreementSummary(projectId: string) {
-  const params = new URLSearchParams({ project_id: projectId });
-  return json<AgreementSummaryEntry[]>(
-    await fetch(`${BASE}/evaluation/agreement-summary?${params.toString()}`)
-  );
-}
-
-export async function fetchDocumentStats(projectId: string) {
-  const params = new URLSearchParams({ project_id: projectId });
-  return json<DocumentStatEntry[]>(
-    await fetch(`${BASE}/evaluation/document-stats?${params.toString()}`)
-  );
-}
-
 export async function fetchEditHistory(
   projectId: string,
   params?: { document_id?: string; entity_type?: string; limit?: number; offset?: number },
@@ -335,13 +304,19 @@ export async function fetchProjectSettings(projectId: string) {
 
 export async function updateProjectSettings(
   projectId: string,
-  enabledPerspectives: string[],
+  patch: { enabled_perspectives?: string[]; thresholds?: Record<string, number> },
 ) {
   return json<ProjectSettings>(
     await fetch(`${BASE}/projects/${projectId}/settings`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ enabled_perspectives: enabledPerspectives }),
+      body: JSON.stringify(patch),
     })
+  );
+}
+
+export async function fetchThresholdDefinitions() {
+  return json<ThresholdDefinition[]>(
+    await fetch(`${BASE}/projects/threshold-definitions`)
   );
 }

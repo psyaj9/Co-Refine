@@ -15,10 +15,11 @@ import StatusBar from "@/components/StatusBar";
 import LeftPanel from "@/components/LeftPanel";
 import DocumentUpload from "@/components/DocumentUpload";
 import DocumentViewer from "@/components/DocumentViewer";
-import Visualisations from "@/components/Visualisations";
+import ConsistencyDashboard from "@/components/ConsistencyDashboard";
 import EditHistoryView from "@/components/EditHistoryView";
 import RightPanel from "@/components/RightPanel";
 import HighlightPopover from "@/components/HighlightPopover";
+import PendingApplicationsBar from "@/components/PendingApplicationsBar";
 
 const PANEL_IDS = ["left-panel", "center-panel", "right-panel"];
 
@@ -142,9 +143,9 @@ export default function App() {
                     </p>
                   </div>
                 </div>
-              ) : viewMode === "visualisation" ? (
+              ) : viewMode === "dashboard" ? (
                 <div className="h-full view-enter">
-                  <Visualisations />
+                  <ConsistencyDashboard />
                 </div>
               ) : viewMode === "history" ? (
                 <div className="h-full view-enter">
@@ -195,6 +196,8 @@ export default function App() {
           </>
         )}
       </Group>
+
+      <PendingApplicationsBar />
 
       <StatusBar />
 

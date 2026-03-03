@@ -19,7 +19,8 @@ class Project(Base):
 
     id = Column(String, primary_key=True)
     name = Column(String, nullable=False)
-    enabled_perspectives = Column(JSON, default=lambda: ["self_consistency", "inter_rater"])
+    enabled_perspectives = Column(JSON, default=lambda: ["self_consistency"])
+    thresholds_json = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     documents = relationship("Document", back_populates="project", cascade="all, delete-orphan")
@@ -188,6 +189,11 @@ def _migrate_add_columns():
             with engine.begin() as conn:
                 conn.execute(text(
                     "ALTER TABLE projects ADD COLUMN enabled_perspectives JSON DEFAULT '[]'"
+                ))
+        if "thresholds_json" not in cols:
+            with engine.begin() as conn:
+                conn.execute(text(
+                    "ALTER TABLE projects ADD COLUMN thresholds_json JSON"
                 ))
     if "consistency_scores" in insp.get_table_names():
         cols = {c["name"] for c in insp.get_columns("consistency_scores")}

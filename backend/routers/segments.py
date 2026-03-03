@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 import uuid
 
 from database import get_db, CodedSegment, Code, Document, AnalysisResult, AgentAlert, EditEvent, ConsistencyScore
-from models import SegmentCreate, SegmentOut, AnalysisOut, AnalysisTrigger, AlertOut, BatchAuditRequest
+from models import SegmentCreate, SegmentOut, AnalysisOut, AnalysisTrigger, AlertOut, BatchAuditRequest, BatchSegmentCreate
 from services.ai_analyzer import run_coding_audit, analyze_quotes
 from services.vector_store import (
     add_segment_embedding,
@@ -113,6 +113,88 @@ async def create_segment(
         user_id=body.user_id,
         created_at=segment.created_at,
     )
+
+
+@router.post("/batch")
+async def batch_create_segments(
+    body: BatchSegmentCreate,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
+    """Create multiple coded segments in one request, trigger ONE consolidated audit."""
+    if not body.items:
+        return {"created": 0}
+
+    created_segments: list[dict] = []
+    user_id = body.items[0].user_id
+    project_id: str | None = None
+
+    for item in body.items:
+        code = db.query(Code).filter(Code.id == item.code_id).first()
+        if not code:
+            continue
+        doc = db.query(Document).filter(Document.id == item.document_id).first()
+        if not doc:
+            continue
+
+        if project_id is None:
+            project_id = code.project_id
+
+        seg_id = str(uuid.uuid4())
+        segment = CodedSegment(
+            id=seg_id,
+            document_id=item.document_id,
+            text=item.text,
+            start_index=item.start_index,
+            end_index=item.end_index,
+            code_id=item.code_id,
+            user_id=item.user_id,
+        )
+        db.add(segment)
+        db.flush()
+
+        # Record edit event
+        db.add(EditEvent(
+            id=str(uuid.uuid4()),
+            project_id=code.project_id,
+            document_id=item.document_id,
+            entity_type="segment",
+            action="created",
+            entity_id=seg_id,
+            metadata_json={
+                "code_label": code.label,
+                "code_colour": code.colour,
+                "code_id": item.code_id,
+                "segment_text": item.text[:200],
+                "start_index": item.start_index,
+                "end_index": item.end_index,
+                "batch": True,
+            },
+            user_id=item.user_id,
+        ))
+
+        context_window = _extract_window(doc.full_text, item.start_index, item.end_index)
+        created_segments.append({
+            "segment_id": seg_id,
+            "text": item.text,
+            "code_label": code.label,
+            "code_id": item.code_id,
+            "user_id": item.user_id,
+            "document_id": item.document_id,
+            "document_context": context_window,
+            "start_index": item.start_index,
+            "end_index": item.end_index,
+            "created_at": segment.created_at.isoformat() if segment.created_at else None,
+        })
+
+    db.commit()
+
+    # Trigger background agents for each created segment (single consolidated pipeline)
+    if settings.azure_api_key:
+        for seg_info in created_segments:
+            background_tasks.add_task(_run_background_agents, **seg_info)
+
+    return {"created": len(created_segments)}
 
 
 @router.get("/", response_model=list[SegmentOut])
@@ -542,21 +624,6 @@ def _run_batch_audit_background(
                         if c in user_code_definitions and c not in all_codes_on_span
                     ]
 
-                # Post-process: force is_conflict=False if predicted code already applied
-                inter_rater = audit_result.get("inter_rater_lens", {})
-                predicted = inter_rater.get("predicted_code", "")
-                if predicted in all_codes_on_span:
-                    inter_rater["is_conflict"] = False
-                    inter_rater["conflict_explanation"] = ""
-
-                # Filter predicted_codes: remove any already applied on this span
-                predicted_codes_raw = inter_rater.get("predicted_codes", [])
-                if isinstance(predicted_codes_raw, list):
-                    inter_rater["predicted_codes"] = [
-                        pc for pc in predicted_codes_raw
-                        if pc.get("code") not in all_codes_on_span
-                    ]
-
                 audit_result["code_id"] = code.id
                 audit_result["code_label"] = code.label
                 audit_result["batch"] = True
@@ -571,7 +638,6 @@ def _run_batch_audit_background(
                 db.add(alert)
 
                 # Persist ConsistencyScore
-                inter_rater = audit_result.get("inter_rater_lens", {})
                 escalation = audit_result.get("_escalation", {})
                 score_row = ConsistencyScore(
                     id=str(uuid.uuid4()),
@@ -588,10 +654,7 @@ def _run_batch_audit_background(
                     codebook_distribution=stage1["codebook_prob_dist"] if stage1 else None,
                     llm_consistency_score=self_lens.get("consistency_score"),
                     llm_intent_score=self_lens.get("intent_alignment_score"),
-                    llm_conflict_severity=inter_rater.get("conflict_severity_score"),
                     llm_overall_severity=audit_result.get("overall_severity_score"),
-                    llm_predicted_code=inter_rater.get("predicted_code"),
-                    llm_predicted_confidence=inter_rater.get("predicted_code_confidence"),
                     was_escalated=escalation.get("was_escalated", False),
                     escalation_reason=escalation.get("reason"),
                 )
@@ -661,7 +724,6 @@ def _reaudit_siblings(
     Sends 'coding_audit' WS messages with ``replaces_segment_id`` and
     ``replaces_code_id`` so the frontend can swap stale cards.
     """
-    from database import Project
 
     siblings = (
         db.query(CodedSegment, Code)
@@ -687,13 +749,6 @@ def _reaudit_siblings(
             user_code_definitions: dict[str, str] = {
                 c.label: (c.definition or "") for c in all_codes
             }
-
-            # Fetch project-level perspective settings
-            enabled_perspectives = None
-            if project_id:
-                project_row = db.query(Project).filter(Project.id == project_id).first()
-                if project_row and project_row.enabled_perspectives:
-                    enabled_perspectives = project_row.enabled_perspectives
 
             # Current co-applied codes on the span (excluding this sibling itself)
             overlapping = (
@@ -777,7 +832,6 @@ def _reaudit_siblings(
                 temporal_drift=stage1_drift,
                 is_pseudo_centroid=stage1_pseudo,
                 segment_count=stage1_seg_count,
-                enabled_perspectives=enabled_perspectives,
             )
 
             # Post-process: filter codes already on span
@@ -787,19 +841,6 @@ def _reaudit_siblings(
             if alt_codes:
                 self_lens["alternative_codes"] = [
                     c for c in alt_codes if c not in all_codes_on_span
-                ]
-
-            inter_rater = audit_result.get("inter_rater_lens", {})
-            predicted = inter_rater.get("predicted_code", "")
-            if predicted in all_codes_on_span:
-                inter_rater["is_conflict"] = False
-                inter_rater["conflict_explanation"] = ""
-
-            predicted_codes_raw = inter_rater.get("predicted_codes", [])
-            if isinstance(predicted_codes_raw, list):
-                inter_rater["predicted_codes"] = [
-                    pc for pc in predicted_codes_raw
-                    if pc.get("code") not in all_codes_on_span
                 ]
 
             # Delete stale alert + consistency score
@@ -839,11 +880,7 @@ def _reaudit_siblings(
                 codebook_distribution=stage1_dist,
                 llm_consistency_score=self_lens.get("consistency_score"),
                 llm_intent_score=self_lens.get("intent_alignment_score"),
-                llm_conflict_severity=inter_rater.get("conflict_severity_score"),
                 llm_overall_severity=audit_result.get("overall_severity_score"),
-                llm_predicted_code=inter_rater.get("predicted_code"),
-                llm_predicted_confidence=inter_rater.get("predicted_code_confidence"),
-                llm_predicted_codes_json=inter_rater.get("predicted_codes"),
                 was_escalated=escalation.get("was_escalated", False),
                 escalation_reason=escalation.get("reason"),
             )
@@ -851,7 +888,6 @@ def _reaudit_siblings(
             db.commit()
 
             is_consistent = self_lens.get("is_consistent", True)
-            is_conflict = inter_rater.get("is_conflict", False)
 
             # Send updated audit card — frontend uses replaces_* to swap stale card
             _ws_send(user_id, {
@@ -861,7 +897,6 @@ def _reaudit_siblings(
                 "code_id": sib_code.id,
                 "code_label": sib_code.label,
                 "is_consistent": is_consistent,
-                "is_conflict": is_conflict,
                 "replaces_segment_id": sib_seg.id,
                 "replaces_code_id": sib_code.id,
                 "deterministic_scores": {
@@ -948,13 +983,7 @@ def _run_background_agents(
             if project_id else []
         )
 
-        # Fetch project-level perspective settings
-        enabled_perspectives = None
-        if project_id:
-            from database import Project
-            project_row = db.query(Project).filter(Project.id == project_id).first()
-            if project_row and project_row.enabled_perspectives:
-                enabled_perspectives = project_row.enabled_perspectives
+        # Fetch project-level settings
         user_code_definitions: dict[str, str] = {
             c.label: (c.definition or "") for c in all_codes
         }
@@ -1046,7 +1075,6 @@ def _run_background_agents(
                 temporal_drift=stage1["temporal_drift"] if stage1 else None,
                 is_pseudo_centroid=stage1["is_pseudo_centroid"] if stage1 else False,
                 segment_count=stage1["segment_count"] if stage1 else None,
-                enabled_perspectives=enabled_perspectives,
             )
 
             # Post-process: filter alternative codes already on this span
@@ -1058,23 +1086,7 @@ def _run_background_agents(
                     c for c in alt_codes if c not in all_codes_on_span
                 ]
 
-            # Post-process: force is_conflict=False if predicted code already applied
-            inter_rater = audit_result.get("inter_rater_lens", {})
-            predicted = inter_rater.get("predicted_code", "")
-            if predicted in all_codes_on_span:
-                inter_rater["is_conflict"] = False
-                inter_rater["conflict_explanation"] = ""
-
-            # Filter predicted_codes: remove any already applied on this span
-            predicted_codes_raw = inter_rater.get("predicted_codes", [])
-            if isinstance(predicted_codes_raw, list):
-                inter_rater["predicted_codes"] = [
-                    pc for pc in predicted_codes_raw
-                    if pc.get("code") not in all_codes_on_span
-                ]
-
             is_consistent = self_lens.get("is_consistent", True)
-            is_conflict = inter_rater.get("is_conflict", False)
 
             alert = AgentAlert(
                 id=str(uuid.uuid4()),
@@ -1105,11 +1117,7 @@ def _run_background_agents(
                 # Stage 2
                 llm_consistency_score=self_lens.get("consistency_score"),
                 llm_intent_score=self_lens.get("intent_alignment_score"),
-                llm_conflict_severity=inter_rater.get("conflict_severity_score"),
                 llm_overall_severity=audit_result.get("overall_severity_score"),
-                llm_predicted_code=inter_rater.get("predicted_code"),
-                llm_predicted_confidence=inter_rater.get("predicted_code_confidence"),
-                llm_predicted_codes_json=inter_rater.get("predicted_codes"),
                 # Stage 3
                 was_escalated=escalation.get("was_escalated", False),
                 escalation_reason=escalation.get("reason"),
@@ -1124,7 +1132,6 @@ def _run_background_agents(
                 "code_id": code_id,
                 "code_label": code_label,
                 "is_consistent": is_consistent,
-                "is_conflict": is_conflict,
                 "deterministic_scores": stage1,
                 "escalation": escalation,
                 "data": audit_result,

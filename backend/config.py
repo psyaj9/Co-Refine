@@ -38,3 +38,10 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+
+def get_threshold(key: str, project_thresholds: dict | None = None) -> float | int:
+    """Return a threshold value, preferring project-level override over global default."""
+    if project_thresholds and key in project_thresholds:
+        return project_thresholds[key]
+    return getattr(settings, key)

@@ -3,8 +3,9 @@ from sqlalchemy.orm import Session
 import uuid
 
 from database import get_db, Project, Document, Code, CodedSegment, AgentAlert
-from models import ProjectCreate, ProjectOut, ProjectSettingsOut, ProjectSettingsUpdate, AVAILABLE_PERSPECTIVES
+from models import ProjectCreate, ProjectOut, ProjectSettingsOut, ProjectSettingsUpdate, AVAILABLE_PERSPECTIVES, THRESHOLD_DEFINITIONS
 from services.vector_store import delete_segment_embedding
+from config import settings as global_settings
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
 
@@ -65,16 +66,30 @@ def delete_project(project_id: str, user_id: str = "default", db: Session = Depe
     return {"status": "deleted"}
 
 
+@router.get("/threshold-definitions")
+def get_threshold_definitions():
+    """Return metadata for all configurable thresholds (labels, ranges, defaults)."""
+    return THRESHOLD_DEFINITIONS
+
+
+def _get_merged_thresholds(project: Project) -> dict[str, float | int]:
+    """Merge project overrides on top of global defaults."""
+    defaults = {td["key"]: getattr(global_settings, td["key"], td["default"]) for td in THRESHOLD_DEFINITIONS}
+    overrides = project.thresholds_json or {}
+    return {**defaults, **{k: v for k, v in overrides.items() if k in defaults}}
+
+
 @router.get("/{project_id}/settings", response_model=ProjectSettingsOut)
 def get_project_settings(project_id: str, db: Session = Depends(get_db)):
-    """Get project settings including enabled perspectives."""
+    """Get project settings including enabled perspectives and thresholds."""
     project = db.query(Project).filter(Project.id == project_id).first()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
-    perspectives = project.enabled_perspectives or ["self_consistency", "inter_rater"]
+    perspectives = project.enabled_perspectives or ["self_consistency"]
     return ProjectSettingsOut(
         enabled_perspectives=perspectives,
         available_perspectives=AVAILABLE_PERSPECTIVES,
+        thresholds=_get_merged_thresholds(project),
     )
 
 
@@ -82,19 +97,31 @@ def get_project_settings(project_id: str, db: Session = Depends(get_db)):
 def update_project_settings(
     project_id: str, body: ProjectSettingsUpdate, db: Session = Depends(get_db)
 ):
-    """Update project settings (e.g. enabled perspectives)."""
+    """Update project settings (perspectives and/or thresholds)."""
     project = db.query(Project).filter(Project.id == project_id).first()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
-    valid_ids = {p["id"] for p in AVAILABLE_PERSPECTIVES}
-    invalid = [p for p in body.enabled_perspectives if p not in valid_ids]
-    if invalid:
-        raise HTTPException(status_code=400, detail=f"Invalid perspectives: {invalid}")
-    if not body.enabled_perspectives:
-        raise HTTPException(status_code=400, detail="At least one perspective must be enabled")
-    project.enabled_perspectives = body.enabled_perspectives
+
+    # Update perspectives if provided
+    if body.enabled_perspectives is not None:
+        valid_ids = {p["id"] for p in AVAILABLE_PERSPECTIVES}
+        invalid = [p for p in body.enabled_perspectives if p not in valid_ids]
+        if invalid:
+            raise HTTPException(status_code=400, detail=f"Invalid perspectives: {invalid}")
+        if not body.enabled_perspectives:
+            raise HTTPException(status_code=400, detail="At least one perspective must be enabled")
+        project.enabled_perspectives = body.enabled_perspectives
+
+    # Update thresholds if provided
+    if body.thresholds is not None:
+        valid_keys = {td["key"] for td in THRESHOLD_DEFINITIONS}
+        clean = {k: v for k, v in body.thresholds.items() if k in valid_keys}
+        existing = project.thresholds_json or {}
+        project.thresholds_json = {**existing, **clean}
+
     db.commit()
     return ProjectSettingsOut(
-        enabled_perspectives=project.enabled_perspectives,
+        enabled_perspectives=project.enabled_perspectives or ["self_consistency"],
         available_perspectives=AVAILABLE_PERSPECTIVES,
+        thresholds=_get_merged_thresholds(project),
     )

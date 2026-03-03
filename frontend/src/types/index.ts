@@ -54,7 +54,6 @@ export interface AlertPayload {
   code_id?: string;
   code_label?: string;
   is_consistent?: boolean;
-  is_conflict?: boolean;
   segment_text?: string;
   batch?: boolean;
   replaces_segment_id?: string;
@@ -83,8 +82,7 @@ export interface TextSelection {
   rect?: { top: number; left: number; bottom: number; right: number; width: number; height: number };
 }
 
-export type ViewMode = "document" | "visualisation" | "history";
-export type VisTab = "frequencies" | "crosstab" | "analytics" | "scarf" | "agreement" | "scatter" | "cooccurrence" | "histogram";
+export type ViewMode = "document" | "dashboard" | "history";
 export type RightPanelTab = "alerts" | "chat";
 export type HistoryScope = "project" | "document";
 
@@ -119,13 +117,6 @@ export interface EditEventOut {
 
 // ── Scoring Pipeline Types ──────────────────────────────────────────
 
-/** A single candidate code predicted by the inter-rater lens */
-export interface PredictedCode {
-  code: string;
-  confidence: number;
-  reasoning: string;
-}
-
 export interface DeterministicScores {
   centroid_similarity: number | null;
   is_pseudo_centroid: boolean;
@@ -135,70 +126,6 @@ export interface DeterministicScores {
   proposed_code_prob: number | null;
   temporal_drift: number | null;
   segment_count: number | null;
-}
-
-export interface ConsistencyScoreOut {
-  id: string;
-  segment_id: string;
-  code_id: string;
-  user_id: string;
-  project_id: string;
-  // Stage 1
-  centroid_similarity: number | null;
-  is_pseudo_centroid: boolean;
-  proposed_code_prob: number | null;
-  entropy: number | null;
-  conflict_score: number | null;
-  temporal_drift: number | null;
-  codebook_distribution: Record<string, number> | null;
-  // Stage 2
-  llm_consistency_score: number | null;
-  llm_intent_score: number | null;
-  llm_conflict_severity: number | null;
-  llm_overall_severity: number | null;
-  llm_predicted_code: string | null;
-  llm_predicted_confidence: number | null;
-  llm_predicted_codes_json: PredictedCode[] | null;
-  // Stage 3
-  was_escalated: boolean;
-  escalation_reason: string | null;
-  created_at: string;
-}
-
-export interface CodeOverlapEntry {
-  code_a: string;
-  code_b: string;
-  similarity: number;
-}
-
-export interface DriftTimelineEntry {
-  code_label: string;
-  drift: number | null;
-}
-
-export interface CooccurrenceEntry {
-  code_a: string;
-  code_b: string;
-  count: number;
-}
-
-export interface AgreementSummaryEntry {
-  code_id: string;
-  code_label: string;
-  colour: string;
-  total: number;
-  agree_count: number;
-  disagree_count: number;
-  avg_conflict_severity: number | null;
-  avg_confidence: number | null;
-}
-
-export interface DocumentStatEntry {
-  document_id: string;
-  document_title: string;
-  segment_count: number;
-  code_count: number;
-  codes: string[];
 }
 
 // ── Project Settings (Perspectives) ─────────────────────────────────
@@ -212,4 +139,29 @@ export interface Perspective {
 export interface ProjectSettings {
   enabled_perspectives: string[];
   available_perspectives: Perspective[];
+  thresholds: Record<string, number>;
+}
+
+export interface ThresholdDefinition {
+  key: string;
+  label: string;
+  description: string;
+  default: number;
+  min: number;
+  max: number;
+  step: number;
+  type: "int" | "float";
+}
+
+// ── Pending Code Application (Select-then-Confirm) ──────────────────
+
+export interface PendingApplication {
+  id: string;             // unique key for React rendering
+  documentId: string;
+  text: string;
+  startIndex: number;
+  endIndex: number;
+  codeId: string;
+  codeLabel: string;
+  codeColour: string;
 }

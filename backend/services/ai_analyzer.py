@@ -78,15 +78,12 @@ def run_coding_audit(
     temporal_drift: float | None = None,
     is_pseudo_centroid: bool = False,
     segment_count: int | None = None,
-    enabled_perspectives: list[str] | None = None,
 ) -> dict:
     """Multi-stage coding audit: Stage 1 scores ground Stage 2 LLM judgment.
 
     Returns a dict with keys:
       self_lens: { is_consistent, consistency_score (float), intent_alignment_score (float),
                    reasoning, definition_match, drift_warning, alternative_codes, suggestion }
-      inter_rater_lens: { predicted_code, predicted_code_confidence (float), is_conflict,
-                          conflict_severity_score (float), reasoning, conflict_explanation }
       overall_severity_score: float [0.0–1.0]
       overall_severity: 'high' | 'medium' | 'low'
       score_grounding_note: str
@@ -106,7 +103,6 @@ def run_coding_audit(
         temporal_drift=temporal_drift,
         is_pseudo_centroid=is_pseudo_centroid,
         segment_count=segment_count,
-        enabled_perspectives=enabled_perspectives,
     )
 
     result = _call_llm(messages)  # fast model
@@ -114,7 +110,6 @@ def run_coding_audit(
     # ── STAGE 3: Escalation — only when Stage 1 and Stage 2 diverge ──
     llm_severity = result.get("overall_severity_score")
     llm_consistency = result.get("self_lens", {}).get("consistency_score")
-    llm_conflict = result.get("inter_rater_lens", {}).get("conflict_severity_score")
 
     # Coerce to float safely (in case LLM returns strings despite instructions)
     def _to_float(val, default: float = 0.5) -> float:
@@ -133,7 +128,6 @@ def run_coding_audit(
 
     llm_severity_f = _to_float(llm_severity, 0.5)
     llm_consistency_f = _to_float(llm_consistency, 0.5)
-    llm_conflict_f = _to_float(llm_conflict, 0.0)
 
     escalation_reason = None
 
@@ -148,37 +142,12 @@ def run_coding_audit(
         escalation_reason = f"high_severity={llm_severity_f:.3f}"
 
     # Condition 3: Embedding says ambiguous but LLM dismisses it
-    if entropy is not None and entropy > 0.7 and llm_conflict_f < 0.3:
-        escalation_reason = f"entropy_conflict: entropy={entropy:.3f}, llm_conflict={llm_conflict_f:.3f}"
+    if entropy is not None and entropy > 0.7 and llm_consistency_f > 0.7:
+        escalation_reason = f"entropy_conflict: entropy={entropy:.3f}, llm_consistency={llm_consistency_f:.3f}"
 
     was_escalated = escalation_reason is not None
     if was_escalated:
         result = _call_llm(messages, model=settings.azure_deployment_reasoning)
-
-    # ── Normalise inter-rater lens: migrate predicted_codes ↔ predicted_code ──
-    inter_rater = result.get("inter_rater_lens") or {}
-
-    # If LLM returned new predicted_codes array, backfill legacy single fields
-    predicted_codes = inter_rater.get("predicted_codes")
-    if isinstance(predicted_codes, list) and len(predicted_codes) > 0:
-        # Sort by confidence descending (in case LLM didn't)
-        predicted_codes.sort(key=lambda c: -(c.get("confidence") or 0))
-        # Trim to top 5
-        inter_rater["predicted_codes"] = predicted_codes[:5]
-        # Backfill legacy single-code fields for backward compat
-        top = predicted_codes[0]
-        inter_rater.setdefault("predicted_code", top.get("code"))
-        inter_rater.setdefault("predicted_code_confidence", top.get("confidence"))
-    elif inter_rater.get("predicted_code"):
-        # Legacy single-code response → normalise into predicted_codes array
-        inter_rater["predicted_codes"] = [{
-            "code": inter_rater["predicted_code"],
-            "confidence": inter_rater.get("predicted_code_confidence", 0.5),
-            "reasoning": inter_rater.get("reasoning", ""),
-        }]
-
-    if inter_rater:
-        result["inter_rater_lens"] = inter_rater
 
     # Attach escalation metadata to result
     result["_escalation"] = {

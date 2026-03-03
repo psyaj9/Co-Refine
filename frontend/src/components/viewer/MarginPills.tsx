@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { SegmentOut } from "@/types";
 
-/** A group of pills sharing the same text range (start_index + end_index). */
 export interface PillGroup {
   rangeKey: string;
   anchorTop: number;
@@ -40,7 +39,6 @@ export default function MarginPills({
     });
   }, []);
 
-  // Measure marks and compute pill positions
   useEffect(() => {
     if (!textRef.current || segments.length === 0) {
       setPillGroups([]);
@@ -52,7 +50,6 @@ export default function MarginPills({
       if (!textEl) return;
       const textRect = textEl.getBoundingClientRect();
 
-      // Measure <mark> positions
       const marks = textEl.querySelectorAll<HTMLElement>("mark[data-start]");
       const markPositionMap = new Map<string, number>();
       marks.forEach((mark) => {
@@ -66,7 +63,6 @@ export default function MarginPills({
         }
       });
 
-      // Map segments to measured positions
       const segWithTop: { top: number; seg: SegmentOut }[] = [];
       for (const seg of segments) {
         const exactKey = `${seg.start_index}-${seg.end_index}`;
@@ -83,7 +79,6 @@ export default function MarginPills({
         if (topPx !== undefined) segWithTop.push({ top: topPx, seg });
       }
 
-      // Group by range
       const groupMap = new Map<string, { anchorTop: number; pills: SegmentOut[] }>();
       for (const item of segWithTop) {
         const key = `${item.seg.start_index}-${item.seg.end_index}`;
@@ -96,7 +91,6 @@ export default function MarginPills({
         g.pills.sort((a, b) => a.code_label.localeCompare(b.code_label));
       }
 
-      // Sort groups and stack with gaps
       const sortedGroups = Array.from(groupMap.entries())
         .map(([rangeKey, g]) => ({ rangeKey, ...g }))
         .sort((a, b) => a.anchorTop - b.anchorTop);

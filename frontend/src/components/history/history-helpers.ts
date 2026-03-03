@@ -1,14 +1,12 @@
 import { escapeHtml } from "@/lib/utils";
 import type { EditEventOut } from "@/types";
 
-/** Add ordinal suffix to day number: 1→"1st", 2→"2nd", 7→"7th" */
 export function ordinal(n: number): string {
   const s = ["th", "st", "nd", "rd"];
   const v = n % 100;
   return n + (s[(v - 20) % 10] || s[v] || s[0]);
 }
 
-/** Format ISO string → "Sun, 7th December 2025, 21:15" */
 export function formatDateTime(iso: string): string {
   const d = new Date(iso);
   const weekday = d.toLocaleDateString("en-GB", { weekday: "short" });
@@ -22,7 +20,6 @@ export function formatDateTime(iso: string): string {
   return `${weekday}, ${day} ${month} ${year}, ${time}`;
 }
 
-/** Build a human-readable summary for an edit event */
 export function eventSummary(ev: EditEventOut): string {
   const meta = ev.metadata_json ?? {};
   const codeLabel = (meta.code_label as string) || "Unknown code";
@@ -47,7 +44,6 @@ export function eventSummary(ev: EditEventOut): string {
   return `${ev.action} ${ev.entity_type}`;
 }
 
-/** Build annotated HTML highlighting the selected history event's span */
 export function buildHistoryAnnotatedText(
   fullText: string,
   selectedEvent: EditEventOut | null,

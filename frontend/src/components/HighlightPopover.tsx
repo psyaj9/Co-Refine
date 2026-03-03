@@ -1,5 +1,5 @@
 import { useStore } from "@/stores/store";
-import { Tag, Check, X, Trash2, GripHorizontal } from "lucide-react";
+import { Check, X, Trash2, GripHorizontal, Plus } from "lucide-react";
 import { useEffect, useRef, useCallback } from "react";
 import { useDraggable } from "@/hooks/useDraggable";
 import { getContrastColor } from "@/lib/utils";
@@ -42,7 +42,8 @@ export default function HighlightPopover({ containerRef }: Props = {}) {
   const codes = useStore((s) => s.codes);
   const segments = useStore((s) => s.segments);
   const activeCodeId = useStore((s) => s.activeCodeId);
-  const applyCode = useStore((s) => s.applyCode);
+  const queueCodeApplication = useStore((s) => s.queueCodeApplication);
+  const pendingApplications = useStore((s) => s.pendingApplications);
   const setSelection = useStore((s) => s.setSelection);
   const setClickedSegments = useStore((s) => s.setClickedSegments);
   const removeSegment = useStore((s) => s.removeSegment);
@@ -188,18 +189,28 @@ export default function HighlightPopover({ containerRef }: Props = {}) {
       .map((seg) => seg.code_id),
   );
 
+  // Codes already queued for this exact span
+  const pendingForSpan = pendingApplications.filter(
+    (p) =>
+      p.startIndex === selection.startIndex &&
+      p.endIndex === selection.endIndex &&
+      p.documentId === useStore.getState().activeDocumentId,
+  );
+  const pendingCodeIds = new Set(pendingForSpan.map((p) => p.codeId));
+
   const activeCode = codes.find((c) => c.id === activeCodeId);
   const activeAlreadyApplied = activeCode
-    ? appliedCodeIds.has(activeCode.id)
+    ? appliedCodeIds.has(activeCode.id) || pendingCodeIds.has(activeCode.id)
     : false;
 
-  const handleApply = async (codeId: string) => {
-    if (appliedCodeIds.has(codeId)) return;
-    await applyCode(selection, codeId);
+  const handleQueue = (codeId: string) => {
+    if (appliedCodeIds.has(codeId) || pendingCodeIds.has(codeId)) return;
+    queueCodeApplication(selection, codeId);
   };
 
-  const availableCodes = codes.filter((c) => !appliedCodeIds.has(c.id));
+  const availableCodes = codes.filter((c) => !appliedCodeIds.has(c.id) && !pendingCodeIds.has(c.id));
   const appliedCodes = codes.filter((c) => appliedCodeIds.has(c.id));
+  const pendingCodes = codes.filter((c) => pendingCodeIds.has(c.id));
 
   return (
     <div
@@ -247,19 +258,39 @@ export default function HighlightPopover({ containerRef }: Props = {}) {
 
       {activeCode && !activeAlreadyApplied && (
         <button
-          onClick={() => handleApply(activeCode.id)}
+          onClick={() => handleQueue(activeCode.id)}
           className="w-full flex items-center gap-2 rounded-lg px-3 py-2 mb-2 text-sm font-medium transition-colors"
           style={{ backgroundColor: activeCode.colour, color: getContrastColor(activeCode.colour) }}
         >
-          <Tag size={14} aria-hidden="true" />
-          Apply &ldquo;{activeCode.label}&rdquo;
+          <Plus size={14} aria-hidden="true" />
+          Queue &ldquo;{activeCode.label}&rdquo;
         </button>
+      )}
+
+      {pendingCodes.length > 0 && (
+        <div className="mb-2">
+          <p className="text-[10px] uppercase tracking-wider text-surface-400 mb-1">
+            Queued codes
+          </p>
+          <div className="flex flex-wrap gap-1">
+            {pendingCodes.map((code) => (
+              <span
+                key={code.id}
+                className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium opacity-80"
+                style={{ backgroundColor: code.colour, color: getContrastColor(code.colour) }}
+              >
+                <Plus size={10} aria-hidden="true" />
+                {code.label}
+              </span>
+            ))}
+          </div>
+        </div>
       )}
 
       {availableCodes.filter((c) => c.id !== activeCodeId).length > 0 && (
         <>
           <p className="text-[10px] uppercase tracking-wider text-surface-400 mb-1">
-            {appliedCodes.length > 0 ? "Add another code" : "Choose a code"}
+            {appliedCodes.length > 0 || pendingCodes.length > 0 ? "Add another code" : "Choose a code"}
           </p>
           <ul className="max-h-40 overflow-auto space-y-0.5" aria-label="Available codes">
             {availableCodes
@@ -267,7 +298,7 @@ export default function HighlightPopover({ containerRef }: Props = {}) {
               .map((code) => (
                 <li key={code.id}>
                   <button
-                    onClick={() => handleApply(code.id)}
+                    onClick={() => handleQueue(code.id)}
                     className="w-full flex items-center gap-2 rounded px-2 py-1.5 text-xs text-surface-700 dark:text-surface-200 hover:bg-surface-50 dark:hover:bg-surface-700 transition-colors"
                   >
                     <span
@@ -283,7 +314,7 @@ export default function HighlightPopover({ containerRef }: Props = {}) {
         </>
       )}
 
-      {availableCodes.length === 0 && appliedCodes.length > 0 && (
+      {availableCodes.length === 0 && (appliedCodes.length > 0 || pendingCodes.length > 0) && (
         <p className="text-xs text-green-600 text-center py-2 font-medium" role="status">
           All codes applied to this segment
         </p>
