@@ -1,4 +1,3 @@
-import math
 import threading
 from datetime import datetime, timezone
 
@@ -125,16 +124,6 @@ def find_similar_across_codes(
     return find_similar_segments(user_id, query_text, top_k=top_k)
 
 
-def _cosine_similarity(a: list[float], b: list[float]) -> float:
-    """Cosine similarity between two equal-length vectors."""
-    dot = sum(x * y for x, y in zip(a, b))
-    norm_a = math.sqrt(sum(x * x for x in a))
-    norm_b = math.sqrt(sum(x * x for x in b))
-    if norm_a == 0.0 or norm_b == 0.0:
-        return 0.0
-    return dot / (norm_a * norm_b)
-
-
 def find_diverse_segments(
     user_id: str,
     query_text: str,
@@ -149,6 +138,8 @@ def find_diverse_segments(
 
     When code_filter is supplied, only segments tagged with that code are considered.
     """
+    from services.scoring import cosine_similarity
+
     collection = _get_collection(user_id)
     if collection.count() == 0:
         return []
@@ -170,7 +161,7 @@ def find_diverse_segments(
 
     # Compute relevance of each candidate to the query
     query_embedding = _embed_text(query_text)
-    relevance = [_cosine_similarity(query_embedding, emb) for emb in embeddings]
+    relevance = [cosine_similarity(query_embedding, emb) for emb in embeddings]
 
     # MMR iterative selection
     n = min(n, len(ids))
@@ -187,7 +178,7 @@ def find_diverse_segments(
 
             if selected_embeddings:
                 max_sim = max(
-                    _cosine_similarity(emb, sel_emb) for sel_emb in selected_embeddings
+                    cosine_similarity(emb, sel_emb) for sel_emb in selected_embeddings
                 )
             else:
                 max_sim = 0.0

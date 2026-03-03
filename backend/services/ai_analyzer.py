@@ -1,4 +1,3 @@
-import json
 from typing import Generator
 from openai import AzureOpenAI
 
