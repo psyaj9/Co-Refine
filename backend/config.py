@@ -19,7 +19,6 @@ class Settings(BaseSettings):
     min_segments_for_consistency: int = 3
     auto_analysis_threshold: int = 3
     vector_search_top_k: int = 8
-    consistency_escalation_threshold: float = 0.7
 
     # Scoring pipeline thresholds
     stage_divergence_threshold: float = 0.25      # |centroid_sim - llm_score| triggers escalation

@@ -1325,19 +1325,10 @@ def _run_background_agents(
                 "data": {"message": str(e)},
             })
 
-        # 3b. Re-audit sibling segments on the same span (their co-applied context changed)
-        if existing_codes_on_span:
-            try:
-                _reaudit_siblings(
-                    db=db,
-                    document_id=document_id,
-                    start_index=start_index,
-                    end_index=end_index,
-                    exclude_segment_id=segment_id,
-                    user_id=user_id,
-                )
-            except Exception as e:
-                print(f"[Agent] Sibling re-audit batch error: {e}")
+        # 3b. Sibling re-audit on CREATE is intentionally omitted:
+        # all segments in a batch are committed before any background task runs,
+        # so each audit already queries the full set of co-applied codes.
+        # Sibling re-audits are only needed on DELETE (see delete_segment route).
 
         # 4. Auto-analysis
         code_segment_count = (

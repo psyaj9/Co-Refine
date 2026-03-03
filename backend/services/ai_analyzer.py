@@ -193,12 +193,9 @@ def run_coding_audit(
     if llm_severity_f >= 0.80:
         escalation_reason = f"high_severity={llm_severity_f:.3f}"
 
-    # Condition 3: Embedding says ambiguous but LLM dismisses it.
-    # Only meaningful when entropy is computed over a real multi-code
-    # distribution (top-K trimmed). Raise threshold to 0.85 to avoid
-    # triggering on large codebooks where moderate ambiguity is expected.
-    if entropy is not None and entropy > 0.85 and llm_consistency_f > 0.7:
-        escalation_reason = f"entropy_conflict: entropy={entropy:.3f}, llm_consistency={llm_consistency_f:.3f}"
+    # Condition 3 (entropy_conflict) removed: entropy structurally converges
+    # near 1.0 on any codebook with 3+ codes, making it a near-constant that
+    # triggered escalation on almost every consistent segment.
 
     was_escalated = escalation_reason is not None
     if was_escalated:

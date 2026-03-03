@@ -139,11 +139,6 @@ def _build_deterministic_evidence_section(
             lines.append(f"    - {code}: {prob:.3f}")
         lines.append("  These probabilities are FACTUAL, not your opinion.")
 
-    if entropy is not None:
-        lines.append(
-            f"- Distribution entropy: **{entropy:.4f}** (range 0–1; higher = more ambiguous)"
-        )
-
     if temporal_drift is not None:
         lines.append(
             f"- Temporal drift for \"{proposed_code}\": **{temporal_drift:.4f}** "
