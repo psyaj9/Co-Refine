@@ -51,8 +51,7 @@ export function useWebSocket() {
           pushAlert(msg);
 
           if (msg.type === "analysis_updated") {
-            loadAnalyses();
-            loadCodes();
+            void Promise.all([loadAnalyses(), loadCodes()]);
           }
         } catch {
           // ignore malformed messages

@@ -67,7 +67,7 @@ def _try_pattern_extraction(text: str) -> dict | None:
 def _create_error_response(response_text: str) -> dict:
     truncated = response_text[:500] + "..." if len(response_text) > 500 else response_text
     return {
-        "definition": "Unable to parse response",
-        "lens": "Unable to parse response",
+        "definition": PARSE_FAILED_SENTINEL,
+        "lens": PARSE_FAILED_SENTINEL,
         "reasoning": f"Raw response: {truncated}",
     }

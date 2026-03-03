@@ -1,18 +1,16 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 import uuid
 
-from database import get_db, Project, Document, Code, CodedSegment, AgentAlert
+from database import get_db, Project, Document, Code, CodedSegment
 from models import ProjectCreate, ProjectOut, ProjectSettingsOut, ProjectSettingsUpdate, AVAILABLE_PERSPECTIVES, THRESHOLD_DEFINITIONS
-from services.vector_store import delete_segment_embedding
 from config import settings as global_settings
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
 
 
-def _project_to_out(project: Project, db: Session) -> ProjectOut:
-    doc_count = db.query(Document).filter(Document.project_id == project.id).count()
-    code_count = db.query(Code).filter(Code.project_id == project.id).count()
+def _project_to_out(project: Project, doc_count: int = 0, code_count: int = 0) -> ProjectOut:
     return ProjectOut(
         id=project.id,
         name=project.name,
@@ -20,6 +18,28 @@ def _project_to_out(project: Project, db: Session) -> ProjectOut:
         code_count=code_count,
         created_at=project.created_at,
     )
+
+
+def _batch_project_counts(db: Session, project_ids: list[str]) -> dict[str, dict]:
+    """Return doc_count and code_count for each project in a single query each."""
+    doc_rows = (
+        db.query(Document.project_id, func.count(Document.id))
+        .filter(Document.project_id.in_(project_ids))
+        .group_by(Document.project_id)
+        .all()
+    )
+    code_rows = (
+        db.query(Code.project_id, func.count(Code.id))
+        .filter(Code.project_id.in_(project_ids))
+        .group_by(Code.project_id)
+        .all()
+    )
+    doc_counts = {pid: cnt for pid, cnt in doc_rows}
+    code_counts = {pid: cnt for pid, cnt in code_rows}
+    return {
+        pid: {"doc_count": doc_counts.get(pid, 0), "code_count": code_counts.get(pid, 0)}
+        for pid in project_ids
+    }
 
 
 @router.post("/", response_model=ProjectOut)
@@ -31,13 +51,17 @@ def create_project(body: ProjectCreate, db: Session = Depends(get_db)):
     db.add(project)
     db.commit()
     db.refresh(project)
-    return _project_to_out(project, db)
+    return _project_to_out(project)
 
 
 @router.get("/", response_model=list[ProjectOut])
 def list_projects(db: Session = Depends(get_db)):
     projects = db.query(Project).order_by(Project.created_at.desc()).all()
-    return [_project_to_out(p, db) for p in projects]
+    counts = _batch_project_counts(db, [p.id for p in projects])
+    return [
+        _project_to_out(p, counts[p.id]["doc_count"], counts[p.id]["code_count"])
+        for p in projects
+    ]
 
 
 @router.get("/{project_id}", response_model=ProjectOut)
@@ -45,7 +69,8 @@ def get_project(project_id: str, db: Session = Depends(get_db)):
     project = db.query(Project).filter(Project.id == project_id).first()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
-    return _project_to_out(project, db)
+    counts = _batch_project_counts(db, [project_id])
+    return _project_to_out(project, counts[project_id]["doc_count"], counts[project_id]["code_count"])
 
 
 @router.delete("/{project_id}")
@@ -55,11 +80,20 @@ def delete_project(project_id: str, user_id: str = "default", db: Session = Depe
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    docs = db.query(Document).filter(Document.project_id == project_id).all()
-    for doc in docs:
-        segments = db.query(CodedSegment).filter(CodedSegment.document_id == doc.id).all()
-        for seg in segments:
-            delete_segment_embedding(user_id, seg.id)
+    # Batch-delete all segment embeddings from ChromaDB in one call
+    seg_ids = [
+        row[0]
+        for row in db.query(CodedSegment.id)
+        .join(Document, CodedSegment.document_id == Document.id)
+        .filter(Document.project_id == project_id)
+        .all()
+    ]
+    if seg_ids:
+        try:
+            from services.vector_store import get_collection
+            get_collection(user_id).delete(ids=seg_ids)
+        except Exception:
+            pass
 
     db.delete(project)
     db.commit()

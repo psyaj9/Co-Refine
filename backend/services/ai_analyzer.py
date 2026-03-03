@@ -12,6 +12,22 @@ from utils import parse_json_response, PARSE_FAILED_SENTINEL
 
 _client: AzureOpenAI | None = None
 
+_ORDINAL_SCORE_MAP = {"high": 0.9, "medium": 0.6, "low": 0.3}
+
+
+def _to_float(val: object, default: float = 0.5) -> float:
+    """Coerce an LLM-returned value to float, handling ordinal strings and None."""
+    if val is None:
+        return default
+    if isinstance(val, (int, float)):
+        return float(val)
+    if isinstance(val, str) and val.lower() in _ORDINAL_SCORE_MAP:
+        return _ORDINAL_SCORE_MAP[val.lower()]
+    try:
+        return float(val)  # type: ignore[arg-type]
+    except (ValueError, TypeError):
+        return default
+
 
 def _get_client() -> AzureOpenAI:
     global _client
@@ -60,8 +76,6 @@ def _call_llm(prompt: str | list[dict], model: str | None = None, retries: int =
 def analyze_quotes(code_label: str, quotes: list[str], user_definition: str | None = None) -> dict:
     prompt = build_analysis_prompt(code_label, quotes, user_definition=user_definition)
     return _call_llm(prompt, model=settings.azure_deployment_reasoning)
-
-    return result
 
 
 def run_coding_audit(
@@ -162,38 +176,28 @@ def run_coding_audit(
     llm_severity = result.get("overall_severity_score")
     llm_consistency = result.get("self_lens", {}).get("consistency_score")
 
-    # Coerce to float safely (in case LLM returns strings despite instructions)
-    def _to_float(val, default: float = 0.5) -> float:
-        if val is None:
-            return default
-        if isinstance(val, (int, float)):
-            return float(val)
-        # Handle ordinal fallback for robustness
-        score_map = {"high": 0.9, "medium": 0.6, "low": 0.3}
-        if isinstance(val, str) and val.lower() in score_map:
-            return score_map[val.lower()]
-        try:
-            return float(val)
-        except (ValueError, TypeError):
-            return default
-
     llm_severity_f = _to_float(llm_severity, 0.5)
     llm_consistency_f = _to_float(llm_consistency, 0.5)
 
     escalation_reason = None
 
     # Condition 1: LLM contradicts the embedding evidence
-    if centroid_similarity is not None:
+    # Skip when centroid is pseudo (definition-only, no real usage signal)
+    if centroid_similarity is not None and not is_pseudo_centroid:
         divergence = abs(centroid_similarity - llm_consistency_f)
         if divergence > settings.stage_divergence_threshold:
             escalation_reason = f"stage_divergence={divergence:.3f}"
 
-    # Condition 2: LLM itself says this is serious
-    if llm_severity_f >= 0.65:
+    # Condition 2: LLM itself says this is serious (raise threshold to 0.80
+    # — reflection already handles most medium-severity cases)
+    if llm_severity_f >= 0.80:
         escalation_reason = f"high_severity={llm_severity_f:.3f}"
 
-    # Condition 3: Embedding says ambiguous but LLM dismisses it
-    if entropy is not None and entropy > 0.7 and llm_consistency_f > 0.7:
+    # Condition 3: Embedding says ambiguous but LLM dismisses it.
+    # Only meaningful when entropy is computed over a real multi-code
+    # distribution (top-K trimmed). Raise threshold to 0.85 to avoid
+    # triggering on large codebooks where moderate ambiguity is expected.
+    if entropy is not None and entropy > 0.85 and llm_consistency_f > 0.7:
         escalation_reason = f"entropy_conflict: entropy={entropy:.3f}, llm_consistency={llm_consistency_f:.3f}"
 
     was_escalated = escalation_reason is not None

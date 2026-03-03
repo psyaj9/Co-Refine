@@ -9,6 +9,8 @@ from config import settings
 _chroma_client: chromadb.ClientAPI | None = None
 _embed_model = None
 _embed_lock = threading.Lock()
+_embed_api_client = None
+_embed_api_lock = threading.Lock()
 
 
 def _get_chroma() -> chromadb.ClientAPI:
@@ -44,14 +46,23 @@ def _embed_local(text: str) -> list[float]:
     return _embed_model.encode(text).tolist()
 
 
+def _get_embed_api_client():
+    global _embed_api_client
+    if _embed_api_client is None:
+        with _embed_api_lock:
+            if _embed_api_client is None:
+                from openai import AzureOpenAI
+                _embed_api_client = AzureOpenAI(
+                    azure_endpoint=settings.azure_endpoint,
+                    api_key=settings.azure_api_key,
+                    api_version=settings.azure_api_version,
+                )
+    return _embed_api_client
+
+
 def _embed_api(text: str) -> list[float]:
     """Azure OpenAI embeddings using the configured embedding deployment."""
-    from openai import AzureOpenAI
-    client = AzureOpenAI(
-        azure_endpoint=settings.azure_endpoint,
-        api_key=settings.azure_api_key,
-        api_version=settings.azure_api_version,
-    )
+    client = _get_embed_api_client()
     response = client.embeddings.create(
         model=settings.azure_embedding_model,
         input=text,
@@ -114,14 +125,6 @@ def find_similar_segments(
             "distance": results["distances"][0][i],
         })
     return items
-
-
-def find_similar_across_codes(
-    user_id: str,
-    query_text: str,
-    top_k: int = 0,
-) -> list[dict]:
-    return find_similar_segments(user_id, query_text, top_k=top_k)
 
 
 def find_diverse_segments(
@@ -221,15 +224,6 @@ def get_segment_count(user_id: str) -> int:
         return 0
 
 
-# ---------------------------------------------------------------------------
-# Public wrappers — used by services.scoring for Stage 1 deterministic scoring
-# ---------------------------------------------------------------------------
-
-def get_collection(user_id: str) -> chromadb.Collection:
-    """Public access to the user's Chroma collection."""
-    return _get_collection(user_id)
-
-
-def embed_text(text: str) -> list[float]:
-    """Public embedding function. Uses local or Azure depending on config."""
-    return _embed_text(text)
+# Public aliases used by services.scoring for Stage 1 deterministic scoring
+get_collection = _get_collection
+embed_text = _embed_text

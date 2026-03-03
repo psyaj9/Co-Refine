@@ -57,7 +57,6 @@ interface AppState {
   setActiveCode: (id: string) => void;
   addCode: (label: string, colour: string, definition?: string) => Promise<void>;
   deleteCode: (id: string) => Promise<void>;
-  updateCodeDefinition: (id: string, definition: string) => Promise<void>;
   updateCode: (id: string, patch: { label?: string; colour?: string; definition?: string }) => Promise<void>;
 
   // Inconsistent segment tracking (for document viewer red highlights)
@@ -268,10 +267,6 @@ export const useStore = create<AppState>((set, get) => ({
       await loadSegments(activeDocumentId);
     }
   },
-  updateCodeDefinition: async (id, definition) => {
-    await api.updateCode(id, { definition });
-    await get().loadCodes();
-  },
   updateCode: async (id, patch) => {
     await api.updateCode(id, patch);
     await get().loadCodes();
@@ -287,9 +282,7 @@ export const useStore = create<AppState>((set, get) => ({
   retrievedSegments: [],
   retrievedCodeId: null,
   loadRetrievedSegments: async (codeId: string) => {
-    // Fetch ALL segments across all docs, then filter by code
-    const allSegs = await api.fetchSegments(undefined, CURRENT_USER);
-    const forCode = allSegs.filter((s) => s.code_id === codeId);
+    const forCode = await api.fetchCodeSegments(codeId, CURRENT_USER);
     set({ retrievedSegments: forCode, retrievedCodeId: codeId });
   },
   clearRetrievedSegments: () => set({ retrievedSegments: [], retrievedCodeId: null }),

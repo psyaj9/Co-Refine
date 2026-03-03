@@ -1,16 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 import uuid
 
 from database import get_db, Code, CodedSegment, AnalysisResult, AgentAlert, EditEvent
 from models import CodeCreate, CodeOut, CodeUpdate, SegmentOut
-from services.vector_store import delete_segment_embedding
-
 router = APIRouter(prefix="/api/codes", tags=["codes"])
 
 
-def _code_to_out(code: Code, db: Session) -> CodeOut:
-    count = db.query(CodedSegment).filter(CodedSegment.code_id == code.id).count()
+def _code_to_out(code: Code, segment_count: int = 0) -> CodeOut:
     return CodeOut(
         id=code.id,
         label=code.label,
@@ -18,8 +16,19 @@ def _code_to_out(code: Code, db: Session) -> CodeOut:
         colour=code.colour,
         created_by=code.created_by,
         project_id=code.project_id,
-        segment_count=count,
+        segment_count=segment_count,
     )
+
+
+def _segment_counts(db: Session, code_ids: list[str]) -> dict[str, int]:
+    """Return a mapping of code_id -> segment count in a single query."""
+    rows = (
+        db.query(CodedSegment.code_id, func.count(CodedSegment.id))
+        .filter(CodedSegment.code_id.in_(code_ids))
+        .group_by(CodedSegment.code_id)
+        .all()
+    )
+    return {code_id: count for code_id, count in rows}
 
 
 @router.post("/", response_model=CodeOut)
@@ -61,7 +70,8 @@ def create_code(body: CodeCreate, db: Session = Depends(get_db)):
     ))
     db.commit()
 
-    return _code_to_out(code, db)
+    counts = _segment_counts(db, [code.id])
+    return _code_to_out(code, counts.get(code.id, 0))
 
 
 @router.get("/", response_model=list[CodeOut])
@@ -70,7 +80,8 @@ def list_codes(project_id: str = "", db: Session = Depends(get_db)):
     if project_id:
         query = query.filter(Code.project_id == project_id)
     codes = query.order_by(Code.label).all()
-    return [_code_to_out(c, db) for c in codes]
+    counts = _segment_counts(db, [c.id for c in codes])
+    return [_code_to_out(c, counts.get(c.id, 0)) for c in codes]
 
 
 @router.patch("/{code_id}", response_model=CodeOut)
@@ -115,7 +126,8 @@ def update_code(code_id: str, body: CodeUpdate, db: Session = Depends(get_db)):
 
     db.commit()
     db.refresh(code)
-    return _code_to_out(code, db)
+    counts = _segment_counts(db, [code.id])
+    return _code_to_out(code, counts.get(code.id, 0))
 
 
 @router.delete("/{code_id}")
@@ -148,9 +160,15 @@ def delete_code(code_id: str, user_id: str = "default", db: Session = Depends(ge
     ))
 
     segments = db.query(CodedSegment).filter(CodedSegment.code_id == code_id).all()
-    for seg in segments:
-        delete_segment_embedding(user_id, seg.id)
-        db.query(AgentAlert).filter(AgentAlert.segment_id == seg.id).delete()
+    seg_ids = [seg.id for seg in segments]
+    if seg_ids:
+        # Batch delete all embeddings in one ChromaDB call
+        try:
+            from services.vector_store import get_collection
+            get_collection(user_id).delete(ids=seg_ids)
+        except Exception:
+            pass
+        db.query(AgentAlert).filter(AgentAlert.segment_id.in_(seg_ids)).delete(synchronize_session=False)
 
     db.query(CodedSegment).filter(CodedSegment.code_id == code_id).delete()
     db.query(AnalysisResult).filter(AnalysisResult.code_id == code_id).delete()

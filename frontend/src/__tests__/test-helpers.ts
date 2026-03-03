@@ -164,7 +164,6 @@ export function defaultStoreState() {
     setActiveCode: vi.fn(),
     addCode: vi.fn().mockResolvedValue(undefined),
     deleteCode: vi.fn().mockResolvedValue(undefined),
-    updateCodeDefinition: vi.fn().mockResolvedValue(undefined),
     updateCode: vi.fn().mockResolvedValue(undefined),
     loadSegments: vi.fn().mockResolvedValue(undefined),
     applyCode: vi.fn().mockResolvedValue(undefined),

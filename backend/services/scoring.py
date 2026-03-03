@@ -207,7 +207,7 @@ def softmax_scores(
     return {label: ev / total for label, ev in zip(labels, exp_vals)}
 
 
-def distribution_entropy(prob_dist: dict[str, float]) -> float:
+def distribution_entropy(prob_dist: dict[str, float], top_k: int = 5) -> float:
     """
     Normalised Shannon entropy of a probability distribution.
 
@@ -215,15 +215,25 @@ def distribution_entropy(prob_dist: dict[str, float]) -> float:
         0 = perfectly certain (one code dominates)
         1 = maximally uncertain (uniform distribution)
 
-    This is the single best scalar for "how ambiguous is this segment's
-    code assignment". High entropy = the segment could plausibly belong
-    to multiple codes.
+    Only the top_k codes by probability are considered. This prevents
+    entropy from trivially approaching 1.0 just because the codebook is
+    large — with 10+ codes a flat softmax makes entropy meaningless.
+    Restricting to the top-K competitors that genuinely compete for the
+    segment gives a score that reflects real ambiguity.
     """
-    n = len(prob_dist)
+    if not prob_dist:
+        return 0.0
+    # Take top-K competitors only
+    top_probs = sorted(prob_dist.values(), reverse=True)[:top_k]
+    n = len(top_probs)
     if n <= 1:
         return 0.0
-    probs = [p for p in prob_dist.values() if p > 0]
-    raw_entropy = -sum(p * math.log(p) for p in probs)
+    # Re-normalise so they sum to 1 over this reduced set
+    total = sum(top_probs)
+    if total == 0:
+        return 0.0
+    normed = [p / total for p in top_probs]
+    raw_entropy = -sum(p * math.log(p) for p in normed if p > 0)
     max_entropy = math.log(n)
     return raw_entropy / max_entropy if max_entropy > 0 else 0.0
 

@@ -315,26 +315,23 @@ async def trigger_analysis(
 
 @router.get("/analyses", response_model=list[AnalysisOut])
 def list_analyses(project_id: str = "", db: Session = Depends(get_db)):
-    query = db.query(AnalysisResult)
+    query = (
+        db.query(AnalysisResult, Code)
+        .join(Code, AnalysisResult.code_id == Code.id)
+    )
     if project_id:
-        query = query.join(Code, AnalysisResult.code_id == Code.id).filter(
-            Code.project_id == project_id
-        )
-    results = query.all()
-    out: list[AnalysisOut] = []
-    for r in results:
-        code = db.query(Code).filter(Code.id == r.code_id).first()
-        if not code:
-            continue
-        out.append(AnalysisOut(
+        query = query.filter(Code.project_id == project_id)
+    return [
+        AnalysisOut(
             code_id=r.code_id,
             code_label=code.label,
             definition=r.definition,
             lens=r.lens,
             reasoning=r.reasoning,
             segment_count=r.segment_count_at_analysis,
-        ))
-    return out
+        )
+        for r, code in query.all()
+    ]
 
 
 @router.get("/{segment_id}", response_model=SegmentOut)
@@ -520,20 +517,15 @@ def _run_batch_audit_background(
             c.label: (c.definition or "") for c in all_codes
         }
 
-        analyses = (
-            db.query(AnalysisResult)
-            .join(Code, AnalysisResult.code_id == Code.id)
-            .filter(Code.project_id == project_id)
-            .all()
-        )
-        code_definitions: dict[str, dict] = {}
-        for a in analyses:
-            code_obj = db.query(Code).filter(Code.id == a.code_id).first()
-            if code_obj:
-                code_definitions[code_obj.label] = {
-                    "definition": a.definition or "",
-                    "lens": a.lens or "",
-                }
+        code_definitions: dict[str, dict] = {
+            code.label: {"definition": a.definition or "", "lens": a.lens or ""}
+            for a, code in (
+                db.query(AnalysisResult, Code)
+                .join(Code, AnalysisResult.code_id == Code.id)
+                .filter(Code.project_id == project_id)
+                .all()
+            )
+        }
 
         all_code_labels = [c.label for c in all_codes]
 
@@ -792,7 +784,7 @@ def _reaudit_siblings(
                     .count()
                 )
 
-            # Build history via MMR
+            # Build history via MMR — shared sample for both audit and reflection passes
             diverse = find_diverse_segments(
                 user_id=user_id,
                 query_text=sib_seg.text,
@@ -800,26 +792,18 @@ def _reaudit_siblings(
                 n=10,
             )
             user_history = [(s["code"], s["text"]) for s in diverse]
+            reflection_history = user_history
 
-            # Fresh MMR sample for reflection pass
-            reflection_diverse = find_diverse_segments(
-                user_id=user_id,
-                query_text=sib_seg.text,
-                code_filter=sib_code.label,
-                n=10,
-            )
-            reflection_history = [(s["code"], s["text"]) for s in reflection_diverse]
-
-            # AI-inferred definitions
-            analyses = db.query(AnalysisResult).all()
-            code_definitions: dict[str, dict] = {}
-            for a in analyses:
-                code_obj = db.query(Code).filter(Code.id == a.code_id).first()
-                if code_obj:
-                    code_definitions[code_obj.label] = {
-                        "definition": a.definition or "",
-                        "lens": a.lens or "",
-                    }
+            # AI-inferred definitions (scoped to project to avoid full table scan)
+            code_definitions: dict[str, dict] = {
+                code.label: {"definition": a.definition or "", "lens": a.lens or ""}
+                for a, code in (
+                    db.query(AnalysisResult, Code)
+                    .join(Code, AnalysisResult.code_id == Code.id)
+                    .filter(Code.project_id == project_id)
+                    .all()
+                )
+            }
 
             # Build document context
             doc = db.query(Document).filter(Document.id == document_id).first()
@@ -1165,10 +1149,6 @@ def _run_background_agents(
             c.label for _seg, c in overlapping_segments
         })
 
-        user_segment_count = (
-            db.query(CodedSegment).filter(CodedSegment.user_id == user_id).count()
-        )
-
         # 2. Stage 1 — Deterministic embedding scores
         stage1 = None
         try:
@@ -1210,25 +1190,18 @@ def _run_background_agents(
                 n=10,
             )
             user_history = [(s["code"], s["text"]) for s in diverse]
+            # Reuse the same MMR sample for the reflection pass
+            reflection_history = user_history
 
-            # Fetch a SECOND independent MMR sample for the reflection pass
-            reflection_diverse = find_diverse_segments(
-                user_id=user_id,
-                query_text=text,
-                code_filter=code_label,
-                n=10,
-            )
-            reflection_history = [(s["code"], s["text"]) for s in reflection_diverse]
-
-            analyses = db.query(AnalysisResult).all()
-            code_definitions: dict[str, dict] = {}
-            for a in analyses:
-                code_obj = db.query(Code).filter(Code.id == a.code_id).first()
-                if code_obj:
-                    code_definitions[code_obj.label] = {
-                        "definition": a.definition or "",
-                        "lens": a.lens or "",
-                    }
+            code_definitions: dict[str, dict] = {
+                code.label: {"definition": a.definition or "", "lens": a.lens or ""}
+                for a, code in (
+                    db.query(AnalysisResult, Code)
+                    .join(Code, AnalysisResult.code_id == Code.id)
+                    .filter(Code.project_id == project_id)
+                    .all()
+                )
+            } if project_id else {}
 
             audit_result = run_coding_audit(
                 user_history=user_history,

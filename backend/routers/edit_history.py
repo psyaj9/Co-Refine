@@ -1,6 +1,5 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
-from typing import Optional
 
 from database import get_db, EditEvent
 from models import EditEventOut
@@ -11,8 +10,8 @@ router = APIRouter(prefix="/api/projects", tags=["edit_history"])
 @router.get("/{project_id}/edit-history", response_model=list[EditEventOut])
 def get_edit_history(
     project_id: str,
-    document_id: Optional[str] = Query(None),
-    entity_type: Optional[str] = Query(None),
+    document_id: str | None = Query(None),
+    entity_type: str | None = Query(None),
     limit: int = Query(200, ge=1, le=1000),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),

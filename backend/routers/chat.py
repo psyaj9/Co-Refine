@@ -7,7 +7,7 @@ from database import (
 )
 from models import ChatRequest, ChatMessageOut
 from services.ai_analyzer import stream_chat_response
-from services.vector_store import find_similar_across_codes
+from services.vector_store import find_similar_segments
 from services.ws_manager import ws_manager
 from prompts.chat_prompt import build_chat_messages
 from config import settings
@@ -157,7 +157,7 @@ def _build_codebook(db: Session, project_id: str) -> list[dict]:
 def _retrieve_segments(user_id: str, query: str) -> list[dict]:
     """Semantic search over coded segments."""
     try:
-        return find_similar_across_codes(user_id=user_id, query_text=query, top_k=8)
+        return find_similar_segments(user_id=user_id, query_text=query, top_k=8)
     except Exception:
         return []
 

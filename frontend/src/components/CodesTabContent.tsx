@@ -26,7 +26,7 @@ export default function CodesTabContent() {
   const setActiveCode = useStore((s) => s.setActiveCode);
   const addCode = useStore((s) => s.addCode);
   const deleteCode = useStore((s) => s.deleteCode);
-  const updateCodeDefinition = useStore((s) => s.updateCodeDefinition);
+  const updateCode = useStore((s) => s.updateCode);
   const analyses = useStore((s) => s.analyses);
   const loadAnalyses = useStore((s) => s.loadAnalyses);
   const loadRetrievedSegments = useStore((s) => s.loadRetrievedSegments);
@@ -197,7 +197,7 @@ export default function CodesTabContent() {
                   editDefText={editDefText}
                   setEditDefText={setEditDefText}
                   setEditingDefCodeId={setEditingDefCodeId}
-                  updateCodeDefinition={updateCodeDefinition}
+                  updateCodeDefinition={(id, def) => updateCode(id, { definition: def })}
                   loadRetrievedSegments={loadRetrievedSegments}
                   setExpandedCodeId={setExpandedCodeId}
                   handleAnalyse={handleAnalyse}
