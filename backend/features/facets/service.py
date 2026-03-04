@@ -206,6 +206,6 @@ def suggest_facet_labels(db: Session, code_id: str, facets: list[Facet]) -> None
                 facet.label_source = "ai"
 
         db.commit()
-        logger.info("Facet labels AI-suggested", code_id=code_id, count=len(label_map))
+        logger.info(f"Facet labels AI-suggested code_id={code_id} count={len(label_map)}")
     except Exception as exc:
-        logger.warning("Facet label suggestion failed — keeping generic labels", code_id=code_id, error=str(exc))
+        logger.warning(f"Facet label suggestion failed — keeping generic labels code_id={code_id} error={exc}")
