@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import HistoryTimeline from "@/components/history/HistoryTimeline";
-import { defaultStoreState, mockEditEvent } from "./test-helpers";
+import { defaultStoreState, mockEditEvent } from "@/shared/__tests__/test-helpers";
 
 vi.mock("@/stores/store", () => ({
   useStore: vi.fn(),

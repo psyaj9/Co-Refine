@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import RetrievedSegments from "@/components/RetrievedSegments";
-import { defaultStoreState, mockSegment, mockCode, mockDocument } from "./test-helpers";
+import { defaultStoreState, mockSegment, mockCode, mockDocument } from "@/shared/__tests__/test-helpers";
 
 vi.mock("@/stores/store", () => ({
   useStore: vi.fn(),

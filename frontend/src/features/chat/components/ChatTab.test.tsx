@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { axe, toHaveNoViolations } from "jest-axe";
 import ChatTab from "@/components/ChatTab";
-import { defaultStoreState, mockChatMessage } from "./test-helpers";
+import { defaultStoreState, mockChatMessage } from "@/shared/__tests__/test-helpers";
 
 expect.extend(toHaveNoViolations);
 

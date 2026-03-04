@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { axe, toHaveNoViolations } from "jest-axe";
 import StatusBar from "@/components/StatusBar";
-import { defaultStoreState } from "./test-helpers";
+import { defaultStoreState } from "@/shared/__tests__/test-helpers";
 
 expect.extend(toHaveNoViolations);
 

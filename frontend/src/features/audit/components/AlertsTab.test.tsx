@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { axe, toHaveNoViolations } from "jest-axe";
 import AlertsTab from "@/components/AlertsTab";
-import { defaultStoreState, mockAlert, mockCode } from "./test-helpers";
+import { defaultStoreState, mockAlert, mockCode } from "@/shared/__tests__/test-helpers";
 
 expect.extend(toHaveNoViolations);
 

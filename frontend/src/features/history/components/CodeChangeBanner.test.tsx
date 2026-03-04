@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
 import CodeChangeBanner from "@/components/history/CodeChangeBanner";
-import { mockEditEvent } from "./test-helpers";
+import { mockEditEvent } from "@/shared/__tests__/test-helpers";
 
 describe("CodeChangeBanner", () => {
   it("renders event summary for segment creation", () => {
