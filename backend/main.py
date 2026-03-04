@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from core.models.migrations import init_db
 from routers import documents, codes, segments, projects, chat, edit_history, evaluation, vis
-from services.ws_manager import ws_manager
+from infrastructure.websocket.manager import ws_manager
 from core.config import settings
 
 

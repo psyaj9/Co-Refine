@@ -1,16 +1,13 @@
 from typing import Generator
-from openai import AzureOpenAI
 
 from core.config import settings
+from infrastructure.llm.client import call_llm, get_client
 from prompts import (
     build_analysis_prompt,
     build_coding_audit_prompt,
     build_reflection_prompt,
     build_challenge_prompt,
 )
-from utils import parse_json_response, PARSE_FAILED_SENTINEL
-
-_client: AzureOpenAI | None = None
 
 _ORDINAL_SCORE_MAP = {"high": 0.9, "medium": 0.6, "low": 0.3}
 
@@ -29,53 +26,9 @@ def _to_float(val: object, default: float = 0.5) -> float:
         return default
 
 
-def _get_client() -> AzureOpenAI:
-    global _client
-    if _client is None:
-        _client = AzureOpenAI(
-            api_key=settings.azure_api_key,
-            azure_endpoint=settings.azure_endpoint,
-            api_version=settings.azure_api_version,
-        )
-    return _client
-
-
-def _call_llm(prompt: str | list[dict], model: str | None = None, retries: int = 1) -> dict:
-    """Call LLM with either a plain string prompt or a list of message dicts.
-
-    Accepts:
-        prompt: str  — wrapped as [{"role": "user", "content": prompt}]
-        prompt: list[dict] — used directly as messages (system + user)
-    """
-    client = _get_client()
-    deployment = model or settings.azure_deployment_fast
-
-    # Support both old (string) and new (messages list) format
-    if isinstance(prompt, str):
-        messages = [{"role": "user", "content": prompt}]
-    else:
-        messages = prompt
-
-    for attempt in range(1 + retries):
-        response = client.chat.completions.create(
-            model=deployment,
-            messages=messages,
-            response_format={"type": "json_object"},
-        )
-        raw = response.choices[0].message.content or ""
-        result = parse_json_response(raw)
-
-        if result.get("definition") != PARSE_FAILED_SENTINEL:
-            return result
-
-        print(f"[LLM] Parse failure (attempt {attempt + 1}) — raw response: {raw[:500]}")
-
-    return result
-
-
 def analyze_quotes(code_label: str, quotes: list[str], user_definition: str | None = None) -> dict:
     prompt = build_analysis_prompt(code_label, quotes, user_definition=user_definition)
-    return _call_llm(prompt, model=settings.azure_deployment_reasoning)
+    return call_llm(prompt, model=settings.azure_deployment_reasoning)
 
 
 def run_coding_audit(
@@ -130,7 +83,7 @@ def run_coding_audit(
     )
 
     # ── Pass 1: Initial judgment (fast model) ──
-    initial_result = _call_llm(messages)  # fast model
+    initial_result = call_llm(messages)  # fast model
 
     # ── Pass 2: Reflection loop (same fast model) ──
     reflection_meta: dict = {"was_reflected": False}
@@ -152,7 +105,7 @@ def run_coding_audit(
             is_pseudo_centroid=is_pseudo_centroid,
             segment_count=segment_count,
         )
-        reflected_result = _call_llm(reflection_messages)  # same fast model
+        reflected_result = call_llm(reflection_messages)  # same fast model
 
         reflected_scores = _extract_scores(reflected_result)
         score_delta = {
@@ -199,7 +152,7 @@ def run_coding_audit(
 
     was_escalated = escalation_reason is not None
     if was_escalated:
-        result = _call_llm(messages, model=settings.azure_deployment_reasoning)
+        result = call_llm(messages, model=settings.azure_deployment_reasoning)
 
     # Attach escalation metadata to result
     result["_escalation"] = {
@@ -263,7 +216,7 @@ def run_challenge_cycle(
         segment_count=segment_count,
     )
 
-    result = _call_llm(messages)  # same fast model
+    result = call_llm(messages)  # same fast model
     post_scores = _extract_scores(result)
 
     result["_challenge"] = {
@@ -285,7 +238,7 @@ def stream_chat_response(
     model: str | None = None,
 ) -> Generator[str, None, None]:
     """Stream chat tokens from Azure OpenAI. Yields text chunks as they arrive."""
-    client = _get_client()
+    client = get_client()
     response = client.chat.completions.create(
         model=model or settings.azure_deployment_fast,
         messages=messages,
