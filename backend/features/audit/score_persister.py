@@ -1,0 +1,81 @@
+"""Score persisters: write ConsistencyScore and AgentAlert rows."""
+from __future__ import annotations
+import uuid
+
+from sqlalchemy.orm import Session
+
+from core.models import ConsistencyScore, AgentAlert
+
+
+def persist_agent_alert(
+    *,
+    db: Session,
+    user_id: str,
+    segment_id: str,
+    audit_result: dict,
+    delete_existing: bool = False,
+) -> AgentAlert:
+    if delete_existing:
+        db.query(AgentAlert).filter(
+            AgentAlert.segment_id == segment_id,
+            AgentAlert.alert_type == "coding_audit",
+        ).delete()
+    alert = AgentAlert(
+        id=str(uuid.uuid4()),
+        user_id=user_id,
+        segment_id=segment_id,
+        alert_type="coding_audit",
+        payload=audit_result,
+    )
+    db.add(alert)
+    return alert
+
+
+def persist_consistency_score(
+    *,
+    db: Session,
+    segment_id: str,
+    code_id: str,
+    user_id: str,
+    project_id: str,
+    stage1: dict | None,
+    audit_result: dict,
+    delete_existing: bool = False,
+) -> ConsistencyScore:
+    if delete_existing:
+        db.query(ConsistencyScore).filter(
+            ConsistencyScore.segment_id == segment_id,
+            ConsistencyScore.code_id == code_id,
+        ).delete()
+
+    escalation = audit_result.get("_escalation", {})
+    reflection = audit_result.get("_reflection", {})
+    self_lens = audit_result.get("self_lens", {})
+
+    was_reflected = reflection.get("was_reflected", False)
+
+    score_row = ConsistencyScore(
+        id=str(uuid.uuid4()),
+        segment_id=segment_id,
+        code_id=code_id,
+        user_id=user_id,
+        project_id=project_id,
+        centroid_similarity=stage1["centroid_similarity"] if stage1 else None,
+        is_pseudo_centroid=stage1["is_pseudo_centroid"] if stage1 else False,
+        proposed_code_prob=stage1["proposed_code_prob"] if stage1 else None,
+        entropy=stage1["entropy"] if stage1 else None,
+        conflict_score=stage1["conflict_score"] if stage1 else None,
+        temporal_drift=stage1["temporal_drift"] if stage1 else None,
+        codebook_distribution=stage1["codebook_prob_dist"] if stage1 else None,
+        llm_consistency_score=self_lens.get("consistency_score"),
+        llm_intent_score=self_lens.get("intent_alignment_score"),
+        llm_overall_severity=audit_result.get("overall_severity_score"),
+        initial_consistency_score=reflection.get("initial_scores", {}).get("consistency_score") if was_reflected else None,
+        initial_intent_score=reflection.get("initial_scores", {}).get("intent_alignment_score") if was_reflected else None,
+        initial_severity_score=reflection.get("initial_scores", {}).get("overall_severity_score") if was_reflected else None,
+        was_reflected=was_reflected,
+        was_escalated=escalation.get("was_escalated", False),
+        escalation_reason=escalation.get("reason"),
+    )
+    db.add(score_row)
+    return score_row

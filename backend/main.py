@@ -4,7 +4,14 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
 from core.models.migrations import init_db
-from routers import documents, codes, segments, projects, chat, edit_history, evaluation, vis
+from features.projects.router import router as projects_router
+from features.documents.router import router as documents_router
+from features.codes.router import router as codes_router
+from features.segments.router import router as segments_router
+from features.audit.router import router as audit_router
+from features.chat.router import router as chat_router
+from features.edit_history.router import router as edit_history_router
+from features.visualisations.router import router as vis_router
 from infrastructure.websocket.manager import ws_manager
 from core.config import settings
 
@@ -28,14 +35,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(projects.router)
-app.include_router(documents.router)
-app.include_router(codes.router)
-app.include_router(segments.router)
-app.include_router(chat.router)
-app.include_router(edit_history.router)
-app.include_router(evaluation.router)
-app.include_router(vis.router)
+app.include_router(projects_router)
+app.include_router(documents_router)
+app.include_router(codes_router)
+app.include_router(segments_router)
+app.include_router(audit_router)
+app.include_router(chat_router)
+app.include_router(edit_history_router)
+app.include_router(vis_router)
 
 
 @app.websocket("/ws/{user_id}")
