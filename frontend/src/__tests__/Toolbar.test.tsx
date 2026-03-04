@@ -50,7 +50,7 @@ describe("Toolbar", () => {
     const setViewMode = vi.fn();
     setup({ setViewMode });
     fireEvent.click(screen.getByLabelText(/visualisations/i));
-    expect(setViewMode).toHaveBeenCalledWith("visualisation");
+    expect(setViewMode).toHaveBeenCalledWith("dashboard");
   });
 
   it("has no accessibility violations", async () => {

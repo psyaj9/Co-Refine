@@ -1,0 +1,46 @@
+import type { ViewMode, RightPanelTab } from "@/types";
+
+export interface UiSlice {
+  currentUser: string;
+
+  viewMode: ViewMode;
+  setViewMode: (v: ViewMode) => void;
+
+  rightPanelTab: RightPanelTab;
+  setRightPanelTab: (t: RightPanelTab) => void;
+
+  showUploadPage: boolean;
+  setShowUploadPage: (v: boolean) => void;
+
+  /** Cross-filter state shared between FacetExplorerTab and MarginPills */
+  selectedVisCodeId: string | null;
+  setSelectedVisCodeId: (id: string | null) => void;
+
+  codeSearchQuery: string;
+  setCodeSearchQuery: (q: string) => void;
+
+  docSearchQuery: string;
+  setDocSearchQuery: (q: string) => void;
+}
+
+export const createUiSlice = (set: (partial: Partial<UiSlice>) => void): UiSlice => ({
+  currentUser: "default",
+
+  viewMode: "document",
+  setViewMode: (v) => set({ viewMode: v }),
+
+  rightPanelTab: "alerts",
+  setRightPanelTab: (t) => set({ rightPanelTab: t }),
+
+  showUploadPage: false,
+  setShowUploadPage: (v) => set({ showUploadPage: v }),
+
+  selectedVisCodeId: null,
+  setSelectedVisCodeId: (id) => set({ selectedVisCodeId: id }),
+
+  codeSearchQuery: "",
+  setCodeSearchQuery: (q) => set({ codeSearchQuery: q }),
+
+  docSearchQuery: "",
+  setDocSearchQuery: (q) => set({ docSearchQuery: q }),
+});
