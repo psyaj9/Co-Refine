@@ -51,8 +51,8 @@ def run_background_agents(
                 document_id=document_id,
                 created_at=created_at,
             )
-        except Exception as e:
-            logger.error("Embedding failed", extra={"segment_id": segment_id, "error": str(e)})
+        except Exception:
+            logger.exception(f"Embedding failed [segment_id={segment_id}]")
 
         current_code = db.query(Code).filter(Code.id == code_id).first()
         project_id = current_code.project_id if current_code else None
@@ -92,8 +92,8 @@ def run_background_agents(
                 "code_id": code_id,
                 "data": stage1,
             })
-        except Exception as e:
-            logger.error("Stage 1 scoring failed", extra={"segment_id": segment_id, "error": str(e)})
+        except Exception:
+            logger.exception(f"Stage 1 scoring failed [segment_id={segment_id}]")
 
         # 3. Coding Audit
         _ws_send(user_id, {"type": "agent_thinking", "agent": "coding_audit", "segment_id": segment_id, "data": {}})

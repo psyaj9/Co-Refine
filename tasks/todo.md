@@ -47,3 +47,42 @@
 - `frontend/src/components/CodingAuditDetail.tsx` — Display-time co-applied filter
 - `frontend/src/stores/store.ts` — Replace logic + stale alert cleanup
 - `frontend/src/types/index.ts` — `replaces_segment_id`/`replaces_code_id` fields
+
+
+---
+
+# Backend Refactor: Vertical Slice Architecture
+
+## Status: COMPLETE (March 2026)
+
+All 7 phases of the backend refactoring are done. Server boots cleanly, all 35 API endpoints served by the new `features/` layer.
+
+## Phases Completed
+
+- [x] Phase 1: `core/` package - config, database, models (11 files), exceptions, logging, events
+- [x] Phase 2: `infrastructure/` package - llm, vector_store, websocket
+- [x] Phase 3: `features/projects/`, `features/documents/`, `features/edit_history/`
+- [x] Phase 4: `features/codes/`, `features/segments/`, `features/chat/`, `features/visualisations/`
+- [x] Phase 5: `features/scoring/` - centroid, distribution, temporal_drift, code_overlap, pipeline
+- [x] Phase 6: `features/audit/` - orchestrator, batch_auditor, sibling_auditor, auto_analyzer, challenge_handler, context_builder, score_persister, router, schemas; `features/facets/` - service
+- [x] Phase 7: main.py updated; 16/17 feature modules import clean (1 pre-existing sklearn venv issue)
+
+## Shims (safe to delete post-dissertation)
+- `routers/`, `services/audit_pipeline.py`, `services/scoring.py`, `services/facet_clustering.py`
+- `services/ai_analyzer.py` - still used by audit feature (promote to infrastructure/ later)
+- `models.py`, root-level `config.py`, `database.py`
+
+
+---
+
+# Backend Refactor: Vertical Slice Architecture
+
+## Status: COMPLETE
+
+- [x] Phase 1: core/ package
+- [x] Phase 2: infrastructure/ package
+- [x] Phase 3: projects, documents, edit_history
+- [x] Phase 4: codes, segments, chat, visualisations
+- [x] Phase 5: scoring (centroid, distribution, temporal_drift, code_overlap, pipeline)
+- [x] Phase 6: audit (orchestrator, batch, sibling, auto_analyzer, challenge, context_builder, score_persister) + facets
+- [x] Phase 7: main.py rewired; 35 routes verified; server boots clean

@@ -21,7 +21,7 @@ def cosine_similarity(a: list[float], b: list[float]) -> float:
 
 def _compute_centroid(embeddings: list[list[float]]) -> list[float]:
     """L2-normalised mean of embedding vectors."""
-    if not embeddings:
+    if embeddings is None or len(embeddings) == 0:
         return []
     dim = len(embeddings[0])
     centroid = [0.0] * dim
@@ -41,7 +41,7 @@ def get_code_centroid(user_id: str, code_label: str) -> list[float] | None:
     collection = get_collection(user_id)
     results = collection.get(where={"code": code_label}, include=["embeddings"])
     embeddings = results.get("embeddings")
-    if not embeddings:
+    if embeddings is None or len(embeddings) == 0:
         return None
     return _compute_centroid(embeddings)
 
@@ -60,7 +60,7 @@ def get_code_centroid_with_fallback(
     collection = get_collection(user_id)
     results = collection.get(where={"code": code_label}, include=["embeddings"])
     embeddings = results.get("embeddings")
-    if embeddings and len(embeddings) >= 1:
+    if embeddings is not None and len(embeddings) >= 1:
         return _compute_centroid(embeddings), False
     elif code_definition:
         return get_definition_pseudo_centroid(code_definition), True

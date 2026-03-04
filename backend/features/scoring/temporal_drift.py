@@ -20,13 +20,15 @@ def compute_temporal_drift(
         where={"code": code_label},
         include=["embeddings", "metadatas"],
     )
-    embeddings = results.get("embeddings", [])
-    metadatas = results.get("metadatas", [])
+    embeddings = results.get("embeddings")
+    if embeddings is None:
+        embeddings = []
+    metadatas = results.get("metadatas") or []
 
-    if not embeddings or len(embeddings) < (window_recent + window_old):
+    if len(embeddings) == 0 or len(embeddings) < (window_recent + window_old):
         return None
 
-    paired = sorted(zip(embeddings, metadatas), key=lambda x: x[1].get("created_at", ""))
+    paired = sorted(zip(embeddings, metadatas), key=lambda x: x[1].get("created_at") or "")
     old_centroid = _compute_centroid([p[0] for p in paired[:window_old]])
     recent_centroid = _compute_centroid([p[0] for p in paired[-window_recent:]])
     return 1.0 - cosine_similarity(old_centroid, recent_centroid)
