@@ -322,6 +322,35 @@ export async function fetchThresholdDefinitions() {
   );
 }
 
+// ── Facet Explorer ──────────────────────────────────────────────────
+
+export async function fetchFacets(projectId: string, codeId?: string | null) {
+  const params = new URLSearchParams();
+  if (codeId) params.set("code_id", codeId);
+  return json<{ facets: unknown[] }>(
+    await fetch(`${BASE}/projects/${projectId}/vis/facets?${params.toString()}`)
+  );
+}
+
+export async function renameFacet(projectId: string, facetId: string, label: string) {
+  return json<{ id: string; label: string; label_source: string }>(
+    await fetch(`${BASE}/projects/${projectId}/vis/facets/${facetId}/label`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ label }),
+    })
+  );
+}
+
+export async function suggestFacetLabels(projectId: string, codeId: string) {
+  return json<{ facets: unknown[] }>(
+    await fetch(
+      `${BASE}/projects/${projectId}/vis/facets/suggest-labels?code_id=${encodeURIComponent(codeId)}`,
+      { method: "POST" }
+    )
+  );
+}
+
 // ── Reflection Challenge (Feature 6) ────────────────────────────────
 
 export async function challengeReflection(

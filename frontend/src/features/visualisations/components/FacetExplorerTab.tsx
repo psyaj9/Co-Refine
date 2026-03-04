@@ -10,13 +10,17 @@ import {
   Legend,
   ZAxis,
 } from "recharts";
+import { Sparkles, Loader2 } from "lucide-react";
 import { useStore } from "@/stores/store";
+import { fetchFacets, renameFacet, suggestFacetLabels } from "@/api/client";
 
 const FACET_COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6"];
 
 interface FacetData {
   facet_id: string;
   facet_label: string;
+  suggested_label: string | null;
+  label_source: "auto" | "ai" | "user";
   code_id: string;
   code_name: string;
   segment_count: number;
@@ -32,36 +36,46 @@ interface FacetData {
 export default function FacetExplorerTab({ projectId }: { projectId: string }) {
   const selectedVisCodeId = useStore((s) => s.selectedVisCodeId);
   const setSelectedVisCodeId = useStore((s) => s.setSelectedVisCodeId);
+  const facetRefreshTrigger = useStore((s) => s.facetRefreshTrigger);
   const [facets, setFacets] = useState<FacetData[]>([]);
+  const [suggesting, setSuggesting] = useState(false);
 
   useEffect(() => {
-    const url = selectedVisCodeId
-      ? `/api/projects/${projectId}/vis/facets?code_id=${selectedVisCodeId}`
-      : `/api/projects/${projectId}/vis/facets`;
-    fetch(url)
-      .then((r) => r.json())
-      .then((d) => setFacets(d.facets || []))
+    fetchFacets(projectId, selectedVisCodeId)
+      .then((d) => setFacets((d.facets as FacetData[]) || []))
       .catch(console.error);
-  }, [projectId, selectedVisCodeId]);
+  }, [projectId, selectedVisCodeId, facetRefreshTrigger]);
 
   // Group facets by code for multi-series scatter
-  const byCode = facets.reduce<Record<string, { points: { x: number; y: number; facet: string; text: string }[]; codeId: string }>>(
-    (acc, f) => {
-      if (!acc[f.code_name]) {
-        acc[f.code_name] = { points: [], codeId: f.code_id };
-      }
-      acc[f.code_name].points.push(
-        ...f.segments.map((s) => ({
-          x: s.tsne_x,
-          y: s.tsne_y,
-          facet: f.facet_label,
-          text: s.text_preview,
-        }))
-      );
-      return acc;
-    },
-    {}
-  );
+  const byCode = facets.reduce<
+    Record<string, { points: { x: number; y: number; facet: string; text: string }[]; codeId: string }>
+  >((acc, f) => {
+    if (!acc[f.code_name]) {
+      acc[f.code_name] = { points: [], codeId: f.code_id };
+    }
+    acc[f.code_name].points.push(
+      ...f.segments.map((s) => ({
+        x: s.tsne_x,
+        y: s.tsne_y,
+        facet: f.facet_label,
+        text: s.text_preview,
+      }))
+    );
+    return acc;
+  }, {});
+
+  const handleSuggestLabels = async () => {
+    if (!selectedVisCodeId) return;
+    setSuggesting(true);
+    try {
+      const result = await suggestFacetLabels(projectId, selectedVisCodeId);
+      setFacets((result.facets as FacetData[]) || []);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSuggesting(false);
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -119,8 +133,8 @@ export default function FacetExplorerTab({ projectId }: { projectId: string }) {
 
       {/* Facet label list for renaming */}
       {facets.length > 0 && (
-        <div className="mt-4">
-          <h4 className="text-xs font-semibold text-surface-500 uppercase tracking-wide mb-2">
+        <div className="mt-4 space-y-3">
+          <h4 className="text-xs font-semibold text-surface-500 uppercase tracking-wide">
             Facet Labels (click to rename)
           </h4>
           <div className="flex flex-wrap gap-2">
@@ -129,17 +143,37 @@ export default function FacetExplorerTab({ projectId }: { projectId: string }) {
                 key={f.facet_id}
                 facetId={f.facet_id}
                 label={f.facet_label}
+                suggestedLabel={f.suggested_label}
+                labelSource={f.label_source}
                 projectId={projectId}
                 onRenamed={(newLabel) =>
                   setFacets((prev) =>
                     prev.map((x) =>
-                      x.facet_id === f.facet_id ? { ...x, facet_label: newLabel } : x
+                      x.facet_id === f.facet_id
+                        ? { ...x, facet_label: newLabel, label_source: "user" }
+                        : x
                     )
                   )
                 }
               />
             ))}
           </div>
+
+          {selectedVisCodeId && (
+            <button
+              onClick={handleSuggestLabels}
+              disabled={suggesting || facets.length === 0}
+              className="flex items-center gap-1.5 text-xs text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              aria-label="Re-suggest AI labels for these facets"
+            >
+              {suggesting ? (
+                <Loader2 className="w-3 h-3 animate-spin" aria-hidden="true" />
+              ) : (
+                <Sparkles className="w-3 h-3" aria-hidden="true" />
+              )}
+              {suggesting ? "Suggesting…" : "Suggest labels for these facets"}
+            </button>
+          )}
         </div>
       )}
     </div>
@@ -149,11 +183,15 @@ export default function FacetExplorerTab({ projectId }: { projectId: string }) {
 function FacetLabelBadge({
   facetId,
   label,
+  suggestedLabel,
+  labelSource,
   projectId,
   onRenamed,
 }: {
   facetId: string;
   label: string;
+  suggestedLabel: string | null;
+  labelSource: "auto" | "ai" | "user";
   projectId: string;
   onRenamed: (l: string) => void;
 }) {
@@ -161,11 +199,7 @@ function FacetLabelBadge({
   const [value, setValue] = useState(label);
 
   const save = () => {
-    fetch(`/api/projects/${projectId}/vis/facets/${facetId}/label`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ label: value }),
-    })
+    renameFacet(projectId, facetId, value)
       .then(() => {
         onRenamed(value);
         setEditing(false);
@@ -197,11 +231,26 @@ function FacetLabelBadge({
     );
   }
 
+  const isAiSuggested = labelSource === "ai";
+  const wasAiSuggested = labelSource === "user" && suggestedLabel !== null;
+  const tooltip = isAiSuggested
+    ? "Label suggested by AI — click to rename"
+    : wasAiSuggested
+    ? `AI suggested: "${suggestedLabel}" — click to rename`
+    : "Click to rename";
+
   return (
     <span
+      role="button"
+      tabIndex={0}
       onClick={() => setEditing(true)}
-      className="cursor-pointer text-xs bg-brand-50 dark:bg-brand-900/20 text-brand-700 dark:text-brand-300 px-2 py-1 rounded-full border border-brand-200 dark:border-brand-700 hover:bg-brand-100 dark:hover:bg-brand-900/30 transition-colors"
+      onKeyDown={(e) => e.key === "Enter" && setEditing(true)}
+      title={tooltip}
+      className="cursor-pointer flex items-center gap-1 text-xs bg-brand-50 dark:bg-brand-900/20 text-brand-700 dark:text-brand-300 px-2 py-1 rounded-full border border-brand-200 dark:border-brand-700 hover:bg-brand-100 dark:hover:bg-brand-900/30 transition-colors"
     >
+      {isAiSuggested && (
+        <Sparkles className="w-3 h-3 text-brand-400 dark:text-brand-500 shrink-0" aria-hidden="true" />
+      )}
       {label}
     </span>
   );

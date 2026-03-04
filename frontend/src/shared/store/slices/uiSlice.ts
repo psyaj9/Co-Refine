@@ -16,6 +16,10 @@ export interface UiSlice {
   selectedVisCodeId: string | null;
   setSelectedVisCodeId: (id: string | null) => void;
 
+  /** Increment to trigger a facet data refetch in FacetExplorerTab */
+  facetRefreshTrigger: number;
+  incrementFacetRefreshTrigger: () => void;
+
   codeSearchQuery: string;
   setCodeSearchQuery: (q: string) => void;
 
@@ -23,7 +27,7 @@ export interface UiSlice {
   setDocSearchQuery: (q: string) => void;
 }
 
-export const createUiSlice = (set: (partial: Partial<UiSlice>) => void): UiSlice => ({
+export const createUiSlice = (set: (partial: any) => void): UiSlice => ({
   currentUser: "default",
 
   viewMode: "document",
@@ -37,6 +41,10 @@ export const createUiSlice = (set: (partial: Partial<UiSlice>) => void): UiSlice
 
   selectedVisCodeId: null,
   setSelectedVisCodeId: (id) => set({ selectedVisCodeId: id }),
+
+  facetRefreshTrigger: 0,
+  incrementFacetRefreshTrigger: () =>
+    set((s: UiSlice) => ({ facetRefreshTrigger: s.facetRefreshTrigger + 1 })),
 
   codeSearchQuery: "",
   setCodeSearchQuery: (q) => set({ codeSearchQuery: q }),

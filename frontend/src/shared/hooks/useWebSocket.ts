@@ -10,6 +10,7 @@ export function useWebSocket() {
   const loadCodes = useStore((s) => s.loadCodes);
   const appendChatToken = useStore((s) => s.appendChatToken);
   const finishChatStream = useStore((s) => s.finishChatStream);
+  const incrementFacetRefreshTrigger = useStore((s) => s.incrementFacetRefreshTrigger);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -43,8 +44,9 @@ export function useWebSocket() {
             return;
           }
 
-          // facet_updated is informational only — no alert needed
+          // facet_updated — trigger UI refetch without pushing to alerts
           if (msg.type === "facet_updated") {
+            incrementFacetRefreshTrigger();
             return;
           }
 

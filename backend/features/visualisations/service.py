@@ -102,6 +102,8 @@ def get_facets(db: Session, project_id: str, code_id: str | None = None) -> dict
         result.append({
             "facet_id": facet.id,
             "facet_label": facet.label,
+            "suggested_label": facet.suggested_label,
+            "label_source": facet.label_source or "auto",
             "code_id": facet.code_id,
             "code_name": code.label if code else "Unknown",
             "segment_count": facet.segment_count,

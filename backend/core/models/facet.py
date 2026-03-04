@@ -13,6 +13,8 @@ class Facet(Base):
     code_id = Column(String, ForeignKey("codes.id"), nullable=False)
     project_id = Column(String, ForeignKey("projects.id"), nullable=False)
     label = Column(String, nullable=False)           # e.g. "immediate shock"
+    suggested_label = Column(String, nullable=True)  # AI's original suggestion (preserved after user renames)
+    label_source = Column(String, default="auto")    # "auto" | "ai" | "user"
     centroid_json = Column(Text, nullable=False)     # JSON list of floats (embedding vector)
     segment_count = Column(Integer, default=0)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

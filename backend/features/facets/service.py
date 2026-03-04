@@ -13,9 +13,11 @@ from sklearn.manifold import TSNE
 from sklearn.decomposition import PCA
 from sqlalchemy.orm import Session
 
-from core.models import Facet, FacetAssignment, CodedSegment
+from core.models import Facet, FacetAssignment, CodedSegment, Code, AnalysisResult
 from core.logging import get_logger
 from infrastructure.vector_store.store import get_collection
+from infrastructure.llm.client import call_llm
+from prompts.facet_label_prompt import build_facet_label_prompt
 
 logger = get_logger(__name__)
 
@@ -131,4 +133,79 @@ def run_facet_analysis(
         db.add(assignment)
 
     db.commit()
+
+    suggest_facet_labels(db, code_id, new_facets)
+
     return {"status": "success", "code_id": code_id, "facet_count": k, "segment_count": len(valid_segments)}
+
+
+def suggest_facet_labels(db: Session, code_id: str, facets: list[Facet]) -> None:
+    """Call LLM to propose descriptive sub-theme labels for each facet.
+
+    Updates Facet.label, Facet.suggested_label, and Facet.label_source in-place.
+    Gracefully degrades — if the LLM call fails, labels remain "Facet N".
+    """
+    if not facets:
+        return
+
+    code = db.query(Code).filter(Code.id == code_id).first()
+    if not code:
+        return
+
+    # Prefer the most recent AnalysisResult definition as richer context
+    analysis = (
+        db.query(AnalysisResult)
+        .filter(AnalysisResult.code_id == code_id)
+        .order_by(AnalysisResult.created_at.desc())
+        .first()
+    )
+    code_definition = (analysis.definition if analysis else None) or code.definition
+
+    # Build per-facet representative segment texts (top 5 by similarity)
+    facet_inputs = []
+    for idx, facet in enumerate(facets):
+        top_assignments = (
+            db.query(FacetAssignment)
+            .filter(FacetAssignment.facet_id == facet.id)
+            .order_by(FacetAssignment.similarity_score.desc())
+            .limit(5)
+            .all()
+        )
+        seg_ids = [a.segment_id for a in top_assignments]
+        segs = db.query(CodedSegment).filter(CodedSegment.id.in_(seg_ids)).all()
+        segs_by_id = {s.id: s for s in segs}
+        texts = [
+            (segs_by_id[a.segment_id].text or "")[:300]
+            for a in top_assignments
+            if a.segment_id in segs_by_id
+        ]
+        facet_inputs.append({"facet_index": idx, "segments": texts, "facet": facet})
+
+    try:
+        messages = build_facet_label_prompt(
+            code_label=code.label,
+            code_definition=code_definition,
+            facets=[{"facet_index": f["facet_index"], "segments": f["segments"]} for f in facet_inputs],
+        )
+        result = call_llm(messages)
+        suggestions = result.get("facets", [])
+
+        label_map: dict[int, str] = {
+            s["facet_index"]: s["suggested_label"]
+            for s in suggestions
+            if isinstance(s.get("facet_index"), int) and s.get("suggested_label")
+        }
+
+        for item in facet_inputs:
+            idx = item["facet_index"]
+            facet = item["facet"]
+            if idx in label_map:
+                suggested = label_map[idx]
+                facet.label = suggested
+                facet.suggested_label = suggested
+                facet.label_source = "ai"
+
+        db.commit()
+        logger.info("Facet labels AI-suggested", code_id=code_id, count=len(label_map))
+    except Exception as exc:
+        logger.warning("Facet label suggestion failed — keeping generic labels", code_id=code_id, error=str(exc))

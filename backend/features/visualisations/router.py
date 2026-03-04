@@ -1,11 +1,12 @@
 """Visualisations router: overview, facets, consistency."""
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from core.database import get_db
 from core.models import Project, Facet
 from features.visualisations.schemas import RelabelFacetBody
 from features.visualisations.service import get_overview, get_facets, get_consistency
+from features.facets.service import suggest_facet_labels
 
 router = APIRouter(prefix="/api/projects/{project_id}/vis", tags=["visualisations"])
 
@@ -47,5 +48,24 @@ def relabel_facet(
     if not facet:
         raise HTTPException(status_code=404, detail="Facet not found")
     facet.label = body.label
+    facet.label_source = "user"
     db.commit()
-    return {"id": facet.id, "label": facet.label}
+    return {"id": facet.id, "label": facet.label, "label_source": facet.label_source}
+
+
+@router.post("/facets/suggest-labels")
+def suggest_labels(
+    project_id: str,
+    code_id: str = Query(...),
+    db: Session = Depends(get_db),
+):
+    """Re-run AI label suggestion for all active facets of a code."""
+    facets = (
+        db.query(Facet)
+        .filter(Facet.project_id == project_id, Facet.code_id == code_id, Facet.is_active == True)
+        .all()
+    )
+    if not facets:
+        raise HTTPException(status_code=404, detail="No active facets for this code")
+    suggest_facet_labels(db, code_id, facets)
+    return get_facets(db, project_id, code_id)
