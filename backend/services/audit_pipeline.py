@@ -1,21 +1,34 @@
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
-from sqlalchemy.orm import Session
+"""Audit pipeline background tasks.
+
+All long-running background work extracted from the segments router lives here.
+These functions are called via FastAPI's BackgroundTasks and create their own
+DB sessions (except _reaudit_siblings which reuses a caller-supplied session).
+"""
+
 import uuid
 
-from database import get_db, CodedSegment, Code, Document, AnalysisResult, AgentAlert, EditEvent, ConsistencyScore, HumanFeedback
-from models import SegmentCreate, SegmentOut, AnalysisOut, AnalysisTrigger, AlertOut, BatchAuditRequest, BatchSegmentCreate, ChallengeReflectionRequest, ChallengeReflectionResponse, ChallengeMeta
-from services.ai_analyzer import run_coding_audit, analyze_quotes, run_challenge_cycle
-from services.vector_store import (
-    add_segment_embedding,
-    find_diverse_segments,
-    delete_segment_embedding,
+from sqlalchemy.orm import Session
+
+from database import (
+    SessionLocal,
+    CodedSegment,
+    Code,
+    Document,
+    AnalysisResult,
+    AgentAlert,
+    ConsistencyScore,
 )
+from services.ai_analyzer import run_coding_audit, analyze_quotes
+from services.vector_store import add_segment_embedding, find_diverse_segments
 from services.scoring import compute_stage1_scores, compute_code_overlap_matrix
 from services.ws_manager import ws_manager
 from config import settings
 from utils import PARSE_FAILED_SENTINEL
 
-router = APIRouter(prefix="/api/segments", tags=["segments"])
+
+def _ws_send(user_id: str, payload: dict):
+    """Fire-and-forget send from a background thread via the main event loop."""
+    ws_manager.send_alert_threadsafe(user_id, payload)
 
 
 def _extract_window(full_text: str, start: int, end: int, sentences: int = 2) -> str:
@@ -38,388 +51,6 @@ def _extract_window(full_text: str, start: int, end: int, sentences: int = 2) ->
     return " ".join(parts)
 
 
-@router.post("/", response_model=SegmentOut)
-async def create_segment(
-    body: SegmentCreate,
-    background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
-):
-    code = db.query(Code).filter(Code.id == body.code_id).first()
-    if not code:
-        raise HTTPException(status_code=404, detail="Code not found")
-    doc = db.query(Document).filter(Document.id == body.document_id).first()
-    if not doc:
-        raise HTTPException(status_code=404, detail="Document not found")
-
-    seg_id = str(uuid.uuid4())
-    segment = CodedSegment(
-        id=seg_id,
-        document_id=body.document_id,
-        text=body.text,
-        start_index=body.start_index,
-        end_index=body.end_index,
-        code_id=body.code_id,
-        user_id=body.user_id,
-    )
-    db.add(segment)
-    db.commit()
-    db.refresh(segment)
-
-    # Record edit event
-    db.add(EditEvent(
-        id=str(uuid.uuid4()),
-        project_id=code.project_id,
-        document_id=body.document_id,
-        entity_type="segment",
-        action="created",
-        entity_id=seg_id,
-        metadata_json={
-            "code_label": code.label,
-            "code_colour": code.colour,
-            "code_id": body.code_id,
-            "segment_text": body.text[:200],
-            "start_index": body.start_index,
-            "end_index": body.end_index,
-        },
-        user_id=body.user_id,
-    ))
-    db.commit()
-
-    if settings.azure_api_key:
-        context_window = _extract_window(doc.full_text, body.start_index, body.end_index)
-        background_tasks.add_task(
-            _run_background_agents,
-            segment_id=seg_id,
-            text=body.text,
-            code_label=code.label,
-            code_id=body.code_id,
-            user_id=body.user_id,
-            document_id=body.document_id,
-            document_context=context_window,
-            start_index=body.start_index,
-            end_index=body.end_index,
-            created_at=segment.created_at.isoformat(),
-        )
-
-    return SegmentOut(
-        id=seg_id,
-        document_id=body.document_id,
-        text=body.text,
-        start_index=body.start_index,
-        end_index=body.end_index,
-        code_id=body.code_id,
-        code_label=code.label,
-        code_colour=code.colour,
-        user_id=body.user_id,
-        created_at=segment.created_at,
-    )
-
-
-@router.post("/batch")
-async def batch_create_segments(
-    body: BatchSegmentCreate,
-    background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
-):
-    """Create multiple coded segments in one request, trigger ONE consolidated audit."""
-    if not body.items:
-        return {"created": 0}
-
-    created_segments: list[dict] = []
-    user_id = body.items[0].user_id
-    project_id: str | None = None
-
-    for item in body.items:
-        code = db.query(Code).filter(Code.id == item.code_id).first()
-        if not code:
-            continue
-        doc = db.query(Document).filter(Document.id == item.document_id).first()
-        if not doc:
-            continue
-
-        if project_id is None:
-            project_id = code.project_id
-
-        seg_id = str(uuid.uuid4())
-        segment = CodedSegment(
-            id=seg_id,
-            document_id=item.document_id,
-            text=item.text,
-            start_index=item.start_index,
-            end_index=item.end_index,
-            code_id=item.code_id,
-            user_id=item.user_id,
-        )
-        db.add(segment)
-        db.flush()
-
-        # Record edit event
-        db.add(EditEvent(
-            id=str(uuid.uuid4()),
-            project_id=code.project_id,
-            document_id=item.document_id,
-            entity_type="segment",
-            action="created",
-            entity_id=seg_id,
-            metadata_json={
-                "code_label": code.label,
-                "code_colour": code.colour,
-                "code_id": item.code_id,
-                "segment_text": item.text[:200],
-                "start_index": item.start_index,
-                "end_index": item.end_index,
-                "batch": True,
-            },
-            user_id=item.user_id,
-        ))
-
-        context_window = _extract_window(doc.full_text, item.start_index, item.end_index)
-        created_segments.append({
-            "segment_id": seg_id,
-            "text": item.text,
-            "code_label": code.label,
-            "code_id": item.code_id,
-            "user_id": item.user_id,
-            "document_id": item.document_id,
-            "document_context": context_window,
-            "start_index": item.start_index,
-            "end_index": item.end_index,
-            "created_at": segment.created_at.isoformat() if segment.created_at else None,
-        })
-
-    db.commit()
-
-    # Trigger background agents for each created segment (single consolidated pipeline)
-    if settings.azure_api_key:
-        for seg_info in created_segments:
-            background_tasks.add_task(_run_background_agents, **seg_info)
-
-    return {"created": len(created_segments)}
-
-
-@router.get("/", response_model=list[SegmentOut])
-def list_segments(
-    document_id: str = "",
-    user_id: str = "",
-    db: Session = Depends(get_db),
-):
-    # Single JOIN query — avoids N+1 (one query per segment to fetch its code).
-    query = db.query(CodedSegment, Code).outerjoin(Code, CodedSegment.code_id == Code.id)
-    if document_id:
-        query = query.filter(CodedSegment.document_id == document_id)
-    if user_id:
-        query = query.filter(CodedSegment.user_id == user_id)
-    rows = query.order_by(CodedSegment.created_at).all()
-
-    return [
-        SegmentOut(
-            id=s.id,
-            document_id=s.document_id,
-            text=s.text,
-            start_index=s.start_index,
-            end_index=s.end_index,
-            code_id=s.code_id,
-            code_label=code.label if code else "?",
-            code_colour=code.colour if code else "#ccc",
-            user_id=s.user_id,
-            created_at=s.created_at,
-        )
-        for s, code in rows
-    ]
-
-
-@router.delete("/{segment_id}")
-def delete_segment(
-    segment_id: str,
-    user_id: str = "default",
-    background_tasks: BackgroundTasks = None,
-    db: Session = Depends(get_db),
-):
-    seg = db.query(CodedSegment).filter(CodedSegment.id == segment_id).first()
-    if not seg:
-        raise HTTPException(status_code=404, detail="Segment not found")
-
-    # Snapshot before deletion for edit history + sibling re-audit
-    code = db.query(Code).filter(Code.id == seg.code_id).first()
-    doc = db.query(Document).filter(Document.id == seg.document_id).first()
-    project_id = code.project_id if code else (doc.project_id if doc else None)
-    seg_document_id = seg.document_id
-    seg_start = seg.start_index
-    seg_end = seg.end_index
-
-    if project_id:
-        db.add(EditEvent(
-            id=str(uuid.uuid4()),
-            project_id=project_id,
-            document_id=seg.document_id,
-            entity_type="segment",
-            action="deleted",
-            entity_id=segment_id,
-            metadata_json={
-                "code_label": code.label if code else "?",
-                "code_colour": code.colour if code else "#ccc",
-                "code_id": seg.code_id,
-                "segment_text": seg.text[:200],
-                "start_index": seg.start_index,
-                "end_index": seg.end_index,
-            },
-            user_id=user_id,
-        ))
-
-    delete_segment_embedding(user_id, segment_id)
-    db.delete(seg)
-    db.commit()
-
-    # Re-audit siblings — their co-applied context just changed (code removed)
-    if settings.azure_api_key and background_tasks is not None:
-        background_tasks.add_task(
-            _reaudit_siblings_background,
-            document_id=seg_document_id,
-            start_index=seg_start,
-            end_index=seg_end,
-            exclude_segment_id=segment_id,
-            user_id=user_id,
-        )
-
-    return {"status": "deleted"}
-
-
-@router.post("/analyze")
-async def trigger_analysis(
-    body: AnalysisTrigger,
-    background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
-):
-    code = db.query(Code).filter(Code.id == body.code_id).first()
-    if not code:
-        raise HTTPException(status_code=404, detail="Code not found")
-
-    segment_count = (
-        db.query(CodedSegment)
-        .filter(CodedSegment.code_id == body.code_id, CodedSegment.user_id == body.user_id)
-        .count()
-    )
-    if segment_count < 2:
-        raise HTTPException(status_code=400, detail="Need at least 2 segments to analyse")
-
-    background_tasks.add_task(
-        _run_analysis_background,
-        code_id=body.code_id,
-        code_label=code.label,
-        user_id=body.user_id,
-        user_definition=code.definition,
-    )
-
-    return {"status": "analysis_started", "code_id": body.code_id}
-
-
-@router.get("/analyses", response_model=list[AnalysisOut])
-def list_analyses(project_id: str = "", db: Session = Depends(get_db)):
-    query = (
-        db.query(AnalysisResult, Code)
-        .join(Code, AnalysisResult.code_id == Code.id)
-    )
-    if project_id:
-        query = query.filter(Code.project_id == project_id)
-    return [
-        AnalysisOut(
-            code_id=r.code_id,
-            code_label=code.label,
-            definition=r.definition,
-            lens=r.lens,
-            reasoning=r.reasoning,
-            segment_count=r.segment_count_at_analysis,
-        )
-        for r, code in query.all()
-    ]
-
-
-@router.get("/{segment_id}", response_model=SegmentOut)
-def get_segment(segment_id: str, db: Session = Depends(get_db)):
-    """Fetch a single segment by ID."""
-    row = (
-        db.query(CodedSegment, Code)
-        .outerjoin(Code, CodedSegment.code_id == Code.id)
-        .filter(CodedSegment.id == segment_id)
-        .first()
-    )
-    if not row:
-        raise HTTPException(status_code=404, detail="Segment not found")
-    seg, code = row
-    return SegmentOut(
-        id=seg.id,
-        document_id=seg.document_id,
-        text=seg.text,
-        start_index=seg.start_index,
-        end_index=seg.end_index,
-        code_id=seg.code_id,
-        code_label=code.label if code else "?",
-        code_colour=code.colour if code else "#ccc",
-        user_id=seg.user_id,
-        created_at=seg.created_at,
-    )
-
-
-@router.get("/alerts", response_model=list[AlertOut])
-def list_alerts(user_id: str, unread_only: bool = True, db: Session = Depends(get_db)):
-    query = db.query(AgentAlert).filter(AgentAlert.user_id == user_id)
-    if unread_only:
-        query = query.filter(AgentAlert.is_read == False)
-    alerts = query.order_by(AgentAlert.created_at.desc()).limit(50).all()
-    return [
-        AlertOut(
-            id=a.id,
-            alert_type=a.alert_type,
-            payload=a.payload,
-            segment_id=a.segment_id,
-            is_read=a.is_read,
-            created_at=a.created_at,
-        )
-        for a in alerts
-    ]
-
-
-@router.patch("/alerts/{alert_id}/read")
-def mark_alert_read(alert_id: str, db: Session = Depends(get_db)):
-    alert = db.query(AgentAlert).filter(AgentAlert.id == alert_id).first()
-    if alert:
-        alert.is_read = True
-        db.commit()
-    return {"status": "ok"}
-
-
-@router.post("/batch-audit")
-async def batch_audit(
-    body: BatchAuditRequest,
-    background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
-):
-    """Run the Coding Audit agent across ALL codes in a project.
-
-    Uses MMR diversity sampling to pick representative segments per code, then
-    runs run_coding_audit on each. Results stream back via WebSocket as
-    'coding_audit' events with batch=True.
-    """
-    if not settings.azure_api_key:
-        raise HTTPException(status_code=400, detail="No AI API key configured")
-
-    codes = db.query(Code).filter(Code.project_id == body.project_id).all()
-    if not codes:
-        raise HTTPException(status_code=404, detail="No codes found for this project")
-
-    background_tasks.add_task(
-        _run_batch_audit_background,
-        project_id=body.project_id,
-        user_id=body.user_id,
-    )
-    return {"status": "batch_audit_started", "code_count": len(codes)}
-
-
-def _ws_send(user_id: str, payload: dict):
-    """Fire-and-forget send from a background thread via the main event loop."""
-    ws_manager.send_alert_threadsafe(user_id, payload)
-
-
 def _run_analysis_background(
     *,
     code_id: str,
@@ -428,7 +59,6 @@ def _run_analysis_background(
     user_definition: str | None,
 ):
     """Background task for manual definition rerun — uses the same WS pipeline."""
-    from database import SessionLocal
     db = SessionLocal()
 
     _ws_send(user_id, {
@@ -500,7 +130,6 @@ def _run_batch_audit_background(
     user_id: str,
 ):
     """Background task: run Coding Audit for every code in a project using MMR sampling."""
-    from database import SessionLocal
     db = SessionLocal()
 
     try:
@@ -925,7 +554,6 @@ def _reaudit_siblings_background(
     user_id: str,
 ):
     """Background-task wrapper for _reaudit_siblings (creates its own DB session)."""
-    from database import SessionLocal
     db = SessionLocal()
     try:
         _reaudit_siblings(
@@ -942,147 +570,6 @@ def _reaudit_siblings_background(
         db.close()
 
 
-# ── Challenge Reflection Endpoint (Feature 6) ────────────────────────
-
-
-@router.post("/{segment_id}/challenge-reflection", response_model=ChallengeReflectionResponse)
-async def challenge_reflection(
-    segment_id: str,
-    body: ChallengeReflectionRequest,
-    db: Session = Depends(get_db),
-):
-    """Human-triggered 3rd cycle: researcher challenges the AI's reflected judgment.
-
-    The researcher provides text feedback explaining why the reflection is wrong.
-    The model reconsiders, weighting the researcher's expertise heavily.
-    A HumanFeedback row is persisted for the audit trail.
-    """
-    # Fetch the segment
-    segment = db.query(CodedSegment).filter(CodedSegment.id == segment_id).first()
-    if not segment:
-        raise HTTPException(status_code=404, detail="Segment not found")
-
-    code = db.query(Code).filter(Code.id == segment.code_id).first()
-    if not code:
-        raise HTTPException(status_code=404, detail="Code not found")
-
-    # Get the latest audit alert for this segment
-    latest_alert = (
-        db.query(AgentAlert)
-        .filter(
-            AgentAlert.segment_id == segment_id,
-            AgentAlert.alert_type == "coding_audit",
-        )
-        .order_by(AgentAlert.created_at.desc())
-        .first()
-    )
-    if not latest_alert:
-        raise HTTPException(status_code=404, detail="No audit found for this segment")
-
-    reflected_judgment = latest_alert.payload
-
-    # Fetch existing ConsistencyScore for Stage 1 data
-    existing_score = (
-        db.query(ConsistencyScore)
-        .filter(
-            ConsistencyScore.segment_id == segment_id,
-            ConsistencyScore.code_id == code.id,
-        )
-        .order_by(ConsistencyScore.created_at.desc())
-        .first()
-    )
-
-    # Fetch co-applied codes
-    overlapping = (
-        db.query(CodedSegment, Code)
-        .join(Code, CodedSegment.code_id == Code.id)
-        .filter(
-            CodedSegment.document_id == segment.document_id,
-            CodedSegment.id != segment.id,
-            CodedSegment.start_index < segment.end_index,
-            CodedSegment.end_index > segment.start_index,
-        )
-        .all()
-    )
-    existing_codes_on_span = list({c.label for _seg, c in overlapping})
-
-    # Fetch MMR history for challenge context
-    diverse = find_diverse_segments(
-        user_id=body.user_id,
-        query_text=segment.text,
-        code_filter=code.label,
-        n=10,
-    )
-    history = [(s["code"], s["text"]) for s in diverse]
-
-    # Run the challenge cycle (3rd pass)
-    challenge_result = run_challenge_cycle(
-        reflected_judgment=reflected_judgment,
-        researcher_feedback=body.feedback,
-        history=history,
-        new_quote=segment.text,
-        proposed_code=code.label,
-        existing_codes_on_span=existing_codes_on_span,
-        centroid_similarity=existing_score.centroid_similarity if existing_score else None,
-        codebook_prob_dist=existing_score.codebook_distribution if existing_score else None,
-        entropy=existing_score.entropy if existing_score else None,
-        temporal_drift=existing_score.temporal_drift if existing_score else None,
-        is_pseudo_centroid=existing_score.is_pseudo_centroid if existing_score else False,
-        segment_count=None,
-    )
-
-    challenge_meta = challenge_result.get("_challenge", {})
-
-    # Persist HumanFeedback row
-    feedback_id = str(uuid.uuid4())
-    feedback = HumanFeedback(
-        id=feedback_id,
-        segment_id=segment_id,
-        code_id=code.id,
-        user_id=body.user_id,
-        project_id=code.project_id,
-        feedback_type="challenge_reflection",
-        feedback_text=body.feedback,
-        context_json={
-            "reflected_judgment": reflected_judgment,
-            "stage1": {
-                "centroid_similarity": existing_score.centroid_similarity if existing_score else None,
-                "entropy": existing_score.entropy if existing_score else None,
-                "temporal_drift": existing_score.temporal_drift if existing_score else None,
-            },
-        },
-        result_json=challenge_result,
-    )
-    db.add(feedback)
-
-    # Update ConsistencyScore with challenged result
-    if existing_score:
-        self_lens = challenge_result.get("self_lens", {})
-        existing_score.llm_consistency_score = self_lens.get("consistency_score")
-        existing_score.llm_intent_score = self_lens.get("intent_alignment_score")
-        existing_score.llm_overall_severity = challenge_result.get("overall_severity_score")
-        existing_score.was_challenged = True
-
-    # Update the alert payload with challenged result
-    latest_alert.payload = challenge_result
-    db.commit()
-
-    # Send WS notification
-    _ws_send(body.user_id, {
-        "type": "challenge_result",
-        "segment_id": segment_id,
-        "code_id": code.id,
-        "code_label": code.label,
-        "data": challenge_result,
-    })
-
-    return ChallengeReflectionResponse(
-        audit_result=challenge_result,
-        challenge=ChallengeMeta(**challenge_meta),
-        human_feedback_id=feedback_id,
-    )
-
-
 def _run_background_agents(
     *,
     segment_id: str,
@@ -1096,7 +583,6 @@ def _run_background_agents(
     end_index: int = 0,
     created_at: str | None = None,
 ):
-    from database import SessionLocal
     db = SessionLocal()
 
     # --- Notify frontend: agents have started ---
