@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 import chromadb
 from chromadb.config import Settings
 
-from config import settings
+from core.config import settings
 
 _chroma_client: chromadb.ClientAPI | None = None
 _embed_model = None

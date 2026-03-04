@@ -310,15 +310,233 @@ panel-bg                                      — panel background token
 
 ---
 
-## Backend Notes
+## Backend Architecture
 
-- **FastAPI** + SQLAlchemy (SQLite) + ChromaDB
+### Tech Stack
+- **Framework**: FastAPI (Python 3.12+)
+- **ORM**: SQLAlchemy 2.x (declarative base)
+- **Database**: SQLite (file-based, dev/dissertation scope)
+- **Vector Store**: ChromaDB (persistent, cosine distance)
+- **Embeddings**: Azure OpenAI or local SentenceTransformer (`all-MiniLM-L6-v2`)
+- **LLM**: Azure OpenAI (gpt-5-mini fast model, gpt-5.2 reasoning model)
+- **WebSocket**: Native FastAPI WebSocket
+- **Validation**: Pydantic v2 (BaseModel for DTOs, BaseSettings for config)
+- **Tests**: pytest (planned)
+
+### Architecture: Vertical Slices + Clean Architecture Internals
+
+```
+backend/
+├── main.py                          # App factory: lifespan, CORS, router mount
+│
+├── core/                            # Shared kernel — NO feature imports allowed
+│   ├── __init__.py
+│   ├── config.py                    # Pydantic Settings (from .env)
+│   ├── database.py                  # Engine, SessionLocal, Base, get_db()
+│   ├── models/                      # SQLAlchemy ORM models (one per aggregate)
+│   │   ├── __init__.py              # Re-exports all models
+│   │   ├── project.py               # Project
+│   │   ├── document.py              # Document
+│   │   ├── code.py                  # Code
+│   │   ├── segment.py               # CodedSegment
+│   │   ├── analysis.py              # AnalysisResult
+│   │   ├── alert.py                 # AgentAlert
+│   │   ├── chat.py                  # ChatMessage
+│   │   ├── edit_event.py            # EditEvent
+│   │   ├── consistency_score.py     # ConsistencyScore
+│   │   ├── human_feedback.py        # HumanFeedback
+│   │   ├── facet.py                 # Facet + FacetAssignment
+│   │   └── migrations.py            # Lightweight column migrations + init_db()
+│   ├── exceptions.py                # Domain exception hierarchy
+│   ├── logging.py                   # Structured logger setup (replaces print())
+│   └── events.py                    # WebSocket event type string constants
+│
+├── infrastructure/                  # External integration adapters
+│   ├── __init__.py
+│   ├── llm/
+│   │   ├── __init__.py
+│   │   ├── client.py                # LLMClient protocol + AzureOpenAIClient impl
+│   │   └── json_parser.py           # parse_json_response + PARSE_FAILED_SENTINEL
+│   ├── vector_store/
+│   │   ├── __init__.py
+│   │   ├── embeddings.py            # embed_text() — local + API strategies
+│   │   ├── store.py                 # ChromaDB collection CRUD (get/add/delete/query)
+│   │   └── mmr.py                   # Maximal Marginal Relevance sampling
+│   └── websocket/
+│       ├── __init__.py
+│       └── manager.py               # ConnectionManager + threadsafe send
+│
+├── features/                        # Vertical slices — one folder per domain
+│   ├── __init__.py
+│   ├── projects/
+│   │   ├── __init__.py
+│   │   ├── router.py                # /api/projects CRUD + settings + thresholds
+│   │   ├── schemas.py               # ProjectCreate, ProjectOut, ProjectSettingsOut, etc.
+│   │   ├── service.py               # Threshold merge, count aggregation
+│   │   ├── repository.py            # DB queries (projects, batch counts)
+│   │   └── constants.py             # AVAILABLE_PERSPECTIVES, THRESHOLD_DEFINITIONS
+│   │
+│   ├── documents/
+│   │   ├── __init__.py
+│   │   ├── router.py                # /api/documents upload, paste, list, get, delete
+│   │   ├── schemas.py               # DocumentOut, DocumentUploadResponse
+│   │   ├── service.py               # Upload orchestration, text normalization
+│   │   ├── repository.py            # DB queries
+│   │   └── file_parser.py           # extract_text(), extract_html()
+│   │
+│   ├── codes/
+│   │   ├── __init__.py
+│   │   ├── router.py                # /api/codes CRUD
+│   │   ├── schemas.py               # CodeCreate, CodeOut, CodeUpdate
+│   │   ├── service.py               # Edit-event recording, cascade delete
+│   │   └── repository.py            # DB queries
+│   │
+│   ├── segments/
+│   │   ├── __init__.py
+│   │   ├── router.py                # /api/segments CRUD + alerts
+│   │   ├── schemas.py               # SegmentCreate, SegmentOut, BatchSegmentCreate, AlertOut
+│   │   ├── service.py               # Segment create/delete + edit-event recording
+│   │   └── repository.py            # DB queries
+│   │
+│   ├── audit/                       # Refactored from 894-line god module
+│   │   ├── __init__.py
+│   │   ├── router.py                # /api/segments/analyze, /batch-audit, /challenge
+│   │   ├── schemas.py               # AnalysisTrigger, BatchAuditRequest, ChallengeRequest/Response
+│   │   ├── orchestrator.py          # Top-level: _run_background_agents (dispatches sub-steps)
+│   │   ├── segment_auditor.py       # CORE: audit_single_segment() — shared by all 3 audit flows
+│   │   ├── batch_auditor.py         # Batch audit across all project codes
+│   │   ├── sibling_auditor.py       # Re-audit overlapping segments on span change
+│   │   ├── auto_analyzer.py         # Auto-analysis trigger when segment count reaches threshold
+│   │   ├── challenge_handler.py     # Human challenge cycle (pass 3)
+│   │   ├── score_persister.py       # ConsistencyScore + AgentAlert write helpers
+│   │   └── context_builder.py       # Codebook builder, window extractor, history builder
+│   │
+│   ├── scoring/                     # Deterministic Stage 1 (pure math, no LLM)
+│   │   ├── __init__.py
+│   │   ├── centroid.py              # Code centroid + cold-start fallback
+│   │   ├── distribution.py          # Softmax, entropy, conflict score
+│   │   ├── temporal_drift.py        # LOGOS temporal drift
+│   │   ├── code_overlap.py          # GATOS code overlap matrix
+│   │   └── pipeline.py              # compute_stage1_scores() aggregator
+│   │
+│   ├── chat/
+│   │   ├── __init__.py
+│   │   ├── router.py                # /api/chat send, history, conversations
+│   │   ├── schemas.py               # ChatRequest, ChatMessageOut
+│   │   ├── service.py               # Context builder + streaming orchestration
+│   │   └── repository.py            # DB queries (messages, conversations)
+│   │
+│   ├── facets/
+│   │   ├── __init__.py
+│   │   ├── service.py               # KMeans clustering + t-SNE/PCA
+│   │   └── repository.py            # Facet + FacetAssignment persistence
+│   │
+│   ├── visualisations/
+│   │   ├── __init__.py
+│   │   ├── router.py                # /api/projects/{id}/vis overview, facets, consistency
+│   │   ├── schemas.py               # RelabelFacetBody
+│   │   └── service.py               # Overview stats, facet explorer, consistency aggregation
+│   │
+│   └── edit_history/
+│       ├── __init__.py
+│       ├── router.py                # /api/projects/{id}/edit-history
+│       ├── schemas.py               # EditEventOut
+│       └── repository.py            # DB queries with filters
+│
+├── prompts/                         # Prompt builders (shared across features)
+│   ├── __init__.py
+│   ├── analysis.py
+│   ├── audit.py
+│   ├── reflection.py
+│   ├── challenge.py
+│   └── chat.py
+│
+└── tests/                           # Mirrors feature structure
+    ├── conftest.py                  # Fixtures: test DB, mock LLM client, mock ChromaDB
+    ├── core/
+    ├── infrastructure/
+    └── features/
+        ├── projects/
+        ├── segments/
+        ├── audit/
+        └── ...
+```
+
+### Layer Rules (STRICT)
+
+```
+features/X/router.py  →  features/X/service.py  →  features/X/repository.py
+                                                 →  infrastructure/*
+                                                 →  core/*
+
+  ✓  feature/router   → feature/service, feature/schemas
+  ✓  feature/service  → feature/repository, infrastructure/*, core/*
+  ✓  feature/service  → prompts/*
+  ✗  feature/A        → feature/B           (FORBIDDEN — lift to core/ or infra/)
+  ✗  core/*           → features/*          (FORBIDDEN)
+  ✗  infrastructure/* → features/*          (FORBIDDEN)
+
+EXCEPTION: features/audit/ may import from features/scoring/ —
+  audit is the single consumer of scoring. This is a deliberate "shared kernel" relationship.
+```
+
+### Backend Conventions
+
+#### Naming
+- **Routers**: `router.py` — one `APIRouter` per file, prefix set in file
+- **Services**: `service.py` — stateless functions, receive `db: Session` as parameter
+- **Repositories**: `repository.py` — pure DB query functions, no business logic
+- **Schemas**: `schemas.py` — Pydantic BaseModel for request/response DTOs
+- **ORM Models**: `core/models/X.py` — one file per SQLAlchemy table
+
+#### Error Handling
+- **Domain exceptions** in `core/exceptions.py`: `NotFoundError`, `ValidationError`, `ConflictError`, `ExternalServiceError`
+- **Router-level mapping**: Catch domain exceptions → HTTPException
+- **No bare `except Exception`** — always log with structured logger, re-raise or return sentinel
+
+#### Logging
+- Use `core/logging.py` structured logger everywhere
+- Replace all `print()` with `logger.info/warning/error`
+- Include context: `logger.error("Audit failed", segment_id=..., code_label=...)`
+
+#### Database
 - All PKs are `String` (UUID), never Integer
-- WebSocket at `ws://localhost:8000/ws/{user_id}` — events dispatched through `useWebSocket.ts`
-- Key WS event types: `coding_audit`, `consistency`, `ghost_partner`, `agents_started/done`, `chat_token/done`, `batch_audit_*`, `deterministic_scores`, `reflection_complete`, `challenge_result`, `facet_updated`
-- REST API base: `http://localhost:8000`
+- `get_db()` for request-scoped sessions (FastAPI Depends)
+- `SessionLocal()` for background task sessions (create + close in try/finally)
+- Relationships use `cascade="all, delete-orphan"` for parent-child
 
-## Key File Locations
+#### WebSocket Events
+- 19 event types — constants in `core/events.py`
+- Background threads send via `ws_manager.send_alert_threadsafe()`
+- Key types: `agents_started`, `agents_done`, `agent_thinking`, `agent_error`,
+  `deterministic_scores`, `coding_audit`, `reflection_complete`, `challenge_result`,
+  `analysis_updated`, `batch_audit_started/progress/done`, `code_overlap_matrix`,
+  `facet_updated`, `chat_stream_start`, `chat_token`, `chat_done`, `chat_error`
+
+#### Testing Strategy
+- Unit tests: pytest + `conftest.py` with in-memory SQLite, mocked LLM, mocked ChromaDB
+- Integration tests: Full router tests with `TestClient`
+- All tests in `backend/tests/` mirroring the feature structure
+
+### Key Backend File Locations
+
+| Concern | File |
+|---------|------|
+| App entrypoint | `backend/main.py` |
+| Config / Settings | `backend/core/config.py` |
+| DB engine + session | `backend/core/database.py` |
+| All ORM models | `backend/core/models/__init__.py` |
+| Domain exceptions | `backend/core/exceptions.py` |
+| LLM client | `backend/infrastructure/llm/client.py` |
+| Vector store | `backend/infrastructure/vector_store/store.py` |
+| WS manager | `backend/infrastructure/websocket/manager.py` |
+| Audit pipeline | `backend/features/audit/orchestrator.py` |
+| Scoring pipeline | `backend/features/scoring/pipeline.py` |
+| Prompt builders | `backend/prompts/*.py` |
+
+---
+
+## Frontend Key File Locations
 
 | Concern | File |
 |---------|------|

@@ -3,9 +3,10 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 import uuid
 
-from database import get_db, Project, Document, Code, CodedSegment
+from core.database import get_db
+from core.models import Project, Document, Code, CodedSegment
 from models import ProjectCreate, ProjectOut, ProjectSettingsOut, ProjectSettingsUpdate, AVAILABLE_PERSPECTIVES, THRESHOLD_DEFINITIONS
-from config import settings as global_settings
+from core.config import settings as global_settings
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
 

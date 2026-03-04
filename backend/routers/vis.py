@@ -4,7 +4,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy import func
-from database import get_db, Project, CodedSegment, Code, ConsistencyScore, Facet, FacetAssignment
+from core.database import get_db
+from core.models import Project, CodedSegment, Code, ConsistencyScore, Facet, FacetAssignment
 
 router = APIRouter(prefix="/api/projects/{project_id}/vis", tags=["visualisations"])
 

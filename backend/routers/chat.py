@@ -2,15 +2,14 @@ from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
 import uuid
 
-from database import (
-    get_db, Code, AnalysisResult, ChatMessage, CodedSegment,
-)
+from core.database import get_db
+from core.models import Code, AnalysisResult, ChatMessage, CodedSegment
 from models import ChatRequest, ChatMessageOut
 from services.ai_analyzer import stream_chat_response
 from services.vector_store import find_similar_segments
 from services.ws_manager import ws_manager
 from prompts.chat_prompt import build_chat_messages
-from config import settings
+from core.config import settings
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
@@ -184,7 +183,7 @@ def _stream_response_background(
     conversation_history: list[dict],
 ):
     """Run the streaming LLM call in a background task, sending tokens via WS."""
-    from database import SessionLocal
+    from core.database import SessionLocal
 
     messages = build_chat_messages(
         user_message=user_message,

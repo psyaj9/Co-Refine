@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
-from database import get_db, EditEvent
+from core.database import get_db
+from core.models import EditEvent
 from models import EditEventOut
 
 router = APIRouter(prefix="/api/projects", tags=["edit_history"])

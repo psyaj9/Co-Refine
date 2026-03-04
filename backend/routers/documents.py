@@ -2,7 +2,8 @@ from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException
 from sqlalchemy.orm import Session
 import uuid
 
-from database import get_db, Document, CodedSegment, AgentAlert
+from core.database import get_db
+from core.models import Document, CodedSegment, AgentAlert
 from models import DocumentOut, DocumentUploadResponse
 from utils.file_parser import extract_text, extract_html
 from services.vector_store import delete_segment_embedding

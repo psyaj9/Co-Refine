@@ -3,7 +3,8 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from database import get_db, AgentAlert
+from core.database import get_db
+from core.models import AgentAlert
 from models import AlertOut
 
 router = APIRouter()

@@ -3,10 +3,10 @@ import asyncio
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
-from database import init_db
+from core.models.migrations import init_db
 from routers import documents, codes, segments, projects, chat, edit_history, evaluation, vis
 from services.ws_manager import ws_manager
-from config import settings
+from core.config import settings
 
 
 @asynccontextmanager

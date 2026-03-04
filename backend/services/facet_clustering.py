@@ -11,7 +11,7 @@ from sklearn.metrics import silhouette_score
 from sklearn.manifold import TSNE
 from sklearn.decomposition import PCA
 from sqlalchemy.orm import Session
-from database import Facet, FacetAssignment, CodedSegment, Code
+from core.models import Facet, FacetAssignment, CodedSegment, Code
 from services.vector_store import get_collection
 
 MIN_SEGMENTS_FOR_CLUSTERING = 4   # don't cluster until we have enough data

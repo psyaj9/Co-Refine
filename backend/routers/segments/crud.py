@@ -8,7 +8,8 @@ from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
 import uuid
 
-from database import get_db, CodedSegment, Code, Document, EditEvent
+from core.database import get_db
+from core.models import CodedSegment, Code, Document, EditEvent
 from models import SegmentCreate, SegmentOut, BatchSegmentCreate
 from services.audit_pipeline import (
     _run_background_agents,
@@ -16,7 +17,7 @@ from services.audit_pipeline import (
     _extract_window,
 )
 from services.vector_store import delete_segment_embedding
-from config import settings
+from core.config import settings
 
 router = APIRouter()
 

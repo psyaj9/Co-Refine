@@ -3,7 +3,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 import uuid
 
-from database import get_db, Code, CodedSegment, AnalysisResult, AgentAlert, EditEvent
+from core.database import get_db
+from core.models import Code, CodedSegment, AnalysisResult, AgentAlert, EditEvent
 from models import CodeCreate, CodeOut, CodeUpdate, SegmentOut
 router = APIRouter(prefix="/api/codes", tags=["codes"])
 

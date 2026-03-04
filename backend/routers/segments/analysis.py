@@ -3,10 +3,11 @@
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
 
-from database import get_db, CodedSegment, Code, AnalysisResult
+from core.database import get_db
+from core.models import CodedSegment, Code, AnalysisResult
 from models import AnalysisOut, AnalysisTrigger, BatchAuditRequest
 from services.audit_pipeline import _run_analysis_background, _run_batch_audit_background
-from config import settings
+from core.config import settings
 
 router = APIRouter()
 

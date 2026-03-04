@@ -9,8 +9,8 @@ import uuid
 
 from sqlalchemy.orm import Session
 
-from database import (
-    SessionLocal,
+from core.database import SessionLocal
+from core.models import (
     CodedSegment,
     Code,
     Document,
@@ -22,7 +22,7 @@ from services.ai_analyzer import run_coding_audit, analyze_quotes
 from services.vector_store import add_segment_embedding, find_diverse_segments
 from services.scoring import compute_stage1_scores, compute_code_overlap_matrix
 from services.ws_manager import ws_manager
-from config import settings
+from core.config import settings
 from utils import PARSE_FAILED_SENTINEL
 
 

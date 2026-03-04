@@ -1,7 +1,7 @@
 from typing import Generator
 from openai import AzureOpenAI
 
-from config import settings
+from core.config import settings
 from prompts import (
     build_analysis_prompt,
     build_coding_audit_prompt,

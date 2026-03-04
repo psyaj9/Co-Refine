@@ -5,7 +5,8 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from database import get_db, CodedSegment, Code, AgentAlert, ConsistencyScore, HumanFeedback
+from core.database import get_db
+from core.models import CodedSegment, Code, AgentAlert, ConsistencyScore, HumanFeedback
 from models import ChallengeReflectionRequest, ChallengeReflectionResponse, ChallengeMeta
 from services.ai_analyzer import run_challenge_cycle
 from services.vector_store import find_diverse_segments
