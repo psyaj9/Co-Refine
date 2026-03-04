@@ -85,83 +85,76 @@ frontend/src/
 │   │                                    # Each: components/ + hooks/ + index.ts
 │   ├── audit/                           # Audit pipeline alerts & display
 │   │   ├── components/
-│   │   │   ├── AlertsTab.tsx            # Orchestrator (~60L)
-│   │   │   ├── AlertList.tsx            # Scrollable alert list
+│   │   │   ├── AlertsTab.tsx            # Orchestrator
 │   │   │   ├── AlertCard.tsx            # Alert type router
 │   │   │   ├── AuditStageProgress.tsx   # 3-stage pipeline progress bar
+│   │   │   ├── AuditScoreTable.tsx      # Deterministic scores table
 │   │   │   ├── SeverityBadge.tsx        # Severity pill atom
-│   │   │   ├── MetricPanel.tsx          # Scores display grid
+│   │   │   ├── MetricStrip.tsx          # Compact metric display
+│   │   │   ├── MetricTooltip.tsx        # Hover tooltip for metrics
 │   │   │   ├── CodingAuditCard.tsx      # coding_audit card
-│   │   │   ├── AuditSection.tsx         # Collapsible self/reflection/challenge section
-│   │   │   ├── ChallengeForm.tsx        # Challenge input + submit
-│   │   │   └── MetricTooltip.tsx
+│   │   │   ├── CodingAuditDetail.tsx    # Expanded audit detail view
+│   │   │   ├── ConsistencyActions.tsx   # Consistency alert actions
+│   │   │   ├── GhostPartnerActions.tsx  # Ghost partner alert actions
+│   │   │   └── ChallengeForm.tsx        # Challenge input + submit
 │   │   ├── hooks/
 │   │   │   └── useChallengeSubmit.ts    # Challenge API call + store update
 │   │   └── index.ts
 │   │
 │   ├── chat/
 │   │   ├── components/
-│   │   │   ├── ChatTab.tsx              # Orchestrator
-│   │   │   ├── ChatMessageList.tsx
-│   │   │   ├── ChatMessage.tsx
-│   │   │   └── ChatInput.tsx
+│   │   │   └── ChatTab.tsx              # Orchestrator
 │   │   └── index.ts
 │   │
 │   ├── codes/                           # Codebook CRUD & search
 │   │   ├── components/
-│   │   │   ├── CodesTabContent.tsx      # Orchestrator (~80L)
-│   │   │   ├── CodeList.tsx
-│   │   │   ├── CodeListItem.tsx
-│   │   │   ├── CodeForm.tsx
-│   │   │   ├── CodeSearch.tsx
-│   │   │   └── RetrievedSegments.tsx
+│   │   │   ├── CodesTabContent.tsx      # Orchestrator
+│   │   │   ├── CodeListItem.tsx         # Single code row
+│   │   │   ├── ExpandedCodeDetail.tsx   # Expanded code detail panel
+│   │   │   └── RetrievedSegments.tsx    # Similar segments display
 │   │   ├── hooks/
-│   │   │   └── useCodeForm.ts
+│   │   │   └── useCodeActions.ts        # Code CRUD action helpers
 │   │   └── index.ts
 │   │
 │   ├── documents/                       # Document upload, list, viewer
 │   │   ├── components/
-│   │   │   ├── DocumentsTabContent.tsx
-│   │   │   ├── DocumentListItem.tsx
-│   │   │   ├── DocumentUpload.tsx
-│   │   │   ├── DocumentViewer.tsx       # Orchestrator
-│   │   │   ├── AnnotatedText.tsx
-│   │   │   └── MarginPills.tsx
-│   │   ├── hooks/
-│   │   │   └── useDocumentHighlight.ts
+│   │   │   ├── DocumentsTabContent.tsx  # Orchestrator
+│   │   │   ├── DocumentUpload.tsx       # Upload UI
+│   │   │   ├── DocumentViewer.tsx       # Annotated document viewer
+│   │   │   └── MarginPills.tsx          # Code pills in margin
 │   │   └── index.ts
 │   │
 │   ├── history/
 │   │   ├── components/
-│   │   │   ├── EditHistoryView.tsx
-│   │   │   ├── HistoryTimeline.tsx
-│   │   │   └── CodeChangeBanner.tsx
+│   │   │   ├── EditHistoryView.tsx      # Orchestrator
+│   │   │   ├── HistoryTimeline.tsx      # Timeline list
+│   │   │   └── CodeChangeBanner.tsx     # Diff banner atom
 │   │   ├── lib/
-│   │   │   └── history-helpers.ts
+│   │   │   └── history-helpers.ts       # Pure history data transforms
 │   │   └── index.ts
 │   │
 │   ├── project/                         # Project management + settings
 │   │   ├── components/
-│   │   │   ├── AgentSettingsModal.tsx   # Orchestrator
-│   │   │   ├── PerspectivesTab.tsx
-│   │   │   └── ThresholdsTab.tsx
+│   │   │   ├── AgentSettingsModal.tsx   # Orchestrator (~114L)
+│   │   │   ├── PerspectivesTab.tsx      # Perspective checkboxes tab
+│   │   │   └── ThresholdsTab.tsx        # Threshold sliders tab
 │   │   ├── hooks/
-│   │   │   └── useProjectSettings.ts
+│   │   │   └── useProjectSettings.ts    # Load/save/dirty settings logic
 │   │   └── index.ts
 │   │
 │   ├── selection/                       # Text selection + highlight popover
 │   │   ├── components/
-│   │   │   ├── HighlightPopover.tsx     # Orchestrator
-│   │   │   ├── PopoverCodeList.tsx
-│   │   │   ├── PopoverCodeItem.tsx
-│   │   │   └── PendingApplicationsBar.tsx
+│   │   │   ├── HighlightPopover.tsx     # Orchestrator (~94L)
+│   │   │   ├── SelectionView.tsx        # New selection: code picker
+│   │   │   ├── ClickedSegmentsView.tsx  # Existing coded segment detail
+│   │   │   └── PendingApplicationsBar.tsx # Queued applications bar
 │   │   ├── hooks/
-│   │   │   └── usePopoverPosition.ts
+│   │   │   └── usePopoverInteraction.ts # Dismiss, apply, focus trap
 │   │   └── index.ts
 │   │
 │   └── visualisations/
 │       ├── components/
-│       │   ├── Visualisations.tsx
+│       │   ├── Visualisations.tsx       # Tab shell
 │       │   ├── VisOverviewTab.tsx
 │       │   ├── FacetExplorerTab.tsx
 │       │   └── ConsistencyTab.tsx
@@ -182,17 +175,23 @@ frontend/src/
 │       └── index.ts
 │
 └── shared/                              # Cross-feature infrastructure
+    ├── __tests__/
+    │   ├── setup.ts                     # Vitest setup (jsdom, jest-axe)
+    │   └── test-helpers.ts              # Mock factories + defaultStoreState
     ├── api/
-    │   └── client.ts                    # Fetch wrapper for all API endpoints
+    │   ├── client.ts                    # Fetch wrapper for all API endpoints
+    │   └── index.ts
     ├── hooks/
     │   ├── useWebSocket.ts              # WS event dispatcher
     │   ├── useTextSelection.ts          # Native selection capture
-    │   └── useDraggable.ts
+    │   ├── useDraggable.ts
+    │   └── index.ts
     ├── lib/
     │   ├── utils.ts                     # cn(), hexToRgba(), color contrast
     │   ├── constants.ts                 # Color palette + audit explanations
     │   ├── annotated-text.ts            # HTML annotation builders (pure)
-    │   └── alert-helpers.ts             # Alert data mapping (pure — no JSX)
+    │   ├── alert-helpers.tsx            # Alert data mapping + icon rendering
+    │   └── index.ts
     ├── store/
     │   ├── slices/
     │   │   ├── uiSlice.ts               # viewMode, rightPanelTab, showUploadPage, selectedVisCodeId
@@ -207,9 +206,9 @@ frontend/src/
     │   └── index.ts                     # export { useStore }
     ├── types/
     │   └── index.ts                     # All TypeScript interfaces (source of truth)
-    └── ui/                              # Shared atomic primitives (Radix-based)
-        ├── Badge.tsx
-        ├── Button.tsx
+    └── ui/                              # Shared atomic primitives
+        ├── Badge.tsx                    # Pill/badge with variant presets
+        ├── IconButton.tsx               # Icon-only button with a11y
         └── index.ts
 ```
 
@@ -327,6 +326,8 @@ panel-bg                                      — panel background token
 | Zustand store (composed) | `shared/store/store.ts` |
 | API client | `shared/api/client.ts` |
 | Color utilities | `shared/lib/utils.ts` |
-| Alert data mapping | `shared/lib/alert-helpers.ts` |
+| Alert data mapping | `shared/lib/alert-helpers.tsx` |
 | WS event handler | `shared/hooks/useWebSocket.ts` |
 | Root layout | `app/App.tsx` |
+| Shared UI atoms | `shared/ui/index.ts` |
+| Test helpers | `shared/__tests__/test-helpers.ts` |
