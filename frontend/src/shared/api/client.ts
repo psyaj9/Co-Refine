@@ -11,6 +11,9 @@ import type {
   ProjectSettings,
   ThresholdDefinition,
   ChallengeReflectionResponse,
+  OverviewData,
+  FacetData,
+  ConsistencyData,
 } from "@/types";
 
 const BASE = "/api";
@@ -322,14 +325,34 @@ export async function fetchThresholdDefinitions() {
   );
 }
 
-// ── Facet Explorer ──────────────────────────────────────────────────
+// ── Visualisations ───────────────────────────────────────────────────
 
-export async function fetchFacets(projectId: string, codeId?: string | null) {
+export async function fetchVisOverview(projectId: string) {
+  return json<OverviewData>(
+    await fetch(`${BASE}/projects/${projectId}/vis/overview`)
+  );
+}
+
+export async function fetchVisFacets(projectId: string, codeId?: string | null) {
   const params = new URLSearchParams();
   if (codeId) params.set("code_id", codeId);
-  return json<{ facets: unknown[] }>(
+  return json<{ facets: FacetData[] }>(
     await fetch(`${BASE}/projects/${projectId}/vis/facets?${params.toString()}`)
   );
+}
+
+export async function fetchVisConsistency(projectId: string, codeId?: string | null) {
+  const params = new URLSearchParams();
+  if (codeId) params.set("code_id", codeId);
+  return json<ConsistencyData>(
+    await fetch(`${BASE}/projects/${projectId}/vis/consistency?${params.toString()}`)
+  );
+}
+
+// ── Facet Explorer (legacy alias) ───────────────────────────────────
+
+export async function fetchFacets(projectId: string, codeId?: string | null) {
+  return fetchVisFacets(projectId, codeId);
 }
 
 export async function renameFacet(projectId: string, facetId: string, label: string) {

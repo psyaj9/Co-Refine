@@ -199,6 +199,85 @@ export interface ThresholdDefinition {
   type: "int" | "float";
 }
 
+// ── Visualisation Data Types ─────────────────────────────────────────
+
+export interface MetricPoint {
+  date: string;
+  avg_consistency: number | null;
+  avg_entropy: number | null;
+  avg_conflict: number | null;
+  avg_centroid_sim: number | null;
+}
+
+export interface OverviewData {
+  total_segments: number;
+  total_codes: number;
+  avg_consistency_score: number;
+  avg_entropy: number;
+  avg_conflict_score: number;
+  reflection_rate: number;
+  challenge_rate: number;
+  escalation_rate: number;
+  score_over_time: { date: string; avg_score: number }[];
+  metrics_over_time: MetricPoint[];
+  top_drifting_codes: { code_name: string; drift_score: number }[];
+}
+
+export interface FacetSegment {
+  segment_id: string;
+  tsne_x: number;
+  tsne_y: number;
+  similarity_score: number;
+  text_preview: string;
+}
+
+export interface FacetData {
+  facet_id: string;
+  facet_label: string;
+  suggested_label: string | null;
+  label_source: "auto" | "ai" | "user";
+  code_id: string;
+  code_name: string;
+  code_definition: string | null;
+  segment_count: number;
+  avg_similarity: number | null;
+  min_similarity: number | null;
+  segments: FacetSegment[];
+}
+
+export interface CodeScores {
+  code_name: string;
+  code_id: string;
+  scores: number[];
+  entropy_scores: number[];
+  conflict_scores: number[];
+  centroid_similarity_scores: number[];
+}
+
+export interface TimelineEntry {
+  date: string;
+  score: number;
+  code_name: string;
+  code_id: string;
+  entropy?: number;
+  conflict?: number;
+}
+
+export interface ReflectionEntry {
+  date: string;
+  code_id: string;
+  code_name: string;
+  initial_score: number;
+  final_score: number;
+  delta: number;
+}
+
+export interface ConsistencyData {
+  scores_by_code: CodeScores[];
+  timeline: TimelineEntry[];
+  reflection_data: ReflectionEntry[];
+}
+
 // ── Pending Code Application (Select-then-Confirm) ──────────────────
 
 export interface PendingApplication {

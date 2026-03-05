@@ -11,41 +11,84 @@ import {
   Line,
   ReferenceLine,
   Legend,
+  Area,
 } from "recharts";
+import { Activity } from "lucide-react";
 import { useStore } from "@/stores/store";
+import { fetchVisConsistency } from "@/api/client";
+import type { ConsistencyData, TimelineEntry } from "@/types";
+import { ChartSkeleton } from "@/shared/ui";
 
-interface ConsistencyData {
-  scores_by_code: { code_name: string; code_id: string; scores: number[] }[];
-  timeline: { date: string; score: number; code_name: string; code_id: string }[];
-}
+type LoadState = "idle" | "loading" | "error" | "success";
 
+/** Range-based box stats for correct stacked bar rendering. */
 function computeBoxStats(scores: number[]) {
-  const sorted = [...scores].sort((a, b) => a - b);
-  const n = sorted.length;
-  const q1 = sorted[Math.floor(n * 0.25)];
-  const median = sorted[Math.floor(n * 0.5)];
-  const q3 = sorted[Math.floor(n * 0.75)];
-  const min = sorted[0];
-  const max = sorted[n - 1];
-  return { min, q1, median, q3, max };
+  const s = [...scores].sort((a, b) => a - b);
+  const n = s.length;
+  const min = s[0];
+  const q1 = s[Math.floor(n * 0.25)];
+  const median = s[Math.floor(n * 0.5)];
+  const q3 = s[Math.floor(n * 0.75)];
+  const max = s[n - 1];
+  // Convert to ranges so stacked bars represent actual spans, not additive values
+  return {
+    base: min,            // transparent spacer — pushes stack to min
+    iqr_lower: q1 - min, // lower whisker box
+    iqr_mid: median - q1, // Q1 → median
+    iqr_upper: q3 - median, // median → Q3
+    top: max - q3,        // upper whisker
+    _min: min, _q1: q1, _median: median, _q3: q3, _max: max,
+  };
 }
 
-export default function ConsistencyTab({ projectId }: { projectId: string }) {
+function pct(v: number | undefined | null) {
+  return v != null ? `${(v * 100).toFixed(1)}%` : "—";
+}
+
+interface ConsistencyTabProps {
+  projectId: string;
+}
+
+export default function ConsistencyTab({ projectId }: ConsistencyTabProps) {
   const selectedVisCodeId = useStore((s) => s.selectedVisCodeId);
   const setSelectedVisCodeId = useStore((s) => s.setSelectedVisCodeId);
+  const visRefreshCounter = useStore((s) => s.visRefreshCounter);
+  const projectSettings = useStore((s) => s.projectSettings);
   const [data, setData] = useState<ConsistencyData | null>(null);
+  const [state, setState] = useState<LoadState>("idle");
+
+  const threshold =
+    projectSettings?.thresholds?.consistency_escalation_threshold ?? 0.7;
 
   useEffect(() => {
-    const url = selectedVisCodeId
-      ? `/api/projects/${projectId}/vis/consistency?code_id=${selectedVisCodeId}`
-      : `/api/projects/${projectId}/vis/consistency`;
-    fetch(url)
-      .then((r) => r.json())
-      .then(setData)
-      .catch(console.error);
-  }, [projectId, selectedVisCodeId]);
+    setState("loading");
+    fetchVisConsistency(projectId, selectedVisCodeId)
+      .then((d) => { setData(d); setState("success"); })
+      .catch(() => setState("error"));
+  }, [projectId, selectedVisCodeId, visRefreshCounter]);
 
-  if (!data) return <p className="text-sm text-surface-400">Loading consistency data…</p>;
+  if (state === "loading" && !data) {
+    return (
+      <div className="space-y-6">
+        <ChartSkeleton height={180} />
+        <ChartSkeleton height={220} />
+      </div>
+    );
+  }
+
+  if (state === "error") {
+    return (
+      <div className="flex flex-col items-center gap-3 py-10 text-center">
+        <Activity className="w-8 h-8 text-surface-400" aria-hidden="true" />
+        <p className="text-sm text-surface-500">Failed to load consistency data.</p>
+        <button onClick={() => setState("idle")} className="text-xs text-brand-500 underline">
+          Retry
+        </button>
+      </div>
+    );
+  }
+
+  if (!data) return null;
 
   const boxData = data.scores_by_code
     .filter((c) => c.scores.length >= 2)
@@ -55,10 +98,22 @@ export default function ConsistencyTab({ projectId }: { projectId: string }) {
       ...computeBoxStats(c.scores),
     }));
 
-  const timelineData = data.timeline.map((t) => ({
+  const timelineData: (TimelineEntry & { date: string })[] = data.timeline.map((t) => ({
     ...t,
     date: new Date(t.date).toLocaleDateString(),
   }));
+
+  if (boxData.length === 0 && timelineData.length === 0) {
+    return (
+      <div className="flex flex-col items-center gap-3 py-10 text-center">
+        <Activity className="w-10 h-10 text-surface-300" aria-hidden="true" />
+        <p className="text-sm font-medium text-surface-600 dark:text-surface-300">No consistency scores yet</p>
+        <p className="text-xs text-surface-400 max-w-xs">
+          Code segments and run the audit to see score distributions here.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -71,64 +126,100 @@ export default function ConsistencyTab({ projectId }: { projectId: string }) {
         </button>
       )}
 
-      {/* Box plots */}
-      <div>
-        <h3 className="text-xs font-semibold mb-2 text-surface-500 uppercase tracking-wide">
-          Score Distribution by Code (min / Q1 / median / Q3 / max)
-        </h3>
-        {boxData.length === 0 ? (
-          <p className="text-xs text-surface-400">
-            Need at least 2 scored segments per code to show distributions.
-          </p>
-        ) : (
+      {/* Box plots — range-stacked (correct math) */}
+      {boxData.length > 0 && (
+        <div>
+          <h3 className="text-xs font-semibold mb-2 text-surface-500 uppercase tracking-wide">
+            Score Distribution by Code (min / Q1 / median / Q3 / max)
+          </h3>
           <ResponsiveContainer width="100%" height={Math.max(180, boxData.length * 40 + 60)}>
             <ComposedChart data={boxData} layout="vertical">
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis type="number" domain={[0, 1]} tick={{ fontSize: 11 }} />
-              <YAxis
-                dataKey="code_name"
-                type="category"
-                width={120}
-                tick={{ fontSize: 11 }}
-              />
+              <YAxis dataKey="code_name" type="category" width={120} tick={{ fontSize: 11 }} />
               <Tooltip
-                formatter={(v: number | undefined, name: string | undefined) => [
-                  v != null ? `${(v * 100).toFixed(1)}%` : "-",
-                  name ?? "",
-                ]}
+                content={({ payload }) => {
+                  if (!payload?.length) return null;
+                  const d = payload[0].payload as ReturnType<typeof computeBoxStats> & { code_name: string };
+                  return (
+                    <div className="bg-white dark:bg-surface-800 border panel-border rounded p-2 text-xs shadow-sm space-y-0.5">
+                      <p className="font-semibold mb-1">{d.code_name}</p>
+                      <p>Min: {pct(d._min)}</p>
+                      <p>Q1: {pct(d._q1)}</p>
+                      <p>Median: {pct(d._median)}</p>
+                      <p>Q3: {pct(d._q3)}</p>
+                      <p>Max: {pct(d._max)}</p>
+                    </div>
+                  );
+                }}
               />
-              <Bar dataKey="min" stackId="box" fill="transparent" name="Min" />
-              <Bar dataKey="q1" stackId="box" fill="#bfdbfe" name="Q1" />
-              <Bar dataKey="median" stackId="box" fill="#3b82f6" name="Median" barSize={3} />
-              <Bar dataKey="q3" stackId="box" fill="#93c5fd" name="Q3" />
+              <Bar dataKey="base" stackId="box" fill="transparent" legendType="none" />
+              <Bar dataKey="iqr_lower" stackId="box" fill="#bfdbfe" name="Lower whisker" />
+              <Bar dataKey="iqr_mid" stackId="box" fill="#3b82f6" name="IQR (Q1→median)" />
+              <Bar dataKey="iqr_upper" stackId="box" fill="#93c5fd" name="IQR (median→Q3)" />
+              <Bar dataKey="top" stackId="box" fill="#dbeafe" name="Upper whisker" />
               <ReferenceLine
-                x={0.7}
+                x={threshold}
                 stroke="#ef4444"
                 strokeDasharray="4 4"
-                label={{ value: "0.7", fontSize: 10 }}
+                label={{ value: `${(threshold * 100).toFixed(0)}%`, fontSize: 10 }}
               />
             </ComposedChart>
           </ResponsiveContainer>
-        )}
-      </div>
+        </div>
+      )}
 
-      {/* Timeline */}
-      <div>
-        <h3 className="text-xs font-semibold mb-2 text-surface-500 uppercase tracking-wide">
-          Score Timeline
-        </h3>
-        {timelineData.length === 0 ? (
-          <p className="text-xs text-surface-400">No scored segments yet.</p>
-        ) : (
-          <>
-            <ResponsiveContainer width="100%" height={220}>
+      {/* Timeline — multi-metric when a code is selected */}
+      {timelineData.length > 0 && (
+        <div>
+          <h3 className="text-xs font-semibold mb-2 text-surface-500 uppercase tracking-wide">
+            {selectedVisCodeId ? "Consistency · Entropy · Conflict Over Time" : "Score Timeline"}
+          </h3>
+          <ResponsiveContainer width="100%" height={240}>
+            {selectedVisCodeId ? (
+              <ComposedChart data={timelineData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="date" tick={{ fontSize: 10 }} />
+                <YAxis domain={[0, 1]} tick={{ fontSize: 11 }} />
+                <Tooltip formatter={(v: number | undefined) => pct(v)} />
+                <Legend />
+                <ReferenceLine y={threshold} stroke="#ef4444" strokeDasharray="4 4" />
+                <Area
+                  type="monotone"
+                  dataKey="entropy"
+                  fill="#fef3c7"
+                  stroke="#f59e0b"
+                  strokeWidth={1}
+                  name="Entropy"
+                  dot={false}
+                  fillOpacity={0.4}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="score"
+                  stroke="#3b82f6"
+                  dot={{ r: 3 }}
+                  name="Consistency"
+                  strokeWidth={2}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="conflict"
+                  stroke="#ef4444"
+                  dot={false}
+                  name="Conflict"
+                  strokeWidth={1.5}
+                  strokeDasharray="3 3"
+                />
+              </ComposedChart>
+            ) : (
               <LineChart data={timelineData}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="date" tick={{ fontSize: 10 }} />
                 <YAxis domain={[0, 1]} tick={{ fontSize: 11 }} />
-                <Tooltip formatter={(v: number | undefined) => v != null ? `${(v * 100).toFixed(1)}%` : "-"} />
+                <Tooltip formatter={(v: number | undefined) => pct(v)} />
                 <Legend />
-                <ReferenceLine y={0.7} stroke="#ef4444" strokeDasharray="4 4" />
+                <ReferenceLine y={threshold} stroke="#ef4444" strokeDasharray="4 4" />
                 <Line
                   type="monotone"
                   dataKey="score"
@@ -138,13 +229,15 @@ export default function ConsistencyTab({ projectId }: { projectId: string }) {
                   strokeWidth={1.5}
                 />
               </LineChart>
-            </ResponsiveContainer>
+            )}
+          </ResponsiveContainer>
+          {!selectedVisCodeId && (
             <p className="text-xs text-surface-400 mt-1">
-              Click a code in the Overview or Facet Explorer to filter this timeline.
+              Select a code in Overview or Facet Explorer to see the multi-metric view.
             </p>
-          </>
-        )}
-      </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
