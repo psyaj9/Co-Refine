@@ -147,6 +147,32 @@ def run_background_agents(
             )
             db.commit()
 
+            # Temporal drift warning: emit if this segment's drift exceeds threshold
+            try:
+                from core import events as ev
+                if stage1 and stage1.get("temporal_drift") is not None:
+                    drift = stage1["temporal_drift"]
+                    threshold = settings.drift_warning_threshold
+                    if drift > threshold:
+                        _ws_send(user_id, {
+                            "type": ev.TEMPORAL_DRIFT_WARNING,
+                            "code_id": code_id,
+                            "code_label": code_label,
+                            "segment_id": segment_id,
+                            "data": {
+                                "avg_drift": round(drift, 4),
+                                "sample_count": stage1.get("segment_count"),
+                                "threshold": threshold,
+                                "message": (
+                                    f"The meaning of '{code_label}' appears to be shifting "
+                                    f"(drift={drift:.2f}). Your recent uses differ from earlier ones — "
+                                    f"consider reviewing the definition or splitting the code."
+                                ),
+                            },
+                        })
+            except Exception as e:
+                logger.error("Temporal drift warning error", extra={"segment_id": segment_id, "error": str(e)})
+
             # Facet analysis
             try:
                 from features.facets.service import run_facet_analysis

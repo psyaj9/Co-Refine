@@ -7,6 +7,7 @@ import {
   AlertCircle,
   BookOpen,
   ScanSearch,
+  TrendingUp,
 } from "lucide-react";
 import { AGENT_LABELS } from "@/lib/constants";
 import type { AlertPayload } from "@/types";
@@ -26,6 +27,8 @@ export function alertStyle(type: string): string {
       "border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/10",
     analysis_updated:
       "border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/10",
+    temporal_drift_warning:
+      "border-orange-200 dark:border-orange-800 bg-orange-50 dark:bg-orange-900/10",
   };
   return (
     styles[type] ||
@@ -44,6 +47,7 @@ export function alertIcon(type: string): React.ReactNode {
     ),
     agent_error: <AlertCircle size={12} className="text-red-500" />,
     analysis_updated: <BookOpen size={12} className="text-green-600" />,
+    temporal_drift_warning: <TrendingUp size={12} className="text-orange-500" />,
   };
   return icons[type] || <CheckCircle2 size={12} className="text-surface-500" />;
 }
@@ -91,6 +95,8 @@ export function alertTitle(alert: AlertPayload): string {
     }
     case "analysis_updated":
       return alert.code_label || "Definition updated";
+    case "temporal_drift_warning":
+      return `${alert.code_label || "Code"} — Semantic Drift`;
     default:
       return "Agent Alert";
   }
@@ -161,6 +167,11 @@ export function alertBody(alert: AlertPayload): string {
     return (data.message as string) || "An error occurred while processing.";
   if (alert.type === "analysis_updated")
     return (data.definition as string) || "Definition updated";
+  if (alert.type === "temporal_drift_warning")
+    return (
+      (data.message as string) ||
+      "The meaning of this code appears to have shifted over time. Review early vs. recent uses."
+    );
   return JSON.stringify(data).slice(0, 200);
 }
 

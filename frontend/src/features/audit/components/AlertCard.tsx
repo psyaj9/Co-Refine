@@ -5,6 +5,7 @@ import { alertStyle, alertIcon, alertTitle, alertBody } from "@/lib/alert-helper
 import CodingAuditCard from "@/features/audit/components/CodingAuditCard";
 import GhostPartnerActions from "@/features/audit/components/GhostPartnerActions";
 import ConsistencyActions from "@/features/audit/components/ConsistencyActions";
+import TemporalDriftCard from "@/features/audit/components/TemporalDriftCard";
 import type { AlertPayload, CodeOut } from "@/types";
 
 interface AlertCardProps {
@@ -31,6 +32,7 @@ export default function AlertCard({
 }: AlertCardProps) {
   const [isOpen, setIsOpen] = useState(true);
   const isCodingAudit = alert.type === "coding_audit";
+  const isTemporalDrift = alert.type === "temporal_drift_warning";
   const hasSegmentText = !!(alert.segment_text || alert.data?.segment_text);
   const isThinking = alert.type === "agent_thinking";
 
@@ -72,6 +74,12 @@ export default function AlertCard({
             codes={codes}
             applySuggestedCode={applySuggestedCode}
             keepMyCode={keepMyCode}
+          />
+        ) : isTemporalDrift ? (
+          <TemporalDriftCard
+            alert={alert}
+            alertIdx={alertIdx}
+            dismissAlert={dismissAlert}
           />
         ) : (
           <>

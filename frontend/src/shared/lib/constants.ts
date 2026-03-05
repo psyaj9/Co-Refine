@@ -33,7 +33,7 @@ export const METRIC_EXPLANATIONS: Record<string, string> = {
   entropy:
     "How ambiguous this segment is — whether it could reasonably belong to several different codes. Higher means more ambiguity.",
   drift:
-    "Measures whether the meaning of this code has been shifting over time. A high value suggests your recent coding decisions differ from earlier ones.",
+    "How much the meaning of this code has shifted over time — comparing your earliest uses with your most recent ones. A high value means your interpretation has evolved; consider reviewing the definition or splitting the code into two distinct concepts.",
   consistency:
     "How well this coding decision aligns with your own past decisions for this code. Higher is better.",
   severity_low:

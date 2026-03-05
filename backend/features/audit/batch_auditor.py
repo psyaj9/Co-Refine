@@ -146,6 +146,43 @@ def run_batch_audit_background(*, project_id: str, user_id: str) -> None:
         except Exception as e:
             logger.error("Code overlap matrix error", extra={"error": str(e)})
 
+        # Temporal drift warnings: emit per-code if avg drift exceeds threshold
+        try:
+            from core import events as ev
+            threshold = settings.drift_warning_threshold
+            for code in all_codes:
+                drift_rows = (
+                    db.query(ConsistencyScore.temporal_drift)
+                    .filter(
+                        ConsistencyScore.project_id == project_id,
+                        ConsistencyScore.code_id == code.id,
+                        ConsistencyScore.temporal_drift.isnot(None),
+                        ConsistencyScore.is_pseudo_centroid == False,
+                    )
+                    .all()
+                )
+                drift_vals = [r.temporal_drift for r in drift_rows]
+                if len(drift_vals) >= 2:
+                    avg_drift = sum(drift_vals) / len(drift_vals)
+                    if avg_drift > threshold:
+                        _ws_send(user_id, {
+                            "type": ev.TEMPORAL_DRIFT_WARNING,
+                            "code_id": code.id,
+                            "code_label": code.label,
+                            "data": {
+                                "avg_drift": round(avg_drift, 4),
+                                "sample_count": len(drift_vals),
+                                "threshold": threshold,
+                                "message": (
+                                    f"The meaning of '{code.label}' has shifted over time "
+                                    f"(avg drift={avg_drift:.2f}). Review early vs. recent uses "
+                                    f"and consider refining the definition or splitting the code."
+                                ),
+                            },
+                        })
+        except Exception as e:
+            logger.error("Temporal drift warning check error", extra={"error": str(e)})
+
         _ws_send(user_id, {"type": "batch_audit_done", "data": {"total_codes": total}})
     except Exception as e:
         logger.error("Batch audit fatal error", extra={"error": str(e)})

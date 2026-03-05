@@ -33,6 +33,9 @@ BATCH_AUDIT_DONE = "batch_audit_done"
 # Scoring
 CODE_OVERLAP_MATRIX = "code_overlap_matrix"
 
+# Temporal drift alert (Stage 1 LOGOS metric — emitted when a code's centroid has drifted)
+TEMPORAL_DRIFT_WARNING = "temporal_drift_warning"
+
 # Facets
 FACET_UPDATED = "facet_updated"
 
