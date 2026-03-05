@@ -20,8 +20,12 @@ export default function RightPanel({ onCollapse }: { onCollapse?: () => void }) 
   const setRightPanelTab = useStore((s) => s.setRightPanelTab);
   const alerts = useStore((s) => s.alerts);
 
+  // Must match HIDDEN_ALERT_TYPES in AlertsTab so the badge count equals the rendered card count
   const visibleAlertCount = alerts.filter(
-    (a) => a.type !== "agents_started" && a.type !== "agents_done"
+    (a) =>
+      a.type !== "agents_started" &&
+      a.type !== "agents_done" &&
+      a.type !== "deterministic_scores"
   ).length;
 
   return (
