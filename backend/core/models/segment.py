@@ -19,6 +19,7 @@ class CodedSegment(Base):
 
     tsne_x = Column(Float, nullable=True)
     tsne_y = Column(Float, nullable=True)
+    tsne_z = Column(Float, nullable=True)
 
     document = relationship("Document", back_populates="segments")
     code = relationship("Code", back_populates="segments")

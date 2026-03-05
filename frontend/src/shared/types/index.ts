@@ -228,6 +228,7 @@ export interface FacetSegment {
   segment_id: string;
   tsne_x: number;
   tsne_y: number;
+  tsne_z?: number | null;
   similarity_score: number;
   text_preview: string;
 }
@@ -244,6 +245,33 @@ export interface FacetData {
   avg_similarity: number | null;
   min_similarity: number | null;
   segments: FacetSegment[];
+}
+
+export interface SegmentOverviewPoint {
+  segment_id: string;
+  code_id: string;
+  code_name: string;
+  code_colour: string;
+  tsne_x: number;
+  tsne_y: number;
+  tsne_z: number | null;
+  text_preview: string;
+}
+
+export interface CodeOverviewStats {
+  code_id: string;
+  code_name: string;
+  code_colour: string;
+  segment_count: number;
+  facet_count: number;
+  centroid_x: number | null;
+  centroid_y: number | null;
+  centroid_z: number | null;
+}
+
+export interface CodesOverviewData {
+  segments: SegmentOverviewPoint[];
+  codes: CodeOverviewStats[];
 }
 
 export interface CodeScores {

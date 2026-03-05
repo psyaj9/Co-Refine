@@ -156,6 +156,7 @@ def get_facets(db: Session, project_id: str, code_id: str | None = None) -> dict
                     "segment_id": seg.id,
                     "tsne_x": seg.tsne_x,
                     "tsne_y": seg.tsne_y,
+                    "tsne_z": seg.tsne_z,
                     "similarity_score": asgn.similarity_score,
                     "text_preview": (seg.text or "")[:120],
                 })
@@ -177,6 +178,81 @@ def get_facets(db: Session, project_id: str, code_id: str | None = None) -> dict
         })
 
     return {"facets": result}
+
+
+def get_codes_overview(db: Session, project_id: str) -> dict:
+    """Overview mode: all positioned segments for the project, grouped by code, with per-code centroids."""
+    # Get all codes for this project
+    codes = db.query(Code).filter(Code.project_id == project_id).all()
+    if not codes:
+        return {"segments": [], "codes": []}
+
+    code_ids = [c.id for c in codes]
+    codes_map = {c.id: c for c in codes}
+
+    # Fetch all segments with t-SNE coords
+    segs = (
+        db.query(CodedSegment)
+        .filter(
+            CodedSegment.code_id.in_(code_ids),
+            CodedSegment.tsne_x.isnot(None),
+        )
+        .all()
+    )
+
+    # Count active facets per code
+    active_facets = (
+        db.query(Facet)
+        .filter(Facet.project_id == project_id, Facet.is_active == True)
+        .all()
+    )
+    facet_count_by_code: dict[str, int] = {}
+    for f in active_facets:
+        facet_count_by_code[f.code_id] = facet_count_by_code.get(f.code_id, 0) + 1
+
+    # Build per-code centroid from segment coords
+    coords_by_code: dict[str, list[tuple[float, float, float | None]]] = {}
+    for seg in segs:
+        coords_by_code.setdefault(seg.code_id, []).append(
+            (seg.tsne_x, seg.tsne_y, seg.tsne_z)
+        )
+
+    segment_out = [
+        {
+            "segment_id": seg.id,
+            "code_id": seg.code_id,
+            "code_name": codes_map[seg.code_id].label,
+            "code_colour": codes_map[seg.code_id].colour,
+            "tsne_x": seg.tsne_x,
+            "tsne_y": seg.tsne_y,
+            "tsne_z": seg.tsne_z,
+            "text_preview": (seg.text or "")[:120],
+        }
+        for seg in segs
+        if seg.code_id in codes_map
+    ]
+
+    codes_out = []
+    for code in codes:
+        seg_count = len(coords_by_code.get(code.id, []))
+        facet_count = facet_count_by_code.get(code.id, 0)
+        coords = coords_by_code.get(code.id, [])
+        cx = round(sum(c[0] for c in coords) / len(coords), 4) if coords else None
+        cy = round(sum(c[1] for c in coords) / len(coords), 4) if coords else None
+        z_vals = [c[2] for c in coords if c[2] is not None]
+        cz = round(sum(z_vals) / len(z_vals), 4) if z_vals else None
+        codes_out.append({
+            "code_id": code.id,
+            "code_name": code.label,
+            "code_colour": code.colour,
+            "segment_count": seg_count,
+            "facet_count": facet_count,
+            "centroid_x": cx,
+            "centroid_y": cy,
+            "centroid_z": cz,
+        })
+
+    return {"segments": segment_out, "codes": codes_out}
 
 
 def get_consistency(db: Session, project_id: str, code_id: str | None = None) -> dict:

@@ -14,6 +14,7 @@ import type {
   OverviewData,
   FacetData,
   ConsistencyData,
+  CodesOverviewData,
 } from "@/types";
 
 const BASE = "/api";
@@ -338,6 +339,20 @@ export async function fetchVisFacets(projectId: string, codeId?: string | null) 
   if (codeId) params.set("code_id", codeId);
   return json<{ facets: FacetData[] }>(
     await fetch(`${BASE}/projects/${projectId}/vis/facets?${params.toString()}`)
+  );
+}
+
+export async function fetchVisCodesOverview(projectId: string) {
+  return json<CodesOverviewData>(
+    await fetch(`${BASE}/projects/${projectId}/vis/codes-overview`)
+  );
+}
+
+export async function fetchFacetExplanation(projectId: string, facetId: string) {
+  return json<{ explanation: string }>(
+    await fetch(`${BASE}/projects/${projectId}/vis/facets/${encodeURIComponent(facetId)}/explain`, {
+      method: "POST",
+    })
   );
 }
 
