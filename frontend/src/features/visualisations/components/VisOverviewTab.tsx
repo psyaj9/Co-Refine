@@ -81,8 +81,8 @@ export default function VisOverviewTab({ projectId }: VisOverviewTabProps) {
 
   const { metrics_over_time: mot } = data;
   const consistencyTrend = computeTrend(mot.map((p) => p.avg_consistency));
-  const entropyTrend = computeTrend(mot.map((p) => p.avg_entropy));
-  const noData = mot.length === 0 && data.top_drifting_codes.length === 0;
+  const centroidTrend = computeTrend(mot.map((p) => p.avg_centroid_sim));
+  const noData = mot.length === 0 && data.top_variable_codes.length === 0;
 
   return (
     <div className="space-y-6">
@@ -102,11 +102,11 @@ export default function VisOverviewTab({ projectId }: VisOverviewTabProps) {
       {/* KPI cards — row 2 */}
       <div className="grid grid-cols-3 gap-4">
         <KPICard
-          label="Avg Entropy"
-          value={pct(data.avg_entropy)}
-          trend={entropyTrend === "up" ? "down" : entropyTrend === "down" ? "up" : "flat"}
+          label="Avg Centroid Similarity"
+          value={pct(data.avg_centroid_sim)}
+          trend={centroidTrend}
           sparkData={mot}
-          sparkKey="avg_entropy"
+          sparkKey="avg_centroid_sim"
         />
         <KPICard label="Escalation Rate" value={pct(data.escalation_rate)} />
         <KPICard label="Reflection Rate" value={pct(data.reflection_rate)} />
@@ -119,9 +119,12 @@ export default function VisOverviewTab({ projectId }: VisOverviewTabProps) {
           {/* Multi-metric trend */}
           {mot.length > 0 && (
             <div>
-              <h3 className="text-xs font-semibold mb-2 text-surface-500 uppercase tracking-wide">
+              <h3 className="text-xs font-semibold mb-1 text-surface-500 uppercase tracking-wide">
                 Metrics Over Time
               </h3>
+              <p className="text-xs text-surface-400 mb-2">
+                Consistency = LLM judgment quality &middot; Centroid Similarity = embedding fit to code
+              </p>
               <ResponsiveContainer width="100%" height={220}>
                 <LineChart data={mot}>
                   <CartesianGrid strokeDasharray="3 3" />
@@ -134,26 +137,49 @@ export default function VisOverviewTab({ projectId }: VisOverviewTabProps) {
                   />
                   <Legend />
                   <Line type="monotone" dataKey="avg_consistency" stroke="#3b82f6" dot={false} strokeWidth={2} name="Consistency" />
-                  <Line type="monotone" dataKey="avg_entropy" stroke="#f59e0b" dot={false} strokeWidth={2} name="Entropy" />
-                  <Line type="monotone" dataKey="avg_conflict" stroke="#ef4444" dot={false} strokeWidth={2} name="Conflict" />
+                  <Line type="monotone" dataKey="avg_centroid_sim" stroke="#8b5cf6" dot={false} strokeWidth={2} name="Centroid Similarity" />
                 </LineChart>
               </ResponsiveContainer>
             </div>
           )}
 
-          {/* Top drifting codes */}
-          {data.top_drifting_codes.length > 0 && (
+          {/* Most Variable Codes — high std-dev of LLM consistency scores signals unclear definitions */}
+          {data.top_variable_codes.length > 0 && (
             <div>
-              <h3 className="text-xs font-semibold mb-2 text-surface-500 uppercase tracking-wide">
-                Top Drifting Codes
+              <h3 className="text-xs font-semibold mb-1 text-surface-500 uppercase tracking-wide">
+                Most Variable Codes
               </h3>
-              <ResponsiveContainer width="100%" height={Math.max(120, data.top_drifting_codes.length * 36 + 40)}>
-                <BarChart data={data.top_drifting_codes} layout="vertical">
+              <p className="text-xs text-surface-400 mb-2">
+                Codes with the highest variation in consistency scores &mdash; may need definitional refinement.
+              </p>
+              <ResponsiveContainer width="100%" height={Math.max(120, data.top_variable_codes.length * 36 + 40)}>
+                <BarChart data={data.top_variable_codes} layout="vertical">
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis type="number" domain={[0, "auto"]} tick={{ fontSize: 11 }} />
                   <YAxis dataKey="code_name" type="category" width={120} tick={{ fontSize: 11 }} />
-                  <Tooltip formatter={(v: number | undefined) => v != null ? v.toFixed(3) : "—"} />
-                  <Bar dataKey="drift_score" fill="#f59e0b" radius={[0, 4, 4, 0]} />
+                  <Tooltip formatter={(v: number | undefined) => v != null ? v.toFixed(3) : "\u2014"} />
+                  <Bar dataKey="variability_score" fill="#f59e0b" radius={[0, 4, 4, 0]} name="Variability" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+
+          {/* Temporal Drift by Code — Stage 1 LOGOS metric: cosine distance between early and recent centroids */}
+          {data.top_temporal_drift_codes.length > 0 && (
+            <div>
+              <h3 className="text-xs font-semibold mb-1 text-surface-500 uppercase tracking-wide">
+                Temporal Drift by Code
+              </h3>
+              <p className="text-xs text-surface-400 mb-2">
+                Semantic distance between early and recent coding examples &mdash; high values indicate your usage of this code has shifted over time.
+              </p>
+              <ResponsiveContainer width="100%" height={Math.max(120, data.top_temporal_drift_codes.length * 36 + 40)}>
+                <BarChart data={data.top_temporal_drift_codes} layout="vertical">
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis type="number" domain={[0, 1]} tick={{ fontSize: 11 }} />
+                  <YAxis dataKey="code_name" type="category" width={120} tick={{ fontSize: 11 }} />
+                  <Tooltip formatter={(v: number | undefined) => v != null ? v.toFixed(3) : "\u2014"} />
+                  <Bar dataKey="avg_drift" fill="#ef4444" radius={[0, 4, 4, 0]} name="Avg Drift" />
                 </BarChart>
               </ResponsiveContainer>
             </div>

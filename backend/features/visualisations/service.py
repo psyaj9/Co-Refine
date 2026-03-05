@@ -36,38 +36,34 @@ def get_overview(db: Session, project_id: str) -> dict:
     scored = [s for s in scores if s.llm_consistency_score is not None]
     avg_score = _safe_avg([s.llm_consistency_score for s in scored]) or 0.0
 
-    entropy_vals = [s.entropy for s in scores if s.entropy is not None]
-    avg_entropy = _safe_avg(entropy_vals) or 0.0
-
-    conflict_vals = [s.conflict_score for s in scores if s.conflict_score is not None]
-    avg_conflict_score = _safe_avg(conflict_vals) or 0.0
+    # Centroid similarity: exclude pseudo-centroids (code definition fallback) as they skew the avg
+    centroid_vals = [
+        s.centroid_similarity for s in scores
+        if s.centroid_similarity is not None and not s.is_pseudo_centroid
+    ]
+    avg_centroid_sim = _safe_avg(centroid_vals) or 0.0
 
     total_all = len(scores)
     reflection_rate = round(sum(1 for s in scores if s.was_reflected) / max(1, total_all), 3)
     challenge_rate = round(sum(1 for s in scores if s.was_challenged) / max(1, total_all), 3)
     escalation_rate = round(sum(1 for s in scores if s.was_escalated) / max(1, total_all), 3)
 
-    # Multi-metric time-series (all scores, not just consistency-scored)
+    # Multi-metric time-series — only metrics that are meaningful and drive real decisions:
+    # avg_consistency = Stage 2 LLM judgment; avg_centroid_sim = Stage 1 embedding guardrail
     metrics_by_date: dict[str, dict[str, list[float]]] = {}
     for s in scores:
         d = s.created_at.strftime("%Y-%m-%d")
         if d not in metrics_by_date:
-            metrics_by_date[d] = {"consistency": [], "entropy": [], "conflict": [], "centroid": []}
+            metrics_by_date[d] = {"consistency": [], "centroid": []}
         if s.llm_consistency_score is not None:
             metrics_by_date[d]["consistency"].append(s.llm_consistency_score)
-        if s.entropy is not None:
-            metrics_by_date[d]["entropy"].append(s.entropy)
-        if s.conflict_score is not None:
-            metrics_by_date[d]["conflict"].append(s.conflict_score)
-        if s.centroid_similarity is not None:
+        if s.centroid_similarity is not None and not s.is_pseudo_centroid:
             metrics_by_date[d]["centroid"].append(s.centroid_similarity)
 
     metrics_over_time = [
         {
             "date": d,
             "avg_consistency": _safe_avg(v["consistency"]),
-            "avg_entropy": _safe_avg(v["entropy"]),
-            "avg_conflict": _safe_avg(v["conflict"]),
             "avg_centroid_sim": _safe_avg(v["centroid"]),
         }
         for d, v in sorted(metrics_by_date.items())
@@ -81,30 +77,48 @@ def get_overview(db: Session, project_id: str) -> dict:
     ]
 
     codes = db.query(Code).filter(Code.project_id == project_id).all()
+    code_name_map = {c.id: c.label for c in codes}
+
+    # "Most Variable Codes" — std dev of LLM consistency scores per code.
+    # High variability = inconsistent application, may signal a poorly-defined code.
     scores_by_code: dict[str, list[float]] = {}
     for s in scored:
         scores_by_code.setdefault(s.code_id, []).append(s.llm_consistency_score)
-    top_drifting = []
+    top_variable = []
     for code in codes:
         code_scores = scores_by_code.get(code.id, [])
         if len(code_scores) >= 2:
             mean = sum(code_scores) / len(code_scores)
             std = math.sqrt(sum((x - mean) ** 2 for x in code_scores) / len(code_scores))
-            top_drifting.append({"code_name": code.label, "drift_score": round(std, 4)})
-    top_drifting.sort(key=lambda x: x["drift_score"], reverse=True)
+            top_variable.append({"code_name": code.label, "variability_score": round(std, 4)})
+    top_variable.sort(key=lambda x: x["variability_score"], reverse=True)
+
+    # "Temporal Drift by Code" — average Stage 1 temporal drift per code.
+    # Uses the LOGOS metric: cosine distance between early and recent coding centroids.
+    # Requires >= 10 segments per code to compute (see scoring/temporal_drift.py).
+    temporal_drift_by_code: dict[str, list[float]] = {}
+    for s in scores:
+        if s.temporal_drift is not None and not s.is_pseudo_centroid:
+            temporal_drift_by_code.setdefault(s.code_id, []).append(s.temporal_drift)
+    top_temporal_drift = []
+    for code_id, drifts in temporal_drift_by_code.items():
+        if len(drifts) >= 2 and code_id in code_name_map:
+            avg = round(sum(drifts) / len(drifts), 4)
+            top_temporal_drift.append({"code_name": code_name_map[code_id], "avg_drift": avg})
+    top_temporal_drift.sort(key=lambda x: x["avg_drift"], reverse=True)
 
     return {
         "total_segments": total_segments,
         "total_codes": total_codes,
         "avg_consistency_score": round(avg_score, 3),
-        "avg_entropy": round(avg_entropy, 3),
-        "avg_conflict_score": round(avg_conflict_score, 3),
+        "avg_centroid_sim": round(avg_centroid_sim, 3),
         "reflection_rate": reflection_rate,
         "challenge_rate": challenge_rate,
         "escalation_rate": escalation_rate,
         "score_over_time": score_trend,
         "metrics_over_time": metrics_over_time,
-        "top_drifting_codes": top_drifting[:5],
+        "top_variable_codes": top_variable[:5],
+        "top_temporal_drift_codes": top_temporal_drift[:5],
     }
 
 

@@ -204,8 +204,6 @@ export interface ThresholdDefinition {
 export interface MetricPoint {
   date: string;
   avg_consistency: number | null;
-  avg_entropy: number | null;
-  avg_conflict: number | null;
   avg_centroid_sim: number | null;
 }
 
@@ -213,14 +211,17 @@ export interface OverviewData {
   total_segments: number;
   total_codes: number;
   avg_consistency_score: number;
-  avg_entropy: number;
-  avg_conflict_score: number;
+  /** Average cosine similarity between segments and their code's centroid (pseudo-centroid excluded). */
+  avg_centroid_sim: number;
   reflection_rate: number;
   challenge_rate: number;
   escalation_rate: number;
   score_over_time: { date: string; avg_score: number }[];
   metrics_over_time: MetricPoint[];
-  top_drifting_codes: { code_name: string; drift_score: number }[];
+  /** Std-dev of LLM consistency scores per code — high = inconsistent application. */
+  top_variable_codes: { code_name: string; variability_score: number }[];
+  /** Average Stage 1 temporal drift per code (LOGOS metric). Only populated once codes have >= 10 segments. */
+  top_temporal_drift_codes: { code_name: string; avg_drift: number }[];
 }
 
 export interface FacetSegment {
