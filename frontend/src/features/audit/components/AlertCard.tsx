@@ -1,4 +1,5 @@
-import { X } from "lucide-react";
+import { useState } from "react";
+import { X, ChevronDown, ChevronRight as ChevronRightIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { alertStyle, alertIcon, alertTitle, alertBody } from "@/lib/alert-helpers";
 import CodingAuditCard from "@/features/audit/components/CodingAuditCard";
@@ -28,70 +29,84 @@ export default function AlertCard({
   keepMyCode,
   dismissAlert,
 }: AlertCardProps) {
+  const [isOpen, setIsOpen] = useState(true);
   const isCodingAudit = alert.type === "coding_audit";
   const hasSegmentText = !!(alert.segment_text || alert.data?.segment_text);
+  const isThinking = alert.type === "agent_thinking";
 
   return (
-    <li className={cn("alert-slide rounded-lg border p-2.5 relative", alertStyle(alert.type))}>
-      {/* Dismiss button — hidden for thinking indicators */}
-      {alert.type !== "agent_thinking" && (
+    <li className={cn("alert-slide rounded-lg border p-2.5", alertStyle(alert.type))}>
+      {/* Header: collapse toggle + icon + title + dismiss */}
+      <div className={cn("flex items-center gap-1.5", isOpen && "mb-1")}>
         <button
-          onClick={() => dismissAlert(alertIdx)}
-          className="absolute top-1.5 right-1.5 text-surface-400 hover:text-surface-600 transition-colors"
-          aria-label="Dismiss alert"
+          onClick={() => setIsOpen(!isOpen)}
+          className="flex items-center gap-1.5 flex-1 min-w-0 text-left"
+          aria-expanded={isOpen}
+          aria-label={isOpen ? "Collapse alert" : "Expand alert"}
         >
-          <X size={10} />
+          {isOpen ? (
+            <ChevronDown size={9} className="shrink-0 text-surface-400" aria-hidden="true" />
+          ) : (
+            <ChevronRightIcon size={9} className="shrink-0 text-surface-400" aria-hidden="true" />
+          )}
+          {alertIcon(alert.type)}
+          <span className="text-2xs font-semibold truncate">{alertTitle(alert)}</span>
         </button>
-      )}
-
-      {/* Header: icon + title */}
-      <div className="flex items-center gap-1.5 mb-1">
-        {alertIcon(alert.type)}
-        <span className="text-2xs font-semibold">{alertTitle(alert)}</span>
+        {!isThinking && (
+          <button
+            onClick={() => dismissAlert(alertIdx)}
+            className="shrink-0 text-surface-400 hover:text-surface-600 transition-colors"
+            aria-label="Dismiss alert"
+          >
+            <X size={10} />
+          </button>
+        )}
       </div>
 
-      {/* Body: type-specific */}
-      {isCodingAudit ? (
-        <CodingAuditCard
-          alert={alert}
-          alertIdx={alertIdx}
-          codes={codes}
-          applySuggestedCode={applySuggestedCode}
-          keepMyCode={keepMyCode}
-        />
-      ) : (
-        <>
-          {hasSegmentText ? (
-            <blockquote className="border-l-2 border-indigo-300 dark:border-indigo-700 pl-2 my-1 text-2xs text-surface-600 dark:text-surface-300 italic line-clamp-3 pr-4">
-              &ldquo;{String(alert.segment_text || alert.data?.segment_text)}&rdquo;
-            </blockquote>
-          ) : (
-            <p className="text-2xs text-surface-600 dark:text-surface-300 line-clamp-4 pr-4">
-              {alertBody(alert)}
-            </p>
-          )}
+      {/* Body: collapsible */}
+      {isOpen && (
+        isCodingAudit ? (
+          <CodingAuditCard
+            alert={alert}
+            alertIdx={alertIdx}
+            codes={codes}
+            applySuggestedCode={applySuggestedCode}
+            keepMyCode={keepMyCode}
+          />
+        ) : (
+          <>
+            {hasSegmentText ? (
+              <blockquote className="border-l-2 border-indigo-300 dark:border-indigo-700 pl-2 my-1 text-2xs text-surface-600 dark:text-surface-300 italic line-clamp-3">
+                &ldquo;{String(alert.segment_text || alert.data?.segment_text)}&rdquo;
+              </blockquote>
+            ) : (
+              <p className="text-2xs text-surface-600 dark:text-surface-300 line-clamp-4">
+                {alertBody(alert)}
+              </p>
+            )}
 
-          {alert.type === "ghost_partner" && (
-            <GhostPartnerActions
-              alert={alert}
-              alertIdx={alertIdx}
-              codes={codes}
-              applySuggestedCode={applySuggestedCode}
-              keepMyCode={keepMyCode}
-              dismissAlert={dismissAlert}
-            />
-          )}
+            {alert.type === "ghost_partner" && (
+              <GhostPartnerActions
+                alert={alert}
+                alertIdx={alertIdx}
+                codes={codes}
+                applySuggestedCode={applySuggestedCode}
+                keepMyCode={keepMyCode}
+                dismissAlert={dismissAlert}
+              />
+            )}
 
-          {alert.type === "consistency" && (
-            <ConsistencyActions
-              alert={alert}
-              alertIdx={alertIdx}
-              codes={codes}
-              applySuggestedCode={applySuggestedCode}
-              keepMyCode={keepMyCode}
-            />
-          )}
-        </>
+            {alert.type === "consistency" && (
+              <ConsistencyActions
+                alert={alert}
+                alertIdx={alertIdx}
+                codes={codes}
+                applySuggestedCode={applySuggestedCode}
+                keepMyCode={keepMyCode}
+              />
+            )}
+          </>
+        )
       )}
     </li>
   );
