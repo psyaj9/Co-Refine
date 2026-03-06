@@ -269,6 +269,15 @@ export interface ConsistencyData {
   reflection_data: ReflectionEntry[];
 }
 
+export interface CodeOverlapData {
+  /** Symmetric matrix of pairwise cosine similarities between code centroids. */
+  matrix: Record<string, Record<string, number>>;
+  /** Ordered list of code labels present in the matrix. */
+  code_labels: string[];
+  /** Similarity threshold above which overlap is flagged as potential redundancy. */
+  threshold: number;
+}
+
 // ── Pending Code Application (Select-then-Confirm) ──────────────────
 
 export interface PendingApplication {

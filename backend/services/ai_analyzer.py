@@ -70,39 +70,11 @@ def run_coding_audit(
         segment_count=segment_count,
     )
 
-    # ── Stage 2: LLM judgment (fast model) ──
-    result = call_llm(messages)
+    # ── Stage 2: Reasoning model — deep audit every segment ──
+    result = call_llm(messages, model=settings.azure_deployment_reasoning)
 
-    # ── Stage 3: Escalation ──
-    llm_severity = result.get("overall_severity_score")
-    llm_consistency = result.get("self_lens", {}).get("consistency_score")
-
-    llm_severity_f = _to_float(llm_severity, 0.5)
-    llm_consistency_f = _to_float(llm_consistency, 0.5)
-
-    escalation_reason = None
-
-    # Condition 1: LLM contradicts the embedding evidence
-    # Skip when centroid is pseudo (definition-only, no real usage signal)
-    if centroid_similarity is not None and not is_pseudo_centroid:
-        divergence = abs(centroid_similarity - llm_consistency_f)
-        if divergence > settings.stage_divergence_threshold:
-            escalation_reason = f"stage_divergence={divergence:.3f}"
-
-    # Condition 2: LLM itself says this is serious (raise threshold to 0.80
-    # — reflection already handles most medium-severity cases)
-    if llm_severity_f >= 0.80:
-        escalation_reason = f"high_severity={llm_severity_f:.3f}"
-
-    was_escalated = escalation_reason is not None
-    if was_escalated:
-        result = call_llm(messages, model=settings.azure_deployment_reasoning)
-
-    # Attach escalation metadata to result
-    result["_escalation"] = {
-        "was_escalated": was_escalated,
-        "reason": escalation_reason,
-    }
+    # Escalation metadata kept for backward compatibility (DB field, WS payload consumers)
+    result["_escalation"] = {"was_escalated": False, "reason": None}
 
     return result
 

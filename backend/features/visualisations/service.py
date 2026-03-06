@@ -237,6 +237,20 @@ def get_consistency(db: Session, project_id: str, code_id: str | None = None) ->
     }
 
 
+def get_code_overlap(db: Session, project_id: str, user_id: str) -> dict:
+    """Tab 4: Pairwise cosine similarity matrix between code centroids."""
+    from features.scoring.code_overlap import compute_code_overlap_matrix
+
+    codes = db.query(Code).filter(Code.project_id == project_id).all()
+    code_labels = [c.label for c in codes]
+    matrix = compute_code_overlap_matrix(user_id=user_id, code_labels=code_labels)
+    return {
+        "matrix": matrix,
+        "code_labels": list(matrix.keys()),
+        "threshold": 0.85,
+    }
+
+
 def explain_facet(facet: Facet, code: Code | None) -> dict:
     """Call LLM to produce a plain-English explanation of a discovered facet sub-theme."""
     code_label = code.label if code else "Unknown code"

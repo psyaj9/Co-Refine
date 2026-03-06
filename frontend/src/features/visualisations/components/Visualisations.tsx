@@ -2,14 +2,16 @@ import { useState } from "react";
 import VisOverviewTab from "@/features/visualisations/components/VisOverviewTab";
 import FacetExplorerTab from "@/features/visualisations/components/FacetExplorerTab";
 import ConsistencyTab from "@/features/visualisations/components/ConsistencyTab";
+import CodeOverlapTab from "@/features/visualisations/components/CodeOverlapTab";
 import { cn } from "@/lib/utils";
 
-type Tab = "overview" | "facets" | "consistency";
+type Tab = "overview" | "facets" | "consistency" | "overlap";
 
 const TAB_LABELS: Record<Tab, string> = {
   overview: "Overview",
   facets: "Facet Explorer",
   consistency: "Consistency",
+  overlap: "Code Overlap",
 };
 
 export default function Visualisations({ projectId }: { projectId: string }) {
@@ -19,7 +21,7 @@ export default function Visualisations({ projectId }: { projectId: string }) {
     <div className="flex flex-col h-full">
       {/* Tab bar */}
       <div className="flex border-b panel-border flex-shrink-0">
-        {(["overview", "facets", "consistency"] as Tab[]).map((tab) => (
+        {(["overview", "facets", "consistency", "overlap"] as Tab[]).map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -40,6 +42,7 @@ export default function Visualisations({ projectId }: { projectId: string }) {
         {activeTab === "overview" && <VisOverviewTab projectId={projectId} />}
         {activeTab === "facets" && <FacetExplorerTab projectId={projectId} />}
         {activeTab === "consistency" && <ConsistencyTab projectId={projectId} />}
+        {activeTab === "overlap" && <CodeOverlapTab projectId={projectId} />}
       </div>
     </div>
   );

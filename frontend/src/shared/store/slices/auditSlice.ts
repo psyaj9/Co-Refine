@@ -3,11 +3,10 @@ import * as api from "@/api/client";
 
 const CURRENT_USER = "default";
 
-/** Three-stage audit pipeline progress */
+/** Two-stage audit pipeline progress */
 export interface AuditStage {
-  current: 0 | 1 | 2 | 3;
+  current: 0 | 1 | 2;
   stage1Scores: Record<string, unknown> | null;
-  escalation: { was_escalated: boolean; reason: string | null } | null;
   confidence: {
     centroid_similarity: number | null;
     consistency_score: number | null;
@@ -19,7 +18,6 @@ export interface AuditStage {
 const INITIAL_AUDIT_STAGE: AuditStage = {
   current: 0,
   stage1Scores: null,
-  escalation: null,
   confidence: null,
 };
 
@@ -39,6 +37,10 @@ export interface AuditSlice {
 
   /** Segment IDs flagged as inconsistent — used for red highlights in DocumentViewer */
   inconsistentSegmentIds: Set<string>;
+
+  /** Latest code overlap matrix from batch audit WS event or REST fetch */
+  overlapMatrix: Record<string, Record<string, number>> | null;
+  setOverlapMatrix: (matrix: Record<string, Record<string, number>>) => void;
 }
 
 export const createAuditSlice = (
@@ -51,6 +53,8 @@ export const createAuditSlice = (
   batchAuditProgress: null,
   auditStage: INITIAL_AUDIT_STAGE,
   inconsistentSegmentIds: new Set<string>(),
+  overlapMatrix: null,
+  setOverlapMatrix: (matrix) => set({ overlapMatrix: matrix }),
 
   pushAlert: (a) =>
     set((s: any) => {
@@ -155,15 +159,9 @@ export const createAuditSlice = (
           const selfLens = a.data?.self_lens as Record<string, unknown> | undefined;
           const isFlagged = selfLens?.is_consistent === false;
 
-          const escalation =
-            a.escalation ??
-            (a.data?._escalation as { was_escalated: boolean; reason: string | null } | undefined) ??
-            null;
-
           const auditStageUpdate: AuditStage = {
             ...s.auditStage,
-            current: (escalation?.was_escalated ? 3 : s.auditStage.current) as 0 | 1 | 2 | 3,
-            escalation: escalation,
+            current: 2 as const,
             confidence: {
               centroid_similarity: s.auditStage.confidence?.centroid_similarity ?? null,
               consistency_score: (selfLens?.consistency_score as number) ?? null,

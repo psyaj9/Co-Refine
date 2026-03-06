@@ -13,6 +13,7 @@ import type {
   OverviewData,
   FacetData,
   ConsistencyData,
+  CodeOverlapData,
 } from "@/types";
 
 const BASE = "/api";
@@ -345,6 +346,12 @@ export async function fetchVisConsistency(projectId: string, codeId?: string | n
   if (codeId) params.set("code_id", codeId);
   return json<ConsistencyData>(
     await fetch(`${BASE}/projects/${projectId}/vis/consistency?${params.toString()}`)
+  );
+}
+
+export async function fetchVisOverlap(projectId: string) {
+  return json<CodeOverlapData>(
+    await fetch(`${BASE}/projects/${projectId}/vis/overlap`)
   );
 }
 

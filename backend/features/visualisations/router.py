@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from core.database import get_db
 from core.models import Project, Facet, Code
 from features.visualisations.schemas import RelabelFacetBody
-from features.visualisations.service import get_overview, get_facets, get_consistency, explain_facet
+from features.visualisations.service import get_overview, get_facets, get_consistency, get_code_overlap, explain_facet
 from features.facets.service import suggest_facet_labels
 
 router = APIRouter(prefix="/api/projects/{project_id}/vis", tags=["visualisations"])
@@ -35,6 +35,14 @@ def get_vis_consistency(
     db: Session = Depends(get_db),
 ):
     return get_consistency(db, project_id, code_id)
+
+
+@router.get("/overlap")
+def get_vis_overlap(project_id: str, db: Session = Depends(get_db)):
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return get_code_overlap(db, project_id, user_id="default")
 
 
 @router.patch("/facets/{facet_id}/label")

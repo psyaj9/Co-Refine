@@ -3,9 +3,7 @@ import {
   Loader2,
   Zap,
   Brain,
-  ShieldAlert,
   TrendingUp,
-  AlertTriangle as AlertTriangleIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AGENT_LABELS, METRIC_EXPLANATIONS } from "@/lib/constants";
@@ -22,15 +20,9 @@ const STAGES = [
   },
   {
     key: 2,
-    label: "LLM Audit",
+    label: "Reasoning Audit",
     Icon: Brain,
-    description: "Self-consistency",
-  },
-  {
-    key: 3,
-    label: "Escalation Review",
-    Icon: ShieldAlert,
-    description: "Re-evaluating with stronger model",
+    description: "Deep self-consistency analysis",
   },
 ] as const;
 
@@ -48,7 +40,7 @@ export default function AuditStageProgress({ auditStage, analysisStatus }: Audit
           Coding Audit Pipeline
         </span>
         <span className="text-2xs text-surface-400 dark:text-surface-500 ml-auto">
-          Stage {auditStage.current}/3
+          Stage {auditStage.current}/2
         </span>
       </div>
 
@@ -58,17 +50,12 @@ export default function AuditStageProgress({ auditStage, analysisStatus }: Audit
         role="progressbar"
         aria-valuenow={auditStage.current}
         aria-valuemin={0}
-        aria-valuemax={3}
+        aria-valuemax={2}
         aria-label="Audit pipeline progress"
       >
         {STAGES.map((stage) => {
           const isActive = auditStage.current === stage.key;
           const isDone = auditStage.current > stage.key;
-          const isHidden =
-            stage.key === 3 &&
-            !auditStage.escalation?.was_escalated &&
-            auditStage.current < 3;
-          if (isHidden) return null;
 
           return (
             <div
@@ -91,11 +78,6 @@ export default function AuditStageProgress({ auditStage, analysisStatus }: Audit
         {STAGES.map((stage) => {
           const isActive = auditStage.current === stage.key;
           const isDone = auditStage.current > stage.key;
-          const isHidden =
-            stage.key === 3 &&
-            !auditStage.escalation?.was_escalated &&
-            auditStage.current < 3;
-          if (isHidden) return null;
           const StageIcon = stage.Icon;
 
           return (
@@ -206,16 +188,6 @@ export default function AuditStageProgress({ auditStage, analysisStatus }: Audit
                   score={auditStage.confidence.overall_severity_score}
                 />
               </div>
-            )}
-            {auditStage.escalation?.was_escalated && (
-              <MetricTooltip explanation={METRIC_EXPLANATIONS.escalation}>
-                <div className="mt-1 flex items-center gap-1">
-                  <AlertTriangleIcon size={8} className="text-amber-500" aria-hidden="true" />
-                  <span className="text-2xs text-amber-600 dark:text-amber-400 italic">
-                    Escalated: {auditStage.escalation.reason || "stage divergence detected"}
-                  </span>
-                </div>
-              </MetricTooltip>
             )}
           </div>
         )}

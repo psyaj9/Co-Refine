@@ -11,6 +11,7 @@ export function useWebSocket() {
   const appendChatToken = useStore((s) => s.appendChatToken);
   const finishChatStream = useStore((s) => s.finishChatStream);
   const triggerVisRefresh = useStore((s) => s.triggerVisRefresh);
+  const setOverlapMatrix = useStore((s) => s.setOverlapMatrix);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -47,6 +48,12 @@ export function useWebSocket() {
           // facet_updated — trigger vis refresh without pushing to alerts
           if (msg.type === "facet_updated") {
             triggerVisRefresh();
+            return;
+          }
+
+          // code_overlap_matrix — update store directly, do not push to alerts
+          if (msg.type === "code_overlap_matrix") {
+            setOverlapMatrix(msg.data as Record<string, Record<string, number>>);
             return;
           }
 
