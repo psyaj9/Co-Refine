@@ -55,7 +55,7 @@ def _migrate_add_columns() -> None:
                 conn.execute(text("ALTER TABLE facets ADD COLUMN label_source TEXT DEFAULT 'auto'"))
     if "coded_segments" in insp.get_table_names():
         cols = {c["name"] for c in insp.get_columns("coded_segments")}
-        for col_name in ("tsne_x", "tsne_y", "tsne_z"):
+        for col_name in ("tsne_x", "tsne_y"):
             if col_name not in cols:
                 with engine.begin() as conn:
                     conn.execute(text(

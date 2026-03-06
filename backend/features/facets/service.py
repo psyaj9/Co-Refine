@@ -43,21 +43,15 @@ def _compute_optimal_k(embeddings: np.ndarray) -> int:
     return best_k
 
 
-def _compute_tsne_3d(embeddings: np.ndarray) -> np.ndarray:
-    """Reduce embeddings to 3D for scatter. Falls back to PCA if TSNE fails."""
+def _compute_tsne(embeddings: np.ndarray) -> np.ndarray:
     n = len(embeddings)
     perplexity = min(30, max(2, n - 1))
     try:
-        reducer = TSNE(n_components=3, perplexity=perplexity, random_state=42)
+        reducer = TSNE(n_components=2, perplexity=perplexity, random_state=42)
         return reducer.fit_transform(embeddings)
     except Exception:
-        pca = PCA(n_components=min(3, embeddings.shape[1]))
-        coords = pca.fit_transform(embeddings)
-        # Pad to 3 columns if needed
-        if coords.shape[1] < 3:
-            padding = np.zeros((coords.shape[0], 3 - coords.shape[1]))
-            coords = np.hstack([coords, padding])
-        return coords
+        reducer = PCA(n_components=2)
+        return reducer.fit_transform(embeddings)
 
 
 def _get_embeddings_by_ids(user_id: str, ids: list[str]) -> dict[str, list[float]]:
@@ -95,7 +89,7 @@ def run_facet_analysis(
     km = KMeans(n_clusters=k, random_state=42, n_init="auto")
     labels = km.fit_predict(emb_matrix)
     centroids = km.cluster_centers_
-    coords_3d = _compute_tsne_3d(emb_matrix)
+    coords_2d = _compute_tsne(emb_matrix)
 
     existing_facets = (
         db.query(Facet).filter(Facet.code_id == code_id, Facet.is_active == True).all()
@@ -121,9 +115,8 @@ def run_facet_analysis(
 
     for i, seg in enumerate(valid_segments):
         cluster_idx = int(labels[i])
-        seg.tsne_x = float(coords_3d[i, 0])
-        seg.tsne_y = float(coords_3d[i, 1])
-        seg.tsne_z = float(coords_3d[i, 2])
+        seg.tsne_x = float(coords_2d[i, 0])
+        seg.tsne_y = float(coords_2d[i, 1])
 
         emb = emb_matrix[i]
         centroid = centroids[cluster_idx]
