@@ -2,7 +2,6 @@ import { useState } from "react";
 import { X, Eye, SlidersHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useProjectSettings } from "@/features/project/hooks/useProjectSettings";
-import PerspectivesTab from "./PerspectivesTab";
 import ThresholdsTab from "./ThresholdsTab";
 
 type SettingsTab = "perspectives" | "thresholds";
@@ -79,13 +78,6 @@ export default function AgentSettingsModal({ open, onClose }: Props) {
 
         {/* Body */}
         <div className="px-5 py-4 max-h-[60vh] overflow-y-auto">
-          {tab === "perspectives" && (
-            <PerspectivesTab
-              available={settings.available}
-              localPerspectives={settings.localPerspectives}
-              onToggle={settings.togglePerspective}
-            />
-          )}
           {tab === "thresholds" && (
             <ThresholdsTab
               thresholdDefs={settings.thresholdDefs}

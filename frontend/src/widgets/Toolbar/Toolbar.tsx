@@ -10,7 +10,7 @@ import {
   Settings2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import AgentSettingsModal from "@/features/project/components/AgentSettingsModal";
+import AgentSettingsModal from "@/features/project/components/SettingsModal";
 
 export default function Toolbar() {
   const viewMode = useStore((s) => s.viewMode);

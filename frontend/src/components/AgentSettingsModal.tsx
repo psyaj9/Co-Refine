@@ -1,1 +1,1 @@
-export { default } from "@/features/project/components/AgentSettingsModal";
+export { default } from "@/features/project/components/SettingsModal";
