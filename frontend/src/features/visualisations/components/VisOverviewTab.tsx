@@ -100,7 +100,7 @@ export default function VisOverviewTab({ projectId }: VisOverviewTabProps) {
       </div>
 
       {/* KPI cards — row 2 */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 gap-4">
         <KPICard
           label="Avg Centroid Similarity"
           value={pct(data.avg_centroid_sim)}
@@ -109,7 +109,6 @@ export default function VisOverviewTab({ projectId }: VisOverviewTabProps) {
           sparkKey="avg_centroid_sim"
         />
         <KPICard label="Escalation Rate" value={pct(data.escalation_rate)} />
-        <KPICard label="Reflection Rate" value={pct(data.reflection_rate)} />
       </div>
 
       {noData ? (
@@ -185,16 +184,6 @@ export default function VisOverviewTab({ projectId }: VisOverviewTabProps) {
             </div>
           )}
 
-          {/* Reflection / challenge rate bars */}
-          {(data.reflection_rate > 0 || data.challenge_rate > 0) && (
-            <div className="space-y-2">
-              <h3 className="text-xs font-semibold text-surface-500 uppercase tracking-wide">
-                Audit Activity
-              </h3>
-              <RateBar label="Reflection rate" value={data.reflection_rate} color="bg-brand-400" />
-              <RateBar label="Challenge rate" value={data.challenge_rate} color="bg-purple-400" />
-            </div>
-          )}
         </>
       )}
     </div>
@@ -248,23 +237,6 @@ function KPICard({
           </ResponsiveContainer>
         </div>
       )}
-    </div>
-  );
-}
-
-function RateBar({ label, value, color }: { label: string; value: number; color: string }) {
-  return (
-    <div>
-      <div className="flex justify-between text-xs text-surface-500 mb-1">
-        <span>{label}</span>
-        <span>{(value * 100).toFixed(1)}%</span>
-      </div>
-      <div className="h-2 w-full rounded-full bg-surface-100 dark:bg-surface-700">
-        <div
-          className={`h-2 rounded-full ${color}`}
-          style={{ width: `${(value * 100).toFixed(1)}%` }}
-        />
-      </div>
     </div>
   );
 }

@@ -99,6 +99,35 @@ def delete_segment_embedding(user_id: str, segment_id: str) -> None:
         pass
 
 
+def get_all_segments_for_code(
+    user_id: str,
+    code_label: str,
+    exclude_id: str | None = None,
+) -> list[dict]:
+    """Fetch ALL segments for a code, sorted by created_at. No MMR sampling."""
+    collection = get_collection(user_id)
+    if collection.count() == 0:
+        return []
+    results = collection.get(
+        where={"code": code_label},
+        include=["documents", "metadatas"],
+    )
+    items = []
+    for i, seg_id in enumerate(results.get("ids", [])):
+        if exclude_id and seg_id == exclude_id:
+            continue
+        meta = results["metadatas"][i] if results.get("metadatas") else {}
+        items.append({
+            "id": seg_id,
+            "text": results["documents"][i] if results.get("documents") else "",
+            "code": code_label,
+            "document_id": meta.get("document_id", ""),
+            "created_at": meta.get("created_at", ""),
+        })
+    items.sort(key=lambda x: x["created_at"])
+    return items
+
+
 def get_segment_count(user_id: str) -> int:
     """Return the total number of embedded segments for a user."""
     try:

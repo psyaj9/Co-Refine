@@ -9,7 +9,5 @@ export { default as AuditStageProgress } from "./components/AuditStageProgress";
 export { default as MetricStrip } from "./components/MetricStrip";
 export { default as AlertCard } from "./components/AlertCard";
 export { default as AuditScoreTable } from "./components/AuditScoreTable";
-export { default as ChallengeForm, ChallengeOpenButton } from "./components/ChallengeForm";
 
 // Hooks
-export { useChallengeSubmit } from "./hooks/useChallengeSubmit";

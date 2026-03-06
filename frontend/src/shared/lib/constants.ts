@@ -58,10 +58,6 @@ export const METRIC_EXPLANATIONS: Record<string, string> = {
     "Checks whether you are applying this code consistently with your own past coding decisions.",
   inter_rater_lens:
     "Simulates an independent second researcher coding the same segment to check if they would agree with your choice.",
-  reflection:
-    "The AI reviewed its own initial judgment using a fresh set of example segments. If scores changed, it means the AI reconsidered after seeing different evidence — this is a quality signal, not an error.",
-  challenge:
-    "You challenged the AI's judgment with your own reasoning. The AI reconsidered its scores in light of your feedback. Score changes show how persuasive your argument was.",
   score_delta:
-    "The difference between the AI's initial score and its revised score after reflection or challenge. Positive means the score increased; negative means it decreased.",
+    "The difference between the AI's initial score and its revised score after escalation. Positive means the score increased; negative means it decreased.",
 };

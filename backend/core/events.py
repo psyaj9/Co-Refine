@@ -16,12 +16,6 @@ DETERMINISTIC_SCORES = "deterministic_scores"
 # Coding audit (Stage 2)
 CODING_AUDIT = "coding_audit"
 
-# Reflection (Stage 2b)
-REFLECTION_COMPLETE = "reflection_complete"
-
-# Challenge (Pass 3)
-CHALLENGE_RESULT = "challenge_result"
-
 # Analysis
 ANALYSIS_UPDATED = "analysis_updated"
 

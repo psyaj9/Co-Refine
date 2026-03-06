@@ -1,4 +1,4 @@
-import type { AlertPayload, ReflectionMeta } from "@/types";
+import type { AlertPayload } from "@/types";
 import * as api from "@/api/client";
 
 const CURRENT_USER = "default";
@@ -6,11 +6,8 @@ const CURRENT_USER = "default";
 /** Three-stage audit pipeline progress */
 export interface AuditStage {
   current: 0 | 1 | 2 | 3;
-  /** Sub-stage for Stage 2: initial = pass 1 (2a), reflecting = pass 2 in progress, reflected = pass 2 done (2b) */
-  substage: "initial" | "reflecting" | "reflected" | null;
   stage1Scores: Record<string, unknown> | null;
   escalation: { was_escalated: boolean; reason: string | null } | null;
-  reflection: ReflectionMeta | null;
   confidence: {
     centroid_similarity: number | null;
     consistency_score: number | null;
@@ -21,10 +18,8 @@ export interface AuditStage {
 
 const INITIAL_AUDIT_STAGE: AuditStage = {
   current: 0,
-  substage: null,
   stage1Scores: null,
   escalation: null,
-  reflection: null,
   confidence: null,
 };
 
@@ -84,10 +79,8 @@ export const createAuditSlice = (
           agentsRunning: true,
           auditStage: {
             current: 1,
-            substage: null,
             stage1Scores: null,
             escalation: null,
-            reflection: null,
             confidence: null,
           },
           alerts: [a, ...s.alerts].slice(0, 50),
@@ -110,7 +103,6 @@ export const createAuditSlice = (
           auditStage: {
             ...s.auditStage,
             current: 2 as const,
-            substage: "initial" as const,
             stage1Scores: a.data || null,
             confidence: {
               centroid_similarity: (a.data?.centroid_similarity as number) ?? null,
@@ -121,28 +113,6 @@ export const createAuditSlice = (
           },
           alerts: [a, ...s.alerts].slice(0, 50),
         };
-      }
-
-      // ── Stage 2b — reflection complete ───────────────────────────
-      if (a.type === "reflection_complete") {
-        const reflectionData = a.data as unknown as ReflectionMeta | undefined;
-        return {
-          auditStage: {
-            ...s.auditStage,
-            substage: "reflected" as const,
-            reflection: reflectionData ?? null,
-          },
-        };
-      }
-
-      // ── Challenge result — update matching audit alert in place ───
-      if (a.type === "challenge_result" && a.segment_id) {
-        const updatedAlerts = s.alerts.map((al: AlertPayload) =>
-          al.type === "coding_audit" && al.segment_id === a.segment_id
-            ? { ...al, data: a.data }
-            : al,
-        );
-        return { alerts: updatedAlerts };
       }
 
       // ── Per-segment audit / analysis alerts ──────────────────────
@@ -189,16 +159,11 @@ export const createAuditSlice = (
             a.escalation ??
             (a.data?._escalation as { was_escalated: boolean; reason: string | null } | undefined) ??
             null;
-          const reflectionMeta = (a.data?._reflection as ReflectionMeta | undefined) ?? null;
 
           const auditStageUpdate: AuditStage = {
             ...s.auditStage,
             current: (escalation?.was_escalated ? 3 : s.auditStage.current) as 0 | 1 | 2 | 3,
-            substage: reflectionMeta?.was_reflected
-              ? ("reflected" as const)
-              : s.auditStage.substage,
             escalation: escalation,
-            reflection: reflectionMeta ?? s.auditStage.reflection,
             confidence: {
               centroid_similarity: s.auditStage.confidence?.centroid_similarity ?? null,
               consistency_score: (selfLens?.consistency_score as number) ?? null,

@@ -5,8 +5,6 @@ from infrastructure.llm.client import call_llm, get_client
 from prompts import (
     build_analysis_prompt,
     build_coding_audit_prompt,
-    build_reflection_prompt,
-    build_challenge_prompt,
 )
 
 _ORDINAL_SCORE_MAP = {"high": 0.9, "medium": 0.6, "low": 0.3}
@@ -46,16 +44,11 @@ def run_coding_audit(
     temporal_drift: float | None = None,
     is_pseudo_centroid: bool = False,
     segment_count: int | None = None,
-    # Reflection loop controls
-    enable_reflection: bool = True,
-    reflection_history: list[tuple[str, str]] | None = None,
 ) -> dict:
-    """Multi-stage coding audit with optional self-consistency reflection loop.
+    """Two-stage coding audit.
 
-    When enable_reflection=True (default), Stage 2 becomes a 2-pass loop:
-      Pass 1: Initial self-consistency judgment (fast model)
-      Pass 2: Reflection on own judgment with fresh MMR examples (same fast model)
-    Escalation (Stage 3) is evaluated against the *reflected* scores.
+    Stage 2: LLM self-consistency judgment (fast model).
+    Stage 3: Escalation with reasoning model when evidence diverges.
 
     Returns a dict with keys:
       self_lens: { is_consistent, consistency_score (float), intent_alignment_score (float),
@@ -64,7 +57,6 @@ def run_coding_audit(
       overall_severity: 'high' | 'medium' | 'low'
       score_grounding_note: str
       _escalation: { was_escalated, reason }
-      _reflection: { was_reflected, initial_scores, reflected_scores, score_delta }
     """
     messages = build_coding_audit_prompt(
         user_history=user_history,
@@ -82,50 +74,10 @@ def run_coding_audit(
         segment_count=segment_count,
     )
 
-    # ── Pass 1: Initial judgment (fast model) ──
-    initial_result = call_llm(messages)  # fast model
+    # ── Stage 2: LLM judgment (fast model) ──
+    result = call_llm(messages)
 
-    # ── Pass 2: Reflection loop (same fast model) ──
-    reflection_meta: dict = {"was_reflected": False}
-
-    if enable_reflection and reflection_history is not None:
-        initial_scores = _extract_scores(initial_result)
-
-        reflection_messages = build_reflection_prompt(
-            initial_judgment=initial_result,
-            reflection_history=reflection_history,
-            new_quote=new_quote,
-            proposed_code=proposed_code,
-            document_context=document_context,
-            existing_codes_on_span=existing_codes_on_span,
-            centroid_similarity=centroid_similarity,
-            codebook_prob_dist=codebook_prob_dist,
-            entropy=entropy,
-            temporal_drift=temporal_drift,
-            is_pseudo_centroid=is_pseudo_centroid,
-            segment_count=segment_count,
-        )
-        reflected_result = call_llm(reflection_messages)  # same fast model
-
-        reflected_scores = _extract_scores(reflected_result)
-        score_delta = {
-            k: round(reflected_scores[k] - initial_scores[k], 4)
-            for k in initial_scores
-        }
-
-        reflection_meta = {
-            "was_reflected": True,
-            "initial_scores": initial_scores,
-            "reflected_scores": reflected_scores,
-            "score_delta": score_delta,
-        }
-
-        # Use the reflected result going forward
-        result = reflected_result
-    else:
-        result = initial_result
-
-    # ── STAGE 3: Escalation — evaluated against reflected scores ──
+    # ── Stage 3: Escalation ──
     llm_severity = result.get("overall_severity_score")
     llm_consistency = result.get("self_lens", {}).get("consistency_score")
 
@@ -158,76 +110,6 @@ def run_coding_audit(
     result["_escalation"] = {
         "was_escalated": was_escalated,
         "reason": escalation_reason,
-    }
-
-    # Attach reflection metadata
-    result["_reflection"] = reflection_meta
-
-    return result
-
-
-def _extract_scores(result: dict) -> dict:
-    """Extract the three key numeric scores from an audit result."""
-    self_lens = result.get("self_lens", {})
-    return {
-        "consistency_score": float(self_lens.get("consistency_score", 0.5)),
-        "intent_alignment_score": float(self_lens.get("intent_alignment_score", 0.5)),
-        "overall_severity_score": float(result.get("overall_severity_score", 0.5)),
-    }
-
-
-def run_challenge_cycle(
-    reflected_judgment: dict,
-    researcher_feedback: str,
-    history: list[tuple[str, str]],
-    new_quote: str,
-    proposed_code: str,
-    existing_codes_on_span: list[str] | None = None,
-    # Stage 1 deterministic scores
-    centroid_similarity: float | None = None,
-    codebook_prob_dist: dict[str, float] | None = None,
-    entropy: float | None = None,
-    temporal_drift: float | None = None,
-    is_pseudo_centroid: bool = False,
-    segment_count: int | None = None,
-) -> dict:
-    """Run a human-triggered challenge cycle (pass 3).
-
-    The researcher disagrees with the reflected judgment and provides
-    their own reasoning. The model reconsiders, weighting the researcher's
-    expertise heavily.
-
-    Returns normal audit dict with _challenge metadata.
-    """
-    pre_scores = _extract_scores(reflected_judgment)
-
-    messages = build_challenge_prompt(
-        reflected_judgment=reflected_judgment,
-        researcher_feedback=researcher_feedback,
-        history=history,
-        new_quote=new_quote,
-        proposed_code=proposed_code,
-        existing_codes_on_span=existing_codes_on_span,
-        centroid_similarity=centroid_similarity,
-        codebook_prob_dist=codebook_prob_dist,
-        entropy=entropy,
-        temporal_drift=temporal_drift,
-        is_pseudo_centroid=is_pseudo_centroid,
-        segment_count=segment_count,
-    )
-
-    result = call_llm(messages)  # same fast model
-    post_scores = _extract_scores(result)
-
-    result["_challenge"] = {
-        "was_challenged": True,
-        "researcher_feedback": researcher_feedback,
-        "pre_challenge_scores": pre_scores,
-        "post_challenge_scores": post_scores,
-        "score_delta": {
-            k: round(post_scores[k] - pre_scores[k], 4)
-            for k in pre_scores
-        },
     }
 
     return result

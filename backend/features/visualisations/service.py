@@ -45,8 +45,6 @@ def get_overview(db: Session, project_id: str) -> dict:
     avg_centroid_sim = _safe_avg(centroid_vals) or 0.0
 
     total_all = len(scores)
-    reflection_rate = round(sum(1 for s in scores if s.was_reflected) / max(1, total_all), 3)
-    challenge_rate = round(sum(1 for s in scores if s.was_challenged) / max(1, total_all), 3)
     escalation_rate = round(sum(1 for s in scores if s.was_escalated) / max(1, total_all), 3)
 
     # Multi-metric time-series — only metrics that are meaningful and drive real decisions:
@@ -113,8 +111,6 @@ def get_overview(db: Session, project_id: str) -> dict:
         "total_codes": total_codes,
         "avg_consistency_score": round(avg_score, 3),
         "avg_centroid_sim": round(avg_centroid_sim, 3),
-        "reflection_rate": reflection_rate,
-        "challenge_rate": challenge_rate,
         "escalation_rate": escalation_rate,
         "score_over_time": score_trend,
         "metrics_over_time": metrics_over_time,

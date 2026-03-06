@@ -1,4 +1,4 @@
-"""Audit feature router: analyze, analyses, batch-audit, challenge-reflection."""
+"""Audit feature router: analyze, analyses, batch-audit."""
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
 
@@ -9,12 +9,9 @@ from features.audit.schemas import (
     AnalysisTrigger,
     BatchAuditRequest,
     AnalysisOut,
-    ChallengeReflectionRequest,
-    ChallengeReflectionResponse,
 )
 from features.audit.auto_analyzer import run_manual_analysis
 from features.audit.batch_auditor import run_batch_audit_background
-from features.audit.challenge_handler import run_challenge
 
 router = APIRouter(prefix="/api/segments", tags=["audit"])
 
@@ -84,15 +81,3 @@ async def batch_audit(
         user_id=body.user_id,
     )
     return {"status": "batch_audit_started", "code_count": len(codes)}
-
-
-@router.post("/{segment_id}/challenge-reflection", response_model=ChallengeReflectionResponse)
-async def challenge_reflection(
-    segment_id: str,
-    body: ChallengeReflectionRequest,
-    db: Session = Depends(get_db),
-):
-    try:
-        return run_challenge(db=db, segment_id=segment_id, user_id=body.user_id, feedback=body.feedback)
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))

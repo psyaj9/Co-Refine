@@ -7,7 +7,7 @@ from core.database import SessionLocal
 from core.models import CodedSegment, Code, Document, AnalysisResult, ConsistencyScore
 from core.logging import get_logger
 from infrastructure.websocket.manager import ws_manager
-from infrastructure.vector_store.mmr import find_diverse_segments
+from infrastructure.vector_store.store import get_all_segments_for_code
 from features.audit.context_builder import extract_window, build_code_definitions, build_user_code_definitions
 from features.audit.score_persister import persist_consistency_score, persist_agent_alert
 
@@ -83,8 +83,8 @@ def reaudit_siblings(
                 .count()
             ) if existing_score and existing_score.codebook_distribution else None
 
-            diverse = find_diverse_segments(
-                user_id=user_id, query_text=sib_seg.text, code_filter=sib_code.label, n=10,
+            diverse = get_all_segments_for_code(
+                user_id=user_id, code_label=sib_code.label, exclude_id=sib_seg.id,
             )
             user_history = [(s["code"], s["text"]) for s in diverse]
 
@@ -109,8 +109,6 @@ def reaudit_siblings(
                 temporal_drift=stage1_drift,
                 is_pseudo_centroid=stage1_pseudo,
                 segment_count=stage1_seg_count,
-                enable_reflection=True,
-                reflection_history=user_history,
             )
 
             all_codes_on_span = set(existing_codes_on_span) | {sib_code.label}

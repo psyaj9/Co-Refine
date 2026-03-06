@@ -7,7 +7,7 @@ from core.models import Code, CodedSegment, AnalysisResult, AgentAlert, Consiste
 from core.config import settings
 from core.logging import get_logger
 from infrastructure.websocket.manager import ws_manager
-from infrastructure.vector_store.mmr import find_diverse_segments
+from infrastructure.vector_store.store import get_all_segments_for_code
 from features.audit.context_builder import build_code_definitions, build_user_code_definitions
 from features.audit.score_persister import persist_consistency_score, persist_agent_alert
 from features.scoring.code_overlap import compute_code_overlap_matrix
@@ -36,8 +36,8 @@ def run_batch_audit_background(*, project_id: str, user_id: str) -> None:
         all_code_labels = [c.label for c in all_codes]
 
         for i, code in enumerate(all_codes):
-            diverse = find_diverse_segments(
-                user_id=user_id, query_text=code.label, code_filter=code.label, n=15,
+            diverse = get_all_segments_for_code(
+                user_id=user_id, code_label=code.label,
             )
 
             if not diverse:
@@ -47,8 +47,9 @@ def run_batch_audit_background(*, project_id: str, user_id: str) -> None:
                 })
                 continue
 
-            representative = diverse[0]
-            history = [(s["code"], s["text"]) for s in diverse[1:]]
+            # Use the most recently added segment as representative; rest as history
+            representative = diverse[-1]
+            history = [(s["code"], s["text"]) for s in diverse[:-1]]
 
             try:
                 stage1 = None
@@ -93,7 +94,6 @@ def run_batch_audit_background(*, project_id: str, user_id: str) -> None:
                     temporal_drift=stage1["temporal_drift"] if stage1 else None,
                     is_pseudo_centroid=stage1["is_pseudo_centroid"] if stage1 else False,
                     segment_count=stage1["segment_count"] if stage1 else None,
-                    enable_reflection=False,
                 )
 
                 all_codes_on_span = set(existing_codes_on_span) | {code.label}

@@ -8,7 +8,7 @@ from core.config import settings
 from core.logging import get_logger
 from infrastructure.websocket.manager import ws_manager
 from infrastructure.vector_store.store import add_segment_embedding
-from infrastructure.vector_store.mmr import find_diverse_segments
+from infrastructure.vector_store.store import get_all_segments_for_code
 from features.audit.context_builder import build_code_definitions, build_user_code_definitions
 from features.audit.score_persister import persist_consistency_score, persist_agent_alert
 from features.audit.auto_analyzer import maybe_run_auto_analysis
@@ -98,8 +98,8 @@ def run_background_agents(
         # 3. Coding Audit
         _ws_send(user_id, {"type": "agent_thinking", "agent": "coding_audit", "segment_id": segment_id, "data": {}})
         try:
-            diverse = find_diverse_segments(
-                user_id=user_id, query_text=text, code_filter=code_label, n=10,
+            diverse = get_all_segments_for_code(
+                user_id=user_id, code_label=code_label, exclude_id=segment_id,
             )
             user_history = [(s["code"], s["text"]) for s in diverse]
 
@@ -119,17 +119,7 @@ def run_background_agents(
                 temporal_drift=stage1["temporal_drift"] if stage1 else None,
                 is_pseudo_centroid=stage1["is_pseudo_centroid"] if stage1 else False,
                 segment_count=stage1["segment_count"] if stage1 else None,
-                enable_reflection=True,
-                reflection_history=user_history,
             )
-
-            reflection_meta = audit_result.get("_reflection", {})
-            if reflection_meta.get("was_reflected"):
-                _ws_send(user_id, {
-                    "type": "reflection_complete",
-                    "segment_id": segment_id,
-                    "data": reflection_meta,
-                })
 
             all_codes_on_span = set(existing_codes_on_span) | {code_label}
             self_lens = audit_result.get("self_lens", {})

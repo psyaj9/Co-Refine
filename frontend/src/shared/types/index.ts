@@ -49,7 +49,7 @@ export interface AnalysisOut {
 }
 
 export interface AlertPayload {
-  type: "coding_audit" | "consistency" | "ghost_partner" | "analysis_updated" | "agents_started" | "agent_thinking" | "agents_done" | "agent_error" | "chat_stream_start" | "chat_token" | "chat_done" | "chat_error" | "batch_audit_started" | "batch_audit_progress" | "batch_audit_done" | "deterministic_scores" | "code_overlap_matrix" | "reflection_started" | "reflection_complete" | "challenge_result" | "temporal_drift_warning";
+  type: "coding_audit" | "consistency" | "ghost_partner" | "analysis_updated" | "agents_started" | "agent_thinking" | "agents_done" | "agent_error" | "chat_stream_start" | "chat_token" | "chat_done" | "chat_error" | "batch_audit_started" | "batch_audit_progress" | "batch_audit_done" | "deterministic_scores" | "code_overlap_matrix" | "temporal_drift_warning";
   segment_id?: string;
   code_id?: string;
   code_label?: string;
@@ -213,8 +213,6 @@ export interface OverviewData {
   avg_consistency_score: number;
   /** Average cosine similarity between segments and their code's centroid (pseudo-centroid excluded). */
   avg_centroid_sim: number;
-  reflection_rate: number;
-  challenge_rate: number;
   escalation_rate: number;
   score_over_time: { date: string; avg_score: number }[];
   metrics_over_time: MetricPoint[];
