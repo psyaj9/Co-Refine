@@ -23,6 +23,9 @@ export const AGENT_LABELS: Record<string, string> = {
   consistency: "Self-Consistency",
 };
 
+/** Display labels for the 3 deterministic audit stages (index = stage number). */
+export const AUDIT_STAGE_LABELS = ["", "Embedding", "LLM Audit", "Escalation"] as const;
+
 /**
  * Plain-language explanations for each metric shown in alerts.
  * Designed for non-technical qualitative researchers.

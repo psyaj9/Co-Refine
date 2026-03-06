@@ -4,7 +4,7 @@ import AlertCard from "@/features/audit/components/AlertCard";
 import type { AlertPayload } from "@/types";
 
 /** Alert types that are internal pipeline signals — never rendered as cards. */
-const HIDDEN_ALERT_TYPES = new Set(["agents_started", "agents_done", "deterministic_scores"]);
+export const HIDDEN_ALERT_TYPES = new Set(["agents_started", "agents_done", "deterministic_scores"]);
 
 function deriveAnalysisStatus(alerts: AlertPayload[]): "pending" | "running" | "done" {
   if (

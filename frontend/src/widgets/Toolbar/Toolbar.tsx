@@ -1,4 +1,4 @@
-import { useRef, useCallback, useState } from "react";
+import { useState } from "react";
 import { useStore } from "@/stores/store";
 import {
   FilePlus,
@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import AgentSettingsModal from "@/features/project/components/SettingsModal";
+import { useToolbarKeyNav } from "./hooks/useToolbarKeyNav";
 
 export default function Toolbar() {
   const viewMode = useStore((s) => s.viewMode);
@@ -26,27 +27,7 @@ export default function Toolbar() {
   // "Add Document" is highlighted when the upload page is shown or no doc is selected yet
   const isAddDocActive = showUploadPage || (viewMode === "document" && !activeDocumentId);
 
-  /* WAI-ARIA toolbar pattern: arrow keys move focus between buttons */
-  const toolbarRef = useRef<HTMLDivElement>(null);
-  const handleToolbarKeyDown = useCallback((e: React.KeyboardEvent) => {
-    const buttons = toolbarRef.current?.querySelectorAll<HTMLButtonElement>("button");
-    if (!buttons || buttons.length === 0) return;
-
-    const btnArr = Array.from(buttons);
-    const idx = btnArr.indexOf(e.target as HTMLButtonElement);
-    if (idx === -1) return;
-
-    let next = -1;
-    if (e.key === "ArrowRight") next = (idx + 1) % btnArr.length;
-    else if (e.key === "ArrowLeft") next = (idx - 1 + btnArr.length) % btnArr.length;
-    else if (e.key === "Home") next = 0;
-    else if (e.key === "End") next = btnArr.length - 1;
-
-    if (next >= 0) {
-      e.preventDefault();
-      btnArr[next].focus();
-    }
-  }, []);
+  const { toolbarRef, handleToolbarKeyDown } = useToolbarKeyNav();
 
   return (
     <header className="h-10 grid grid-cols-[1fr_auto_1fr] items-center px-3 border-b panel-border panel-bg flex-shrink-0 select-none" role="banner">

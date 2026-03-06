@@ -1,10 +1,6 @@
-import { useEffect, useState } from "react";
-import { useStore } from "@/stores/store";
-import { fetchVisOverlap } from "@/api/client";
-import type { CodeOverlapData } from "@/types";
+import { useCodeOverlap } from "@/features/visualisations/hooks/useCodeOverlap";
+import { FlaggedPairs } from "@/features/visualisations/components/FlaggedPairs";
 import { cn } from "@/lib/utils";
-
-type LoadState = "idle" | "loading" | "error" | "success";
 
 /** Map a similarity value [0, 1] to a background colour.
  *  Values below threshold → blue intensity scale; at/above threshold → amber warning. */
@@ -15,12 +11,10 @@ function cellStyle(
 ): React.CSSProperties {
   if (isDiagonal) return { backgroundColor: "var(--color-surface-200, #e2e8f0)" };
   if (value >= threshold) {
-    // Amber warning: opacity scales with how far above the threshold we are
     const intensity = Math.min(1, (value - threshold) / (1 - threshold));
-    return { backgroundColor: `rgba(251,146,60,${0.25 + intensity * 0.65})` }; // orange-400 base
+    return { backgroundColor: `rgba(251,146,60,${0.25 + intensity * 0.65})` };
   }
-  // Brand blue: opacity scales with value
-  return { backgroundColor: `rgba(59,130,246,${value * 0.7})` }; // blue-500 base
+  return { backgroundColor: `rgba(59,130,246,${value * 0.7})` };
 }
 
 interface CodeOverlapTabProps {
@@ -28,32 +22,12 @@ interface CodeOverlapTabProps {
 }
 
 export default function CodeOverlapTab({ projectId }: CodeOverlapTabProps) {
-  const [state, setState] = useState<LoadState>("idle");
-  const [data, setData] = useState<CodeOverlapData | null>(null);
-  const visRefreshCounter = useStore((s) => s.visRefreshCounter);
-  const liveMatrix = useStore((s) => s.overlapMatrix);
-
-  useEffect(() => {
-    setState("loading");
-    fetchVisOverlap(projectId)
-      .then((d) => {
-        setData(d);
-        setState("success");
-      })
-      .catch(() => setState("error"));
-  }, [projectId, visRefreshCounter]);
-
-  // Apply live WS update on top of fetched data when available
-  const matrix = liveMatrix ?? data?.matrix ?? null;
-  const labels = liveMatrix
-    ? Object.keys(liveMatrix)
-    : data?.code_labels ?? [];
-  const threshold = data?.threshold ?? 0.85;
+  const { state, matrix, labels, threshold, reload } = useCodeOverlap(projectId);
 
   if (state === "loading") {
     return (
       <div className="flex items-center justify-center h-32 text-surface-400 text-xs">
-        Loading overlap matrix…
+        Loading overlap matrix&hellip;
       </div>
     );
   }
@@ -62,15 +36,7 @@ export default function CodeOverlapTab({ projectId }: CodeOverlapTabProps) {
     return (
       <div className="flex flex-col items-center justify-center h-32 gap-2">
         <span className="text-xs text-red-500">Failed to load overlap data.</span>
-        <button
-          onClick={() => {
-            setState("loading");
-            fetchVisOverlap(projectId)
-              .then((d) => { setData(d); setState("success"); })
-              .catch(() => setState("error"));
-          }}
-          className="text-xs text-brand-600 underline"
-        >
+        <button onClick={reload} className="text-xs text-brand-600 underline">
           Retry
         </button>
       </div>
@@ -178,50 +144,6 @@ export default function CodeOverlapTab({ projectId }: CodeOverlapTabProps) {
 
       {/* Flagged pairs summary */}
       <FlaggedPairs matrix={matrix} labels={labels} threshold={threshold} />
-    </div>
-  );
-}
-
-interface FlaggedPairsProps {
-  matrix: Record<string, Record<string, number>>;
-  labels: string[];
-  threshold: number;
-}
-
-function FlaggedPairs({ matrix, labels, threshold }: FlaggedPairsProps) {
-  const pairs: { a: string; b: string; score: number }[] = [];
-  for (let i = 0; i < labels.length; i++) {
-    for (let j = i + 1; j < labels.length; j++) {
-      const score = matrix[labels[i]]?.[labels[j]] ?? 0;
-      if (score >= threshold) {
-        pairs.push({ a: labels[i], b: labels[j], score });
-      }
-    }
-  }
-
-  if (pairs.length === 0) return null;
-
-  pairs.sort((x, y) => y.score - x.score);
-
-  return (
-    <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-3 py-2.5">
-      <p className="text-2xs font-semibold text-amber-700 dark:text-amber-300 mb-2">
-        Potentially redundant pairs ({pairs.length})
-      </p>
-      <ul className="space-y-1">
-        {pairs.map(({ a, b, score }) => (
-          <li key={`${a}-${b}`} className="flex items-center justify-between gap-2">
-            <span className="text-2xs text-amber-800 dark:text-amber-200 truncate">
-              <span className="font-medium">{a}</span>
-              <span className="mx-1 text-amber-500">↔</span>
-              <span className="font-medium">{b}</span>
-            </span>
-            <span className="text-2xs font-mono font-semibold text-amber-700 dark:text-amber-300 flex-shrink-0">
-              {score.toFixed(3)}
-            </span>
-          </li>
-        ))}
-      </ul>
     </div>
   );
 }

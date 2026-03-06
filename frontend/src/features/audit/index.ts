@@ -1,5 +1,5 @@
 // Orchestrators
-export { default as AlertsTab } from "./components/AlertsTab";
+export { default as AlertsTab, HIDDEN_ALERT_TYPES } from "./components/AlertsTab";
 export { default as CodingAuditDetail } from "./components/CodingAuditDetail";
 
 // Sub-components (public for cross-feature use if needed)

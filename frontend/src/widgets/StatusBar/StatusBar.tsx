@@ -1,6 +1,6 @@
 import { useStore } from "@/stores/store";
 import { FileText, Hash, FolderOpen, Loader2, Eye, Users } from "lucide-react";
-import { AGENT_LABELS } from "@/lib/constants";
+import { AGENT_LABELS, AUDIT_STAGE_LABELS } from "@/lib/constants";
 
 const PERSPECTIVE_LABELS: Record<string, { short: string; icon: typeof Eye }> = {
   self_consistency: { short: "Self-Consistency", icon: Eye },
@@ -24,8 +24,6 @@ export default function StatusBar() {
   const activeAgentLabel = activeAgent
     ? AGENT_LABELS[activeAgent.agent ?? ""] || activeAgent.agent || "Agent"
     : null;
-
-  const stageLabels = ["", "Embedding", "LLM Audit", "Escalation"];
 
   return (
     <footer className="h-6 flex items-center justify-between px-3 border-t panel-border panel-bg text-2xs text-surface-400 dark:text-surface-500 flex-shrink-0 select-none" role="contentinfo">
@@ -74,7 +72,7 @@ export default function StatusBar() {
           <span className="flex items-center gap-1 text-brand-500 dark:text-brand-400">
             <Loader2 size={10} className="animate-spin" aria-hidden="true" />
             {auditStage.current > 0
-              ? `Stage ${auditStage.current}: ${stageLabels[auditStage.current]}`
+              ? `Stage ${auditStage.current}: ${AUDIT_STAGE_LABELS[auditStage.current]}`
               : activeAgentLabel
                 ? `${activeAgentLabel} running`
                 : "Agents running"}

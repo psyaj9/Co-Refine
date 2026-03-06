@@ -1,6 +1,6 @@
 import { Pencil, Check, X, Tag, BookOpen, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
-import RetrievedSegments from "@/components/RetrievedSegments";
+import RetrievedSegments from "./RetrievedSegments";
 import type { CodeOut, AnalysisOut } from "@/types";
 
 interface ExpandedCodeDetailProps {

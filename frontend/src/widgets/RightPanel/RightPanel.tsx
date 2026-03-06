@@ -2,8 +2,8 @@ import * as Tabs from "@radix-ui/react-tabs";
 import { useStore } from "@/stores/store";
 import { AlertTriangle, MessageCircle, PanelRightClose } from "lucide-react";
 import { cn } from "@/lib/utils";
-import AlertsTab from "@/components/AlertsTab";
-import ChatTab from "@/components/ChatTab";
+import { AlertsTab, HIDDEN_ALERT_TYPES } from "@/features/audit";
+import { ChatTab } from "@/features/chat";
 import type { RightPanelTab } from "@/types";
 
 const TAB_META: {
@@ -20,13 +20,8 @@ export default function RightPanel({ onCollapse }: { onCollapse?: () => void }) 
   const setRightPanelTab = useStore((s) => s.setRightPanelTab);
   const alerts = useStore((s) => s.alerts);
 
-  // Must match HIDDEN_ALERT_TYPES in AlertsTab so the badge count equals the rendered card count
-  const visibleAlertCount = alerts.filter(
-    (a) =>
-      a.type !== "agents_started" &&
-      a.type !== "agents_done" &&
-      a.type !== "deterministic_scores"
-  ).length;
+  // Shared with AlertsTab — badge count must match the rendered card count
+  const visibleAlertCount = alerts.filter((a) => !HIDDEN_ALERT_TYPES.has(a.type)).length;
 
   return (
     <Tabs.Root

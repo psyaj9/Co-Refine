@@ -1,4 +1,3 @@
-import { useEffect, useState } from "react";
 import {
   LineChart,
   Line,
@@ -11,13 +10,10 @@ import {
   Bar,
   Legend,
 } from "recharts";
-import { TrendingUp, TrendingDown, Minus, BarChart2 } from "lucide-react";
-import { useStore } from "@/stores/store";
-import { fetchVisOverview } from "@/api/client";
-import type { OverviewData, MetricPoint } from "@/types";
+import { BarChart2 } from "lucide-react";
 import { ChartSkeleton, KPISkeleton } from "@/shared/ui";
-
-type LoadState = "idle" | "loading" | "error" | "success";
+import { useVisOverview } from "@/features/visualisations/hooks/useVisOverview";
+import { KPICard } from "@/features/visualisations/components/KPICard";
 
 function computeTrend(vals: (number | null)[]): "up" | "down" | "flat" {
   const clean = vals.filter((v): v is number => v != null);
@@ -39,16 +35,7 @@ interface VisOverviewTabProps {
 }
 
 export default function VisOverviewTab({ projectId }: VisOverviewTabProps) {
-  const visRefreshCounter = useStore((s) => s.visRefreshCounter);
-  const [data, setData] = useState<OverviewData | null>(null);
-  const [state, setState] = useState<LoadState>("idle");
-
-  useEffect(() => {
-    setState("loading");
-    fetchVisOverview(projectId)
-      .then((d) => { setData(d); setState("success"); })
-      .catch(() => setState("error"));
-  }, [projectId, visRefreshCounter]);
+  const { data, state, reload } = useVisOverview(projectId);
 
   if (state === "loading" && !data) {
     return (
@@ -68,7 +55,7 @@ export default function VisOverviewTab({ projectId }: VisOverviewTabProps) {
         <BarChart2 className="w-8 h-8 text-surface-400" aria-hidden="true" />
         <p className="text-sm text-surface-500">Failed to load overview data.</p>
         <button
-          onClick={() => setState("idle")}
+          onClick={() => reload()}
           className="text-xs text-brand-500 underline"
         >
           Retry
@@ -81,7 +68,6 @@ export default function VisOverviewTab({ projectId }: VisOverviewTabProps) {
 
   const { metrics_over_time: mot } = data;
   const consistencyTrend = computeTrend(mot.map((p) => p.avg_consistency));
-  const centroidTrend = computeTrend(mot.map((p) => p.avg_centroid_sim));
   const noData = mot.length === 0 && data.top_variable_codes.length === 0;
 
   return (
@@ -173,57 +159,6 @@ export default function VisOverviewTab({ projectId }: VisOverviewTabProps) {
           )}
 
         </>
-      )}
-    </div>
-  );
-}
-
-// ── Sub-components ──────────────────────────────────────────────────
-
-function KPICard({
-  label,
-  value,
-  trend,
-  sparkData,
-  sparkKey,
-}: {
-  label: string;
-  value: string | number;
-  trend?: "up" | "down" | "flat";
-  sparkData?: MetricPoint[];
-  sparkKey?: keyof MetricPoint;
-}) {
-  const TrendIcon =
-    trend === "up" ? TrendingUp : trend === "down" ? TrendingDown : Minus;
-  const trendColor =
-    trend === "up" ? "text-green-500" : trend === "down" ? "text-red-500" : "text-surface-400";
-
-  return (
-    <div className="rounded-lg border panel-border panel-bg p-4">
-      <div className="flex items-start justify-between gap-1">
-        <div>
-          <p className="text-2xl font-bold text-surface-800 dark:text-surface-100">{value}</p>
-          <p className="text-xs text-surface-500 mt-1">{label}</p>
-        </div>
-        {trend && (
-          <TrendIcon className={`w-4 h-4 shrink-0 mt-1 ${trendColor}`} aria-hidden="true" />
-        )}
-      </div>
-      {sparkData && sparkKey && sparkData.length > 1 && (
-        <div className="mt-2 -mx-1">
-          <ResponsiveContainer width="100%" height={36}>
-            <LineChart data={sparkData.slice(-10)}>
-              <Line
-                type="monotone"
-                dataKey={sparkKey as string}
-                stroke="#3b82f6"
-                dot={false}
-                strokeWidth={1.5}
-                isAnimationActive={false}
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
       )}
     </div>
   );
