@@ -3,9 +3,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from core.database import get_db
-from core.models import Project, Facet
+from core.models import Project, Facet, Code
 from features.visualisations.schemas import RelabelFacetBody
-from features.visualisations.service import get_overview, get_facets, get_consistency
+from features.visualisations.service import get_overview, get_facets, get_consistency, explain_facet
 from features.facets.service import suggest_facet_labels
 
 router = APIRouter(prefix="/api/projects/{project_id}/vis", tags=["visualisations"])
@@ -69,3 +69,17 @@ def suggest_labels(
         raise HTTPException(status_code=404, detail="No active facets for this code")
     suggest_facet_labels(db, code_id, facets)
     return get_facets(db, project_id, code_id)
+
+
+@router.post("/facets/{facet_id}/explain")
+def explain_facet_endpoint(
+    project_id: str,
+    facet_id: str,
+    db: Session = Depends(get_db),
+):
+    """Return an AI-generated plain-English explanation of a facet sub-theme."""
+    facet = db.query(Facet).filter(Facet.id == facet_id, Facet.project_id == project_id).first()
+    if not facet:
+        raise HTTPException(status_code=404, detail="Facet not found")
+    code = db.query(Code).filter(Code.id == facet.code_id).first()
+    return explain_facet(facet, code)

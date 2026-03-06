@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from core.models import Project, CodedSegment, Code, ConsistencyScore, Facet, FacetAssignment
+from infrastructure.llm.client import call_llm
 
 
 def _safe_avg(lst: list[float]) -> float | None:
@@ -244,3 +245,38 @@ def get_consistency(db: Session, project_id: str, code_id: str | None = None) ->
         "timeline": sorted(timeline, key=lambda x: x["date"]),
         "reflection_data": reflection_data,
     }
+
+
+def explain_facet(facet: Facet, code: Code | None) -> dict:
+    """Call LLM to produce a plain-English explanation of a discovered facet sub-theme."""
+    code_label = code.label if code else "Unknown code"
+    code_def = (code.definition or "No definition provided") if code else "No definition provided"
+    facet_label = facet.label or facet.suggested_label or "Unnamed facet"
+    segment_count = facet.segment_count or 0
+
+    prompt = [
+        {
+            "role": "system",
+            "content": (
+                "You are a qualitative research assistant helping a researcher understand "
+                "discovered sub-themes (facets) within their codebook. "
+                "Respond with JSON in the format: {\"explanation\": \"<plain-English text>\"}"
+            ),
+        },
+        {
+            "role": "user",
+            "content": (
+                f"I am doing qualitative coding research. I have a code called '{code_label}' "
+                f"defined as: '{code_def}'.\n\n"
+                f"Within this code, an AI clustering algorithm discovered a sub-theme (facet) "
+                f"labelled: '{facet_label}'. This facet contains {segment_count} coded text segments.\n\n"
+                "Please explain in 2-3 sentences what this facet likely represents and why these "
+                "segments may cluster together as a distinct sub-theme within the broader code. "
+                "Be specific and use qualitative research language."
+            ),
+        },
+    ]
+
+    result = call_llm(prompt)
+    explanation = result.get("explanation", "Unable to generate explanation at this time.")
+    return {"explanation": explanation, "facet_label": facet_label, "code_name": code_label}

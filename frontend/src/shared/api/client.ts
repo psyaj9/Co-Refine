@@ -374,6 +374,12 @@ export async function suggestFacetLabels(projectId: string, codeId: string) {
   );
 }
 
+export async function explainFacet(projectId: string, facetId: string) {
+  return json<{ explanation: string; facet_label: string; code_name: string }>(
+    await fetch(`${BASE}/projects/${projectId}/vis/facets/${facetId}/explain`, { method: "POST" })
+  );
+}
+
 // ── Reflection Challenge (Feature 6) ────────────────────────────────
 
 export async function challengeReflection(

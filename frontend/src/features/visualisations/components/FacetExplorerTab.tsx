@@ -1,300 +1,183 @@
-import { useEffect, useState } from "react";
-import {
-  ScatterChart,
-  Scatter,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  Legend,
-  ZAxis,
-  BarChart,
-  Bar,
-} from "recharts";
-import { Sparkles, Loader2, Layers } from "lucide-react";
+/**
+ * FacetExplorerTab — orchestrates the facet visualisation.
+ *
+ * Overview (drillCodeId = null):
+ *   - All-codes scatter plot: code centroids as ★ stars, facet segments as faded dots
+ *   - Click a star → drill-down
+ *
+ * Drill-down (drillCodeId set):
+ *   - Only segments for that code, labelled by facet sub-theme
+ *   - Facet cards with inline label editing + AI explanation
+ */
+import { useEffect, useState, useMemo, useCallback } from "react";
+import { BarChart2, RefreshCw } from "lucide-react";
 import { useStore } from "@/stores/store";
-import { fetchVisFacets, renameFacet, suggestFacetLabels } from "@/api/client";
+import { fetchVisFacets } from "@/api/client";
 import type { FacetData } from "@/types";
-import { ChartSkeleton } from "@/shared/ui";
+import FacetScatterPlot from "./FacetScatterPlot";
+import FacetDrillDown from "./FacetDrillDown";
 
-const FACET_COLORS = [
-  "#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6",
-  "#ec4899", "#06b6d4", "#84cc16", "#f97316", "#6366f1",
+// ── Colour palette for codes ──────────────────────────────────────────────────
+const PALETTE = [
+  "#6366f1", "#0ea5e9", "#10b981", "#f59e0b", "#ef4444",
+  "#8b5cf6", "#ec4899", "#14b8a6", "#f97316", "#84cc16",
+  "#06b6d4", "#a855f7", "#e11d48", "#22c55e", "#eab308",
+  "#3b82f6", "#d946ef", "#64748b",
 ];
 
-type LoadState = "idle" | "loading" | "error" | "success";
+function buildColourMap(facets: FacetData[]): Record<string, string> {
+  const codeIds = Array.from(new Set(facets.map((f) => f.code_id)));
+  return Object.fromEntries(codeIds.map((id, i) => [id, PALETTE[i % PALETTE.length]]));
+}
+
+// ── Component ─────────────────────────────────────────────────────────────────
 
 interface FacetExplorerTabProps {
   projectId: string;
 }
 
+type LoadState = "idle" | "loading" | "error" | "success";
+
 export default function FacetExplorerTab({ projectId }: FacetExplorerTabProps) {
-  const selectedVisCodeId = useStore((s) => s.selectedVisCodeId);
-  const setSelectedVisCodeId = useStore((s) => s.setSelectedVisCodeId);
   const visRefreshCounter = useStore((s) => s.visRefreshCounter);
+
   const [facets, setFacets] = useState<FacetData[]>([]);
-  const [state, setState] = useState<LoadState>("idle");
-  const [suggesting, setSuggesting] = useState(false);
+  const [loadState, setLoadState] = useState<LoadState>("idle");
+  const [drillCodeId, setDrillCodeId] = useState<string | null>(null);
+
+  const colourMap = useMemo(() => buildColourMap(facets), [facets]);
+
+  const load = useCallback(() => {
+    setLoadState("loading");
+    fetchVisFacets(projectId)
+      .then(({ facets: data }) => {
+        setFacets(data);
+        setLoadState("success");
+      })
+      .catch(() => setLoadState("error"));
+  }, [projectId]);
 
   useEffect(() => {
-    setState("loading");
-    fetchVisFacets(projectId, selectedVisCodeId)
-      .then((d) => { setFacets(d.facets); setState("success"); })
-      .catch(() => setState("error"));
-  }, [projectId, selectedVisCodeId, visRefreshCounter]);
+    load();
+  }, [load, visRefreshCounter]);
 
-  // Group by facet (not code) for per-facet color series
-  const byFacet = facets.reduce<
-    Record<string, { points: { x: number; y: number; facet: string; text: string }[] }>
-  >((acc, f) => {
-    const key = f.facet_label;
-    if (!acc[key]) acc[key] = { points: [] };
-    acc[key].points.push(
-      ...f.segments.map((s) => ({
-        x: s.tsne_x,
-        y: s.tsne_y,
-        facet: f.facet_label,
-        text: s.text_preview,
-      }))
+  // Reset drill-down when project changes
+  useEffect(() => {
+    setDrillCodeId(null);
+  }, [projectId]);
+
+  const handleLabelChange = useCallback((facetId: string, newLabel: string) => {
+    setFacets((prev) =>
+      prev.map((f) => (f.facet_id === facetId ? { ...f, facet_label: newLabel } : f))
     );
-    return acc;
-  }, {});
+  }, []);
 
-  const facetCountData = facets.map((f) => ({
-    name: f.facet_label,
-    count: f.segment_count,
-    avg_sim: f.avg_similarity != null ? Math.round(f.avg_similarity * 100) : null,
-  }));
+  const drillCode = drillCodeId
+    ? facets.find((f) => f.code_id === drillCodeId)
+    : null;
 
-  const handleSuggestLabels = async () => {
-    if (!selectedVisCodeId) return;
-    setSuggesting(true);
-    try {
-      const result = await suggestFacetLabels(projectId, selectedVisCodeId);
-      setFacets(result.facets as FacetData[]);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setSuggesting(false);
-    }
-  };
+  // ── Loading ────────────────────────────────────────────────────────────────
 
-  if (state === "loading" && facets.length === 0) {
+  if (loadState === "loading" && facets.length === 0) {
     return (
-      <div className="space-y-4">
-        <ChartSkeleton height={400} />
-        <ChartSkeleton height={100} />
+      <div className="flex items-center justify-center h-48">
+        <RefreshCw className="w-5 h-5 text-surface-400 animate-spin" aria-hidden="true" />
+        <span className="ml-2 text-sm text-surface-400">Loading facet data…</span>
       </div>
     );
   }
 
-  if (state === "error") {
+  if (loadState === "error") {
     return (
       <div className="flex flex-col items-center gap-3 py-10 text-center">
-        <Layers className="w-8 h-8 text-surface-400" aria-hidden="true" />
+        <BarChart2 className="w-8 h-8 text-surface-400" aria-hidden="true" />
         <p className="text-sm text-surface-500">Failed to load facet data.</p>
-        <button onClick={() => setState("idle")} className="text-xs text-brand-500 underline">
+        <button
+          onClick={load}
+          className="text-xs text-brand-500 underline hover:text-brand-600"
+        >
           Retry
         </button>
       </div>
     );
   }
 
-  return (
-    <div className="space-y-4">
-      <p className="text-xs text-surface-400">
-        Each dot is a coded segment. Clusters = discovered sub-themes (facets). Click a series to filter.
-      </p>
-
-      {selectedVisCodeId && (
-        <button onClick={() => setSelectedVisCodeId(null)} className="text-xs text-brand-500 underline">
-          ← Show all codes
-        </button>
-      )}
-
-      {Object.keys(byFacet).length === 0 ? (
-        <EmptyFacets />
-      ) : (
-        <>
-          <ResponsiveContainer width="100%" height={400}>
-            <ScatterChart>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="x" name="t-SNE 1" tick={{ fontSize: 10 }} />
-              <YAxis dataKey="y" name="t-SNE 2" tick={{ fontSize: 10 }} />
-              <ZAxis range={[40, 40]} />
-              <Tooltip
-                cursor={{ strokeDasharray: "3 3" }}
-                content={({ payload }) => {
-                  if (!payload?.length) return null;
-                  const d = payload[0].payload as { facet: string; text: string };
-                  return (
-                    <div className="bg-white dark:bg-surface-800 border panel-border rounded p-2 text-xs max-w-xs shadow-sm">
-                      <p className="font-semibold">{d.facet}</p>
-                      <p className="text-surface-500 mt-1">{d.text}</p>
-                    </div>
-                  );
-                }}
-              />
-              <Legend />
-              {Object.entries(byFacet).map(([facetLabel, { points }], i) => (
-                <Scatter
-                  key={facetLabel}
-                  name={facetLabel}
-                  data={points}
-                  fill={FACET_COLORS[i % FACET_COLORS.length]}
-                />
-              ))}
-            </ScatterChart>
-          </ResponsiveContainer>
-
-          {/* Segment count per facet */}
-          <div>
-            <h4 className="text-xs font-semibold text-surface-500 uppercase tracking-wide mb-2">
-              Segments per Facet
-            </h4>
-            <ResponsiveContainer width="100%" height={Math.max(80, facets.length * 28)}>
-              <BarChart data={facetCountData} layout="vertical">
-                <XAxis type="number" tick={{ fontSize: 10 }} />
-                <YAxis dataKey="name" type="category" width={110} tick={{ fontSize: 10 }} />
-                <Tooltip formatter={(v: number) => [v, "segments"]} />
-                <Bar dataKey="count" fill="#3b82f6" radius={[0, 3, 3, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </>
-      )}
-
-      {/* Facet label list */}
-      {facets.length > 0 && (
-        <div className="mt-2 space-y-3">
-          <h4 className="text-xs font-semibold text-surface-500 uppercase tracking-wide">
-            Facet Labels (click to rename)
-          </h4>
-          <div className="flex flex-wrap gap-2">
-            {facets.map((f, i) => (
-              <FacetLabelBadge
-                key={f.facet_id}
-                facetId={f.facet_id}
-                label={f.facet_label}
-                suggestedLabel={f.suggested_label}
-                labelSource={f.label_source}
-                projectId={projectId}
-                color={FACET_COLORS[i % FACET_COLORS.length]}
-                avgSimilarity={f.avg_similarity}
-                onRenamed={(newLabel) =>
-                  setFacets((prev) =>
-                    prev.map((x) =>
-                      x.facet_id === f.facet_id
-                        ? { ...x, facet_label: newLabel, label_source: "user" }
-                        : x
-                    )
-                  )
-                }
-              />
-            ))}
-          </div>
-
-          {selectedVisCodeId && (
-            <button
-              onClick={handleSuggestLabels}
-              disabled={suggesting || facets.length === 0}
-              className="flex items-center gap-1.5 text-xs text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              aria-label="Re-suggest AI labels for these facets"
-            >
-              {suggesting ? (
-                <Loader2 className="w-3 h-3 animate-spin" aria-hidden="true" />
-              ) : (
-                <Sparkles className="w-3 h-3" aria-hidden="true" />
-              )}
-              {suggesting ? "Suggesting…" : "Suggest labels for these facets"}
-            </button>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── Sub-components ──────────────────────────────────────────────────
-
-function FacetLabelBadge({
-  facetId,
-  label,
-  suggestedLabel,
-  labelSource,
-  projectId,
-  color,
-  avgSimilarity,
-  onRenamed,
-}: {
-  facetId: string;
-  label: string;
-  suggestedLabel: string | null;
-  labelSource: "auto" | "ai" | "user";
-  projectId: string;
-  color: string;
-  avgSimilarity: number | null;
-  onRenamed: (l: string) => void;
-}) {
-  const [editing, setEditing] = useState(false);
-  const [value, setValue] = useState(label);
-
-  const save = () => {
-    renameFacet(projectId, facetId, value)
-      .then(() => { onRenamed(value); setEditing(false); })
-      .catch(console.error);
-  };
-
-  if (editing) {
+  if (loadState === "success" && facets.length === 0) {
     return (
-      <div className="flex items-center gap-1">
-        <input
-          autoFocus
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && save()}
-          className="text-xs border panel-border rounded px-1 py-0.5 bg-white dark:bg-surface-800 text-surface-800 dark:text-surface-100"
-        />
-        <button onClick={save} className="text-xs text-green-500" aria-label="Save label">✓</button>
-        <button onClick={() => setEditing(false)} className="text-xs text-red-400" aria-label="Cancel">✕</button>
+      <div className="flex flex-col items-center gap-3 py-10 text-center">
+        <BarChart2 className="w-8 h-8 text-surface-400" aria-hidden="true" />
+        <p className="text-sm text-surface-500">
+          No facets yet. Run an analysis to discover sub-themes.
+        </p>
       </div>
     );
   }
 
-  const isAi = labelSource === "ai";
-  const tooltip = isAi
-    ? "Label suggested by AI — click to rename"
-    : `Click to rename${avgSimilarity != null ? ` · avg similarity ${(avgSimilarity * 100).toFixed(0)}%` : ""}`;
+  // ── Drill-down view ────────────────────────────────────────────────────────
 
-  return (
-    <button
-      type="button"
-      onClick={() => setEditing(true)}
-      title={tooltip}
-      aria-label={`Rename facet: ${label}`}
-      className="cursor-pointer flex items-center gap-1 text-xs px-2 py-1 rounded-full border hover:opacity-80 transition-opacity"
-      style={{ borderColor: color, color }}
-    >
-      {isAi && <Sparkles className="w-3 h-3 shrink-0" aria-hidden="true" />}
-      <span
-        className="inline-block w-2 h-2 rounded-full shrink-0"
-        style={{ backgroundColor: color }}
-        aria-hidden="true"
+  if (drillCodeId && drillCode) {
+    return (
+      <FacetDrillDown
+        codeName={drillCode.code_name}
+        codeId={drillCodeId}
+        facets={facets}
+        colourMap={colourMap}
+        projectId={projectId}
+        onBack={() => setDrillCodeId(null)}
+        onLabelChange={handleLabelChange}
       />
-      {label}
-    </button>
-  );
-}
+    );
+  }
 
-function EmptyFacets() {
+  // ── Overview view ──────────────────────────────────────────────────────────
+
+  const uniqueCodes = Array.from(
+    new Map(facets.map((f) => [f.code_id, f.code_name])).entries()
+  );
+
+  const totalSegments = facets.reduce((n, f) => n + f.segment_count, 0);
+
   return (
-    <div className="flex flex-col items-center gap-3 py-10 text-center">
-      <Layers className="w-10 h-10 text-surface-300" aria-hidden="true" />
-      <p className="text-sm font-medium text-surface-600 dark:text-surface-300">No facets yet</p>
-      <p className="text-xs text-surface-400 max-w-xs">
-        Facets are computed automatically after 4+ segments are coded under a single code.
-      </p>
+    <div className="flex flex-col gap-4">
+      <div>
+        <p className="text-xs text-surface-400">
+          ★ = code centroid · dots = coded segments · click a star to drill in
+        </p>
+        <p className="text-[10px] text-surface-400 mt-0.5">
+          {uniqueCodes.length} codes · {facets.length} facets · {totalSegments} segments
+        </p>
+      </div>
+
+      {/* Scatter plot */}
+      <div className="w-full overflow-x-auto">
+        <FacetScatterPlot
+          facets={facets}
+          colourMap={colourMap}
+          drillCodeId={null}
+          onStarClick={(codeId) => setDrillCodeId(codeId)}
+          width={640}
+          height={420}
+        />
+      </div>
+
+      {/* Legend */}
+      <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+        {uniqueCodes.map(([codeId, codeName]) => (
+          <button
+            key={codeId}
+            onClick={() => setDrillCodeId(codeId)}
+            className="flex items-center gap-1.5 text-[10px] text-surface-600 dark:text-surface-300 hover:text-brand-600 transition-colors"
+            aria-label={`Drill into ${codeName}`}
+          >
+            <span
+              className="inline-block h-2.5 w-2.5 rounded-sm"
+              style={{ backgroundColor: colourMap[codeId] }}
+              aria-hidden="true"
+            />
+            {codeName}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
