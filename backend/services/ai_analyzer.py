@@ -39,8 +39,6 @@ def run_coding_audit(
     existing_codes_on_span: list[str] | None = None,
     # Stage 1 deterministic scores (None = no grounding available)
     centroid_similarity: float | None = None,
-    codebook_prob_dist: dict[str, float] | None = None,
-    entropy: float | None = None,
     temporal_drift: float | None = None,
     is_pseudo_centroid: bool = False,
     segment_count: int | None = None,
@@ -67,8 +65,6 @@ def run_coding_audit(
         user_code_definitions=user_code_definitions,
         existing_codes_on_span=existing_codes_on_span,
         centroid_similarity=centroid_similarity,
-        codebook_prob_dist=codebook_prob_dist,
-        entropy=entropy,
         temporal_drift=temporal_drift,
         is_pseudo_centroid=is_pseudo_centroid,
         segment_count=segment_count,
@@ -97,10 +93,6 @@ def run_coding_audit(
     # — reflection already handles most medium-severity cases)
     if llm_severity_f >= 0.80:
         escalation_reason = f"high_severity={llm_severity_f:.3f}"
-
-    # Condition 3 (entropy_conflict) removed: entropy structurally converges
-    # near 1.0 on any codebook with 3+ codes, making it a near-constant that
-    # triggered escalation on almost every consistent segment.
 
     was_escalated = escalation_reason is not None
     if was_escalated:

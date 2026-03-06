@@ -22,11 +22,7 @@ class ConsistencyScore(Base):
     # Stage 1: Deterministic (reproducible, no LLM)
     centroid_similarity = Column(Float, nullable=True)      # cosine(segment, code_centroid) [0,1]
     is_pseudo_centroid = Column(Boolean, default=False)       # cold-start fallback used?
-    proposed_code_prob = Column(Float, nullable=True)        # P(proposed_code) from softmax [0,1]
-    entropy = Column(Float, nullable=True)                   # normalised Shannon entropy [0,1]
-    conflict_score = Column(Float, nullable=True)            # 1 - proposed_code_prob [0,1]
     temporal_drift = Column(Float, nullable=True)            # centroid drift for this code [0,1]
-    codebook_distribution = Column(JSON, nullable=True)      # full {code: probability} dict
 
     # Stage 2: LLM-produced (grounded on Stage 1)
     llm_consistency_score = Column(Float, nullable=True)     # [0.0-1.0]

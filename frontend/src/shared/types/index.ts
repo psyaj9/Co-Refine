@@ -166,10 +166,6 @@ export interface EditEventOut {
 export interface DeterministicScores {
   centroid_similarity: number | null;
   is_pseudo_centroid: boolean;
-  codebook_prob_dist: Record<string, number> | null;
-  entropy: number | null;
-  conflict_score: number | null;
-  proposed_code_prob: number | null;
   temporal_drift: number | null;
   segment_count: number | null;
 }
@@ -248,8 +244,6 @@ export interface CodeScores {
   code_name: string;
   code_id: string;
   scores: number[];
-  entropy_scores: number[];
-  conflict_scores: number[];
   centroid_similarity_scores: number[];
 }
 
@@ -258,8 +252,6 @@ export interface TimelineEntry {
   score: number;
   code_name: string;
   code_id: string;
-  entropy?: number;
-  conflict?: number;
 }
 
 export interface ReflectionEntry {

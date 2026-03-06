@@ -207,8 +207,6 @@ def get_consistency(db: Session, project_id: str, code_id: str | None = None) ->
             "code_name": code.label,
             "code_id": code.id,
             "scores": [s.llm_consistency_score for s in code_scores],
-            "entropy_scores": [s.entropy for s in code_scores if s.entropy is not None],
-            "conflict_scores": [s.conflict_score for s in code_scores if s.conflict_score is not None],
             "centroid_similarity_scores": [
                 s.centroid_similarity for s in code_scores if s.centroid_similarity is not None
             ],
@@ -220,10 +218,6 @@ def get_consistency(db: Session, project_id: str, code_id: str | None = None) ->
                 "code_name": code.label,
                 "code_id": code.id,
             }
-            if s.entropy is not None:
-                entry["entropy"] = s.entropy
-            if s.conflict_score is not None:
-                entry["conflict"] = s.conflict_score
             timeline.append(entry)
 
             if s.was_reflected and s.initial_consistency_score is not None:

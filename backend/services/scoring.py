@@ -6,7 +6,6 @@ Produces reproducible, evaluatable numeric scores.
 
 Literature grounding:
   - Thematic-LM:  code centroid = mean embedding → segment_to_centroid_similarity
-  - ITA-GPT:      softmax probability distribution → softmax_scores / distribution_entropy
   - GATOS:        pairwise code-code distance → compute_code_overlap_matrix
   - LOGOS:         temporal drift via rolling centroids → compute_temporal_drift
 """
@@ -149,108 +148,6 @@ def segment_to_centroid_similarity(
 
 
 # ---------------------------------------------------------------------------
-# Codebook probability distribution (ITA-GPT)
-# ---------------------------------------------------------------------------
-
-def compute_codebook_distribution(
-    user_id: str,
-    segment_text: str,
-    code_labels: list[str],
-) -> dict[str, float]:
-    """
-    Compute raw cosine similarity between segment_text and the centroid of
-    every code in code_labels.
-
-    Returns dict mapping code_label → raw cosine similarity.
-    Codes with no segments get score 0.0.
-    """
-    seg_emb = embed_text(segment_text)
-    scores: dict[str, float] = {}
-    for label in code_labels:
-        centroid = get_code_centroid(user_id, label)
-        if centroid is None:
-            scores[label] = 0.0
-        else:
-            scores[label] = cosine_similarity(seg_emb, centroid)
-    return scores
-
-
-def softmax_scores(
-    raw_scores: dict[str, float],
-    temperature: float = 1.0,
-) -> dict[str, float]:
-    """
-    Softmax over raw cosine similarities → probability distribution.
-
-    ITA-GPT approach: produces a probability distribution across the codebook.
-    Sum of all probabilities = 1.0.
-
-    Args:
-        temperature: lower = more peaked (decisive); 1.0 = neutral
-
-    Interpretation:
-        - P(proposed_code) high → low conflict
-        - P spread across codes → high conflict
-        - Entropy of this distribution = standalone ambiguity metric
-    """
-    if not raw_scores:
-        return {}
-    labels = list(raw_scores.keys())
-    vals = [raw_scores[l] / temperature for l in labels]
-    max_val = max(vals)
-    exp_vals = [math.exp(v - max_val) for v in vals]  # numerically stable
-    total = sum(exp_vals)
-    if total == 0:
-        # Degenerate case — return uniform
-        n = len(labels)
-        return {label: 1.0 / n for label in labels}
-    return {label: ev / total for label, ev in zip(labels, exp_vals)}
-
-
-def distribution_entropy(prob_dist: dict[str, float], top_k: int = 5) -> float:
-    """
-    Normalised Shannon entropy of a probability distribution.
-
-    Range [0, 1]:
-        0 = perfectly certain (one code dominates)
-        1 = maximally uncertain (uniform distribution)
-
-    Only the top_k codes by probability are considered. This prevents
-    entropy from trivially approaching 1.0 just because the codebook is
-    large — with 10+ codes a flat softmax makes entropy meaningless.
-    Restricting to the top-K competitors that genuinely compete for the
-    segment gives a score that reflects real ambiguity.
-    """
-    if not prob_dist:
-        return 0.0
-    # Take top-K competitors only
-    top_probs = sorted(prob_dist.values(), reverse=True)[:top_k]
-    n = len(top_probs)
-    if n <= 1:
-        return 0.0
-    # Re-normalise so they sum to 1 over this reduced set
-    total = sum(top_probs)
-    if total == 0:
-        return 0.0
-    normed = [p / total for p in top_probs]
-    raw_entropy = -sum(p * math.log(p) for p in normed if p > 0)
-    max_entropy = math.log(n)
-    return raw_entropy / max_entropy if max_entropy > 0 else 0.0
-
-
-def conflict_score(prob_dist: dict[str, float], proposed_code: str) -> float:
-    """
-    Scalar conflict score in [0, 1].
-
-    Formula: 1 - P(proposed_code)
-
-    0.0 = no conflict (proposed code dominates the distribution)
-    1.0 = maximum conflict (proposed code has near-zero probability)
-    """
-    return 1.0 - prob_dist.get(proposed_code, 0.0)
-
-
-# ---------------------------------------------------------------------------
 # Temporal drift (LOGOS)
 # ---------------------------------------------------------------------------
 
@@ -351,7 +248,6 @@ def compute_stage1_scores(
     code_label: str,
     all_code_labels: list[str],
     code_definition: str | None = None,
-    softmax_temperature: float = 1.0,
 ) -> dict:
     """
     Compute all Stage 1 deterministic scores for a single segment.
@@ -359,10 +255,6 @@ def compute_stage1_scores(
     Returns a dict with:
         centroid_similarity: float | None
         is_pseudo_centroid: bool
-        codebook_prob_dist: dict[str, float]
-        entropy: float
-        conflict_score: float
-        proposed_code_prob: float
         temporal_drift: float | None
         segment_count: int  (for this code)
     """
@@ -370,11 +262,6 @@ def compute_stage1_scores(
         user_id, segment_text, code_label, code_definition
     )
 
-    raw_scores = compute_codebook_distribution(user_id, segment_text, all_code_labels)
-    prob_dist = softmax_scores(raw_scores, temperature=softmax_temperature)
-    entropy = distribution_entropy(prob_dist)
-    conf_score = conflict_score(prob_dist, code_label)
-    proposed_prob = prob_dist.get(code_label, 0.0)
     drift = compute_temporal_drift(user_id, code_label)
 
     # Segment count for this code (for cold-start awareness)
@@ -385,10 +272,6 @@ def compute_stage1_scores(
     return {
         "centroid_similarity": centroid_sim,
         "is_pseudo_centroid": is_pseudo,
-        "codebook_prob_dist": prob_dist,
-        "entropy": entropy,
-        "conflict_score": conf_score,
-        "proposed_code_prob": proposed_prob,
         "temporal_drift": drift,
         "segment_count": seg_count,
     }

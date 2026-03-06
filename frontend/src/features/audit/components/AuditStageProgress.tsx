@@ -18,13 +18,13 @@ const STAGES = [
     key: 1,
     label: "Embedding Analysis",
     Icon: Zap,
-    description: "Computing semantic similarity & codebook distribution",
+    description: "Computing semantic similarity & temporal drift",
   },
   {
     key: 2,
     label: "LLM Audit",
     Icon: Brain,
-    description: "Self-consistency & inter-rater review",
+    description: "Self-consistency",
   },
   {
     key: 3,

@@ -94,15 +94,13 @@ Additional:
 
 def _build_deterministic_evidence_section(
     centroid_similarity: float | None = None,
-    codebook_prob_dist: dict[str, float] | None = None,
-    entropy: float | None = None,
     temporal_drift: float | None = None,
     is_pseudo_centroid: bool = False,
     segment_count: int | None = None,
     proposed_code: str = "",
 ) -> str:
     """Build the DETERMINISTIC EMBEDDING SCORES block for the prompt."""
-    if centroid_similarity is None and not codebook_prob_dist:
+    if centroid_similarity is None:
         return (
             "**DETERMINISTIC EMBEDDING SCORES: NOT AVAILABLE**\n"
             "This code has no prior segments — no embedding evidence exists.\n"
@@ -133,12 +131,6 @@ def _build_deterministic_evidence_section(
             "  (range 0–1; higher = more similar to past examples of this code)"
         )
 
-    if codebook_prob_dist:
-        lines.append("- Softmax probability distribution across codebook:")
-        for code, prob in sorted(codebook_prob_dist.items(), key=lambda x: -x[1]):
-            lines.append(f"    - {code}: {prob:.3f}")
-        lines.append("  These probabilities are FACTUAL, not your opinion.")
-
     if temporal_drift is not None:
         lines.append(
             f"- Temporal drift for \"{proposed_code}\": **{temporal_drift:.4f}** "
@@ -158,8 +150,6 @@ def build_coding_audit_prompt(
     existing_codes_on_span: list[str] | None = None,
     # Stage 1 parameters (None = no grounding available)
     centroid_similarity: float | None = None,
-    codebook_prob_dist: dict[str, float] | None = None,
-    entropy: float | None = None,
     temporal_drift: float | None = None,
     is_pseudo_centroid: bool = False,
     segment_count: int | None = None,
@@ -180,8 +170,6 @@ def build_coding_audit_prompt(
     # Deterministic evidence section
     deterministic_evidence_section = _build_deterministic_evidence_section(
         centroid_similarity=centroid_similarity,
-        codebook_prob_dist=codebook_prob_dist,
-        entropy=entropy,
         temporal_drift=temporal_drift,
         is_pseudo_centroid=is_pseudo_centroid,
         segment_count=segment_count,
@@ -204,17 +192,14 @@ def build_coding_audit_prompt(
 
     co_applied_label_list = ", ".join(f'"{c}"' for c in all_applied) if all_applied else "(none)"
 
-    # Researcher-supplied definitions (canonical codebook) with softmax probabilities
+    # Researcher-supplied definitions (canonical codebook)
     if user_code_definitions:
         user_def_lines = []
         for code, defn in user_code_definitions.items():
-            prob_str = ""
-            if codebook_prob_dist and code in codebook_prob_dist:
-                prob_str = f" [embedding P={codebook_prob_dist[code]:.3f}]"
             if defn:
-                user_def_lines.append(f"**{code}**{prob_str}: {defn}")
+                user_def_lines.append(f"**{code}**: {defn}")
             else:
-                user_def_lines.append(f"**{code}**{prob_str}: (No definition provided)")
+                user_def_lines.append(f"**{code}**: (No definition provided)")
         user_definitions_str = "\n".join(user_def_lines)
     else:
         user_definitions_str = "(No researcher-supplied definitions yet)"

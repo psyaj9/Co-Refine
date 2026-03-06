@@ -22,7 +22,6 @@ class Settings(BaseSettings):
 
     # Scoring pipeline thresholds
     stage_divergence_threshold: float = 0.25      # |centroid_sim - llm_score| triggers escalation
-    softmax_temperature: float = 1.0              # temperature for codebook probability softmax
     drift_warning_threshold: float = 0.3          # temporal drift above this triggers a warning
     code_overlap_warning_threshold: float = 0.85  # centroid overlap above this flags code pair
 

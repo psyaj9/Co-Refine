@@ -12,7 +12,7 @@ interface MetricStripProps {
 /** Enriched metrics strip shown beneath the body of a coding_audit alert card. */
 export default function MetricStrip({ alert }: MetricStripProps) {
   const m = alertMetrics(alert);
-  const hasMetrics = m.centroidSimilarity != null || m.entropy != null || m.severity != null;
+  const hasMetrics = m.centroidSimilarity != null || m.severity != null;
   if (!hasMetrics) return null;
 
   return (
@@ -25,24 +25,6 @@ export default function MetricStrip({ alert }: MetricStripProps) {
               <span className="font-medium text-surface-700 dark:text-surface-200">
                 {m.centroidSimilarity.toFixed(3)}
               </span>
-            </span>
-          </MetricTooltip>
-        )}
-        {m.entropy != null && (
-          <MetricTooltip explanation={METRIC_EXPLANATIONS.entropy}>
-            <span className="text-[9px] text-surface-500 dark:text-surface-400">
-              Entropy:{" "}
-              <span
-                className={cn(
-                  "font-medium",
-                  m.entropy > 0.6
-                    ? "text-amber-600 dark:text-amber-400"
-                    : "text-surface-700 dark:text-surface-200",
-                )}
-              >
-                {m.entropy.toFixed(3)}
-              </span>
-              {m.entropy > 0.6 && <span className="text-amber-500 ml-0.5">⚠</span>}
             </span>
           </MetricTooltip>
         )}

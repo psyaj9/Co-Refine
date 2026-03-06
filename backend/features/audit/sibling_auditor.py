@@ -73,15 +73,8 @@ def reaudit_siblings(
             )
 
             stage1_centroid = existing_score.centroid_similarity if existing_score else None
-            stage1_entropy = existing_score.entropy if existing_score else None
             stage1_drift = existing_score.temporal_drift if existing_score else None
             stage1_pseudo = existing_score.is_pseudo_centroid if existing_score else False
-            stage1_dist = existing_score.codebook_distribution if existing_score else None
-            stage1_seg_count = (
-                db.query(CodedSegment)
-                .filter(CodedSegment.code_id == sib_code.id, CodedSegment.user_id == user_id)
-                .count()
-            ) if existing_score and existing_score.codebook_distribution else None
 
             diverse = get_all_segments_for_code(
                 user_id=user_id, code_label=sib_code.label, exclude_id=sib_seg.id,
@@ -104,11 +97,8 @@ def reaudit_siblings(
                 user_code_definitions=user_code_definitions,
                 existing_codes_on_span=existing_codes_on_span,
                 centroid_similarity=stage1_centroid,
-                codebook_prob_dist=stage1_dist,
-                entropy=stage1_entropy,
                 temporal_drift=stage1_drift,
                 is_pseudo_centroid=stage1_pseudo,
-                segment_count=stage1_seg_count,
             )
 
             all_codes_on_span = set(existing_codes_on_span) | {sib_code.label}
@@ -122,11 +112,7 @@ def reaudit_siblings(
             sibling_stage1 = {
                 "centroid_similarity": stage1_centroid,
                 "is_pseudo_centroid": stage1_pseudo,
-                "proposed_code_prob": existing_score.proposed_code_prob if existing_score else None,
-                "entropy": stage1_entropy,
-                "conflict_score": existing_score.conflict_score if existing_score else None,
                 "temporal_drift": stage1_drift,
-                "codebook_prob_dist": stage1_dist,
             } if stage1_centroid is not None else None
 
             persist_consistency_score(
@@ -149,7 +135,6 @@ def reaudit_siblings(
                 "replaces_code_id": sib_code.id,
                 "deterministic_scores": {
                     "centroid_similarity": stage1_centroid,
-                    "entropy": stage1_entropy,
                     "temporal_drift": stage1_drift,
                 } if stage1_centroid is not None else None,
                 "escalation": escalation,

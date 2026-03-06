@@ -84,7 +84,6 @@ def run_background_agents(
                 code_label=code_label,
                 all_code_labels=all_code_labels,
                 code_definition=current_definition,
-                softmax_temperature=settings.softmax_temperature,
             )
             _ws_send(user_id, {
                 "type": "deterministic_scores",
@@ -114,8 +113,6 @@ def run_background_agents(
                 user_code_definitions=user_code_definitions,
                 existing_codes_on_span=existing_codes_on_span,
                 centroid_similarity=stage1["centroid_similarity"] if stage1 else None,
-                codebook_prob_dist=stage1["codebook_prob_dist"] if stage1 else None,
-                entropy=stage1["entropy"] if stage1 else None,
                 temporal_drift=stage1["temporal_drift"] if stage1 else None,
                 is_pseudo_centroid=stage1["is_pseudo_centroid"] if stage1 else False,
                 segment_count=stage1["segment_count"] if stage1 else None,

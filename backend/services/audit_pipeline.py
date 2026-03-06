@@ -194,7 +194,6 @@ def _run_batch_audit_background(
                         code_label=code.label,
                         all_code_labels=all_code_labels,
                         code_definition=current_definition,
-                        softmax_temperature=settings.softmax_temperature,
                     )
                 except Exception as e:
                     print(f"[Scoring] Batch stage1 error for '{code.label}': {e}")
@@ -228,8 +227,6 @@ def _run_batch_audit_background(
                     user_code_definitions=user_code_definitions,
                     existing_codes_on_span=existing_codes_on_span,
                     centroid_similarity=stage1["centroid_similarity"] if stage1 else None,
-                    codebook_prob_dist=stage1["codebook_prob_dist"] if stage1 else None,
-                    entropy=stage1["entropy"] if stage1 else None,
                     temporal_drift=stage1["temporal_drift"] if stage1 else None,
                     is_pseudo_centroid=stage1["is_pseudo_centroid"] if stage1 else False,
                     segment_count=stage1["segment_count"] if stage1 else None,
@@ -270,11 +267,7 @@ def _run_batch_audit_background(
                     project_id=project_id,
                     centroid_similarity=stage1["centroid_similarity"] if stage1 else None,
                     is_pseudo_centroid=stage1["is_pseudo_centroid"] if stage1 else False,
-                    proposed_code_prob=stage1["proposed_code_prob"] if stage1 else None,
-                    entropy=stage1["entropy"] if stage1 else None,
-                    conflict_score=stage1["conflict_score"] if stage1 else None,
                     temporal_drift=stage1["temporal_drift"] if stage1 else None,
-                    codebook_distribution=stage1["codebook_prob_dist"] if stage1 else None,
                     llm_consistency_score=self_lens.get("consistency_score"),
                     llm_intent_score=self_lens.get("intent_alignment_score"),
                     llm_overall_severity=audit_result.get("overall_severity_score"),
@@ -399,19 +392,8 @@ def _reaudit_siblings(
                 .first()
             )
             stage1_centroid = existing_score.centroid_similarity if existing_score else None
-            stage1_entropy = existing_score.entropy if existing_score else None
             stage1_drift = existing_score.temporal_drift if existing_score else None
             stage1_pseudo = existing_score.is_pseudo_centroid if existing_score else False
-            stage1_dist = existing_score.codebook_distribution if existing_score else None
-            # Segment count from scoring table or fallback to DB count
-            stage1_seg_count = None
-            if existing_score and existing_score.codebook_distribution:
-                # Not stored directly — use current count
-                stage1_seg_count = (
-                    db.query(CodedSegment)
-                    .filter(CodedSegment.code_id == sib_code.id, CodedSegment.user_id == user_id)
-                    .count()
-                )
 
             # Build history via MMR — shared sample for both audit and reflection passes
             diverse = find_diverse_segments(
@@ -451,11 +433,8 @@ def _reaudit_siblings(
                 user_code_definitions=user_code_definitions,
                 existing_codes_on_span=existing_codes_on_span,
                 centroid_similarity=stage1_centroid,
-                codebook_prob_dist=stage1_dist,
-                entropy=stage1_entropy,
                 temporal_drift=stage1_drift,
                 is_pseudo_centroid=stage1_pseudo,
-                segment_count=stage1_seg_count,
                 # Reflection loop enabled for sibling re-audits
                 enable_reflection=True,
                 reflection_history=reflection_history,
@@ -501,11 +480,7 @@ def _reaudit_siblings(
                 project_id=project_id or "",
                 centroid_similarity=stage1_centroid,
                 is_pseudo_centroid=stage1_pseudo,
-                proposed_code_prob=existing_score.proposed_code_prob if existing_score else None,
-                entropy=stage1_entropy,
-                conflict_score=existing_score.conflict_score if existing_score else None,
                 temporal_drift=stage1_drift,
-                codebook_distribution=stage1_dist,
                 llm_consistency_score=self_lens.get("consistency_score"),
                 llm_intent_score=self_lens.get("intent_alignment_score"),
                 llm_overall_severity=audit_result.get("overall_severity_score"),
@@ -534,7 +509,6 @@ def _reaudit_siblings(
                 "replaces_code_id": sib_code.id,
                 "deterministic_scores": {
                     "centroid_similarity": stage1_centroid,
-                    "entropy": stage1_entropy,
                     "temporal_drift": stage1_drift,
                 } if stage1_centroid is not None else None,
                 "escalation": escalation,
@@ -650,7 +624,6 @@ def _run_background_agents(
                 code_label=code_label,
                 all_code_labels=all_code_labels,
                 code_definition=current_definition,
-                softmax_temperature=settings.softmax_temperature,
             )
             _ws_send(user_id, {
                 "type": "deterministic_scores",
@@ -699,8 +672,6 @@ def _run_background_agents(
                 existing_codes_on_span=existing_codes_on_span,
                 # Stage 1 grounding (None-safe — prompt handles missing scores)
                 centroid_similarity=stage1["centroid_similarity"] if stage1 else None,
-                codebook_prob_dist=stage1["codebook_prob_dist"] if stage1 else None,
-                entropy=stage1["entropy"] if stage1 else None,
                 temporal_drift=stage1["temporal_drift"] if stage1 else None,
                 is_pseudo_centroid=stage1["is_pseudo_centroid"] if stage1 else False,
                 segment_count=stage1["segment_count"] if stage1 else None,
@@ -751,11 +722,7 @@ def _run_background_agents(
                 # Stage 1
                 centroid_similarity=stage1["centroid_similarity"] if stage1 else None,
                 is_pseudo_centroid=stage1["is_pseudo_centroid"] if stage1 else False,
-                proposed_code_prob=stage1["proposed_code_prob"] if stage1 else None,
-                entropy=stage1["entropy"] if stage1 else None,
-                conflict_score=stage1["conflict_score"] if stage1 else None,
                 temporal_drift=stage1["temporal_drift"] if stage1 else None,
-                codebook_distribution=stage1["codebook_prob_dist"] if stage1 else None,
                 # Stage 2 (reflected scores if reflection happened, otherwise initial)
                 llm_consistency_score=self_lens.get("consistency_score"),
                 llm_intent_score=self_lens.get("intent_alignment_score"),

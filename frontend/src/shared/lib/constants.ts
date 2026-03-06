@@ -30,8 +30,6 @@ export const AGENT_LABELS: Record<string, string> = {
 export const METRIC_EXPLANATIONS: Record<string, string> = {
   similarity:
     "How closely this segment matches past examples of the same code. Higher means a better fit (0 = no match, 1 = perfect match).",
-  entropy:
-    "How ambiguous this segment is — whether it could reasonably belong to several different codes. Higher means more ambiguity.",
   drift:
     "How much the meaning of this code has shifted over time — comparing your earliest uses with your most recent ones. A high value means your interpretation has evolved; consider reviewing the definition or splitting the code into two distinct concepts.",
   consistency:

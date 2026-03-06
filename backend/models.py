@@ -148,10 +148,6 @@ class DeterministicScores(BaseModel):
     """Stage 1 deterministic embedding scores for a single segment."""
     centroid_similarity: Optional[float] = None
     is_pseudo_centroid: bool = False
-    codebook_prob_dist: Optional[dict[str, float]] = None
-    entropy: Optional[float] = None
-    conflict_score: Optional[float] = None
-    proposed_code_prob: Optional[float] = None
     temporal_drift: Optional[float] = None
     segment_count: Optional[int] = None
 
@@ -223,7 +219,6 @@ THRESHOLD_DEFINITIONS: list[dict] = [
     {"key": "vector_search_top_k", "label": "Vector search top K", "description": "How many similar segments to retrieve for comparison", "default": 8, "min": 3, "max": 30, "step": 1, "type": "int"},
     {"key": "consistency_escalation_threshold", "label": "Consistency escalation threshold", "description": "Consistency score above which escalation to reasoning model is triggered", "default": 0.7, "min": 0.0, "max": 1.0, "step": 0.05, "type": "float"},
     {"key": "stage_divergence_threshold", "label": "Stage divergence threshold", "description": "Difference between deterministic and LLM scores that triggers escalation", "default": 0.25, "min": 0.0, "max": 1.0, "step": 0.05, "type": "float"},
-    {"key": "softmax_temperature", "label": "Softmax temperature", "description": "Temperature for codebook probability distribution (lower = sharper)", "default": 1.0, "min": 0.1, "max": 5.0, "step": 0.1, "type": "float"},
     {"key": "drift_warning_threshold", "label": "Drift warning threshold", "description": "Temporal drift score above which a warning is shown", "default": 0.3, "min": 0.0, "max": 1.0, "step": 0.05, "type": "float"},
     {"key": "code_overlap_warning_threshold", "label": "Code overlap warning", "description": "Centroid similarity above which a code-pair overlap warning fires", "default": 0.85, "min": 0.5, "max": 1.0, "step": 0.05, "type": "float"},
 ]

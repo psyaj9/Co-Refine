@@ -11,7 +11,6 @@ import {
   Line,
   ReferenceLine,
   Legend,
-  Area,
 } from "recharts";
 import { Activity } from "lucide-react";
 import { useStore } from "@/stores/store";
@@ -173,69 +172,26 @@ export default function ConsistencyTab({ projectId }: ConsistencyTabProps) {
       {timelineData.length > 0 && (
         <div>
           <h3 className="text-xs font-semibold mb-2 text-surface-500 uppercase tracking-wide">
-            {selectedVisCodeId ? "Consistency · Entropy · Conflict Over Time" : "Score Timeline"}
+            Score Timeline
           </h3>
           <ResponsiveContainer width="100%" height={240}>
-            {selectedVisCodeId ? (
-              <ComposedChart data={timelineData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="date" tick={{ fontSize: 10 }} />
-                <YAxis domain={[0, 1]} tick={{ fontSize: 11 }} />
-                <Tooltip formatter={(v: number | undefined) => pct(v)} />
-                <Legend />
-                <ReferenceLine y={threshold} stroke="#ef4444" strokeDasharray="4 4" />
-                <Area
-                  type="monotone"
-                  dataKey="entropy"
-                  fill="#fef3c7"
-                  stroke="#f59e0b"
-                  strokeWidth={1}
-                  name="Entropy"
-                  dot={false}
-                  fillOpacity={0.4}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="score"
-                  stroke="#3b82f6"
-                  dot={{ r: 3 }}
-                  name="Consistency"
-                  strokeWidth={2}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="conflict"
-                  stroke="#ef4444"
-                  dot={false}
-                  name="Conflict"
-                  strokeWidth={1.5}
-                  strokeDasharray="3 3"
-                />
-              </ComposedChart>
-            ) : (
-              <LineChart data={timelineData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="date" tick={{ fontSize: 10 }} />
-                <YAxis domain={[0, 1]} tick={{ fontSize: 11 }} />
-                <Tooltip formatter={(v: number | undefined) => pct(v)} />
-                <Legend />
-                <ReferenceLine y={threshold} stroke="#ef4444" strokeDasharray="4 4" />
-                <Line
-                  type="monotone"
-                  dataKey="score"
-                  stroke="#3b82f6"
-                  dot={{ r: 3 }}
-                  name="Consistency Score"
-                  strokeWidth={1.5}
-                />
-              </LineChart>
-            )}
+            <LineChart data={timelineData}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="date" tick={{ fontSize: 10 }} />
+              <YAxis domain={[0, 1]} tick={{ fontSize: 11 }} />
+              <Tooltip formatter={(v: number | undefined) => pct(v)} />
+              <Legend />
+              <ReferenceLine y={threshold} stroke="#ef4444" strokeDasharray="4 4" />
+              <Line
+                type="monotone"
+                dataKey="score"
+                stroke="#3b82f6"
+                dot={{ r: 3 }}
+                name="Consistency Score"
+                strokeWidth={1.5}
+              />
+            </LineChart>
           </ResponsiveContainer>
-          {!selectedVisCodeId && (
-            <p className="text-xs text-surface-400 mt-1">
-              Select a code in Overview or Facet Explorer to see the multi-metric view.
-            </p>
-          )}
         </div>
       )}
     </div>

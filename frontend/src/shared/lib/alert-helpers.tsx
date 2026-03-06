@@ -178,8 +178,6 @@ export function alertBody(alert: AlertPayload): string {
 /** Build enriched metrics summary for coding audit alerts */
 export function alertMetrics(alert: AlertPayload): {
   centroidSimilarity: number | null;
-  entropy: number | null;
-  conflictScore: number | null;
   temporalDrift: number | null;
   severity: string | null;
   severityScore: number | null;
@@ -194,8 +192,6 @@ export function alertMetrics(alert: AlertPayload): {
 
   return {
     centroidSimilarity: scores?.centroid_similarity ?? null,
-    entropy: scores?.entropy ?? null,
-    conflictScore: scores?.conflict_score ?? null,
     temporalDrift: scores?.temporal_drift ?? null,
     severity: (data.overall_severity as string) ?? null,
     severityScore: (data.overall_severity_score as number) ?? null,

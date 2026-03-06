@@ -94,8 +94,6 @@ async def challenge_reflection(
         proposed_code=code.label,
         existing_codes_on_span=existing_codes_on_span,
         centroid_similarity=existing_score.centroid_similarity if existing_score else None,
-        codebook_prob_dist=existing_score.codebook_distribution if existing_score else None,
-        entropy=existing_score.entropy if existing_score else None,
         temporal_drift=existing_score.temporal_drift if existing_score else None,
         is_pseudo_centroid=existing_score.is_pseudo_centroid if existing_score else False,
         segment_count=None,
@@ -117,7 +115,6 @@ async def challenge_reflection(
             "reflected_judgment": reflected_judgment,
             "stage1": {
                 "centroid_similarity": existing_score.centroid_similarity if existing_score else None,
-                "entropy": existing_score.entropy if existing_score else None,
                 "temporal_drift": existing_score.temporal_drift if existing_score else None,
             },
         },
