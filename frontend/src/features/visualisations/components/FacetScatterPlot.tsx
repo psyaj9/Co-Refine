@@ -68,6 +68,16 @@ function starPath(cx: number, cy: number, outerR: number, innerR: number): strin
 
 const MARGIN = { top: 20, right: 20, bottom: 40, left: 48 };
 
+/**
+ * Distinct colours used for per-facet colouring in drill-down mode.
+ * Chosen for good contrast against both light and dark backgrounds.
+ */
+const DRILL_PALETTE = [
+  "#6366f1", "#0ea5e9", "#10b981", "#f59e0b", "#ef4444",
+  "#8b5cf6", "#ec4899", "#14b8a6", "#f97316", "#84cc16",
+  "#06b6d4", "#a855f7", "#e11d48", "#22c55e", "#eab308",
+];
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function FacetScatterPlot({
@@ -109,6 +119,18 @@ export default function FacetScatterPlot({
       ),
     [visibleFacets, colourMap]
   );
+
+  /**
+   * In drill-down mode, assign each facet its own colour from DRILL_PALETTE
+   * so every sub-theme cluster is visually distinct.
+   */
+  const drillFacetColourMap = useMemo<Record<string, string>>(() => {
+    if (!drillCodeId) return {};
+    const facetIds = Array.from(new Set(visibleFacets.map((f) => f.facet_id)));
+    return Object.fromEntries(
+      facetIds.map((id, i) => [id, DRILL_PALETTE[i % DRILL_PALETTE.length]])
+    );
+  }, [drillCodeId, visibleFacets]);
 
   /** Compute code centroids only in overview mode */
   const centroids = useMemo<CodeCentroid[]>(() => {
@@ -224,15 +246,19 @@ export default function FacetScatterPlot({
           {/* Segment dots */}
           {allSegments.map((dot) => {
             const isHighlighted = highlightFacetId ? dot.facetId === highlightFacetId : true;
+            // In drill-down use per-facet distinct colour; in overview use code colour
+            const dotColour = isDrillDown
+              ? (drillFacetColourMap[dot.facetId] ?? dot.colour)
+              : dot.colour;
             return (
               <g key={dot.segmentId}>
                 <circle
                   cx={xScale(dot.x)}
                   cy={yScale(dot.y)}
                   r={isDrillDown ? 5 : 4}
-                  fill={dot.colour}
-                  opacity={isHighlighted ? (isDrillDown ? 0.75 : 0.45) : 0.12}
-                  stroke={dot.colour}
+                  fill={dotColour}
+                  opacity={isHighlighted ? (isDrillDown ? 0.80 : 0.45) : 0.12}
+                  stroke={dotColour}
                   strokeWidth={0.5}
                   style={{ cursor: dot.text ? "pointer" : "default" }}
                   onMouseEnter={(e) => handleDotMouseEnter(e, dot)}
@@ -244,8 +270,8 @@ export default function FacetScatterPlot({
                     x={xScale(dot.x) + 7}
                     y={yScale(dot.y) + 4}
                     fontSize={8}
-                    fill={dot.colour}
-                    opacity={0.85}
+                    fill={dotColour}
+                    opacity={0.90}
                     style={{ pointerEvents: "none", userSelect: "none" }}
                   >
                     {dot.facetLabel.length > 25
