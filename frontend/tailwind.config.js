@@ -65,6 +65,7 @@ export default {
         'collapsible-open': 'collapsibleOpen 0.2s ease-out',
         'collapsible-close': 'collapsibleClose 0.15s ease-in',
         'view-enter': 'viewEnter 0.2s ease-out',
+        'zoom-fade-in': 'zoomFadeIn 0.22s ease-out both',
       },
       keyframes: {
         fadeIn: {
@@ -98,6 +99,10 @@ export default {
         viewEnter: {
           from: { opacity: '0' },
           to: { opacity: '1' },
+        },
+        zoomFadeIn: {
+          from: { opacity: '0', transform: 'scale(0.96)' },
+          to: { opacity: '1', transform: 'scale(1)' },
         },
       },
     },

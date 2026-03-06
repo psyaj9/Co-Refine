@@ -1,23 +1,27 @@
-/**
- * FacetExplorerTab — orchestrates the facet visualisation.
+﻿/**
+ * FacetExplorerTab â€” orchestrates the facet visualisation.
  *
  * Overview (drillCodeId = null):
- *   - All-codes scatter plot: code centroids as ★ stars, facet segments as faded dots
- *   - Click a star → drill-down
+ *   - All-codes scatter plot: code centroids as â˜… stars, faded segment dots
+ *   - Stars use the code's actual colour from the codebook
+ *   - Click a star or legend item â†’ drill-down
  *
  * Drill-down (drillCodeId set):
  *   - Only segments for that code, labelled by facet sub-theme
  *   - Facet cards with inline label editing + AI explanation
+ *
+ * Transitions between views use scale+fade via animate-zoom-fade-in.
  */
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { BarChart2, RefreshCw } from "lucide-react";
 import { useStore } from "@/stores/store";
 import { fetchVisFacets } from "@/api/client";
-import type { FacetData } from "@/types";
+import type { CodeOut, FacetData } from "@/types";
 import FacetScatterPlot from "./FacetScatterPlot";
 import FacetDrillDown from "./FacetDrillDown";
 
-// ── Colour palette for codes ──────────────────────────────────────────────────
+// â”€â”€ Colour mapping â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Use the code's own colour from the codebook; PALETTE is the fallback.
 const PALETTE = [
   "#6366f1", "#0ea5e9", "#10b981", "#f59e0b", "#ef4444",
   "#8b5cf6", "#ec4899", "#14b8a6", "#f97316", "#84cc16",
@@ -25,12 +29,20 @@ const PALETTE = [
   "#3b82f6", "#d946ef", "#64748b",
 ];
 
-function buildColourMap(facets: FacetData[]): Record<string, string> {
+function buildColourMap(
+  facets: FacetData[],
+  codes: CodeOut[],
+): Record<string, string> {
   const codeIds = Array.from(new Set(facets.map((f) => f.code_id)));
-  return Object.fromEntries(codeIds.map((id, i) => [id, PALETTE[i % PALETTE.length]]));
+  return Object.fromEntries(
+    codeIds.map((id, i) => {
+      const stored = codes.find((c) => c.id === id);
+      return [id, stored?.colour ?? PALETTE[i % PALETTE.length]];
+    }),
+  );
 }
 
-// ── Component ─────────────────────────────────────────────────────────────────
+// â”€â”€ Component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 interface FacetExplorerTabProps {
   projectId: string;
@@ -40,12 +52,30 @@ type LoadState = "idle" | "loading" | "error" | "success";
 
 export default function FacetExplorerTab({ projectId }: FacetExplorerTabProps) {
   const visRefreshCounter = useStore((s) => s.visRefreshCounter);
+  const codes = useStore((s) => s.codes);
 
   const [facets, setFacets] = useState<FacetData[]>([]);
   const [loadState, setLoadState] = useState<LoadState>("idle");
   const [drillCodeId, setDrillCodeId] = useState<string | null>(null);
 
-  const colourMap = useMemo(() => buildColourMap(facets), [facets]);
+  // Responsive container width
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerWidth, setContainerWidth] = useState(640);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      const w = entries[0]?.contentRect.width;
+      if (w && w > 0) setContainerWidth(Math.floor(w));
+    });
+    ro.observe(el);
+    // Set initial size
+    setContainerWidth(Math.floor(el.getBoundingClientRect().width) || 640);
+    return () => ro.disconnect();
+  }, []);
+
+  const colourMap = useMemo(() => buildColourMap(facets, codes), [facets, codes]);
 
   const load = useCallback(() => {
     setLoadState("loading");
@@ -76,13 +106,13 @@ export default function FacetExplorerTab({ projectId }: FacetExplorerTabProps) {
     ? facets.find((f) => f.code_id === drillCodeId)
     : null;
 
-  // ── Loading ────────────────────────────────────────────────────────────────
+  // â”€â”€ Loading â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   if (loadState === "loading" && facets.length === 0) {
     return (
       <div className="flex items-center justify-center h-48">
         <RefreshCw className="w-5 h-5 text-surface-400 animate-spin" aria-hidden="true" />
-        <span className="ml-2 text-sm text-surface-400">Loading facet data…</span>
+        <span className="ml-2 text-sm text-surface-400">Loading facet dataâ€¦</span>
       </div>
     );
   }
@@ -113,23 +143,25 @@ export default function FacetExplorerTab({ projectId }: FacetExplorerTabProps) {
     );
   }
 
-  // ── Drill-down view ────────────────────────────────────────────────────────
+  // â”€â”€ Drill-down view â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   if (drillCodeId && drillCode) {
     return (
-      <FacetDrillDown
-        codeName={drillCode.code_name}
-        codeId={drillCodeId}
-        facets={facets}
-        colourMap={colourMap}
-        projectId={projectId}
-        onBack={() => setDrillCodeId(null)}
-        onLabelChange={handleLabelChange}
-      />
+      <div key={drillCodeId} className="animate-zoom-fade-in">
+        <FacetDrillDown
+          codeName={drillCode.code_name}
+          codeId={drillCodeId}
+          facets={facets}
+          colourMap={colourMap}
+          projectId={projectId}
+          onBack={() => setDrillCodeId(null)}
+          onLabelChange={handleLabelChange}
+        />
+      </div>
     );
   }
 
-  // ── Overview view ──────────────────────────────────────────────────────────
+  // â”€â”€ Overview view â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   const uniqueCodes = Array.from(
     new Map(facets.map((f) => [f.code_id, f.code_name])).entries()
@@ -137,30 +169,32 @@ export default function FacetExplorerTab({ projectId }: FacetExplorerTabProps) {
 
   const totalSegments = facets.reduce((n, f) => n + f.segment_count, 0);
 
+  const plotHeight = Math.min(Math.round(containerWidth * 0.65), 520);
+
   return (
-    <div className="flex flex-col gap-4">
+    <div key="overview" className="animate-zoom-fade-in flex flex-col gap-4">
       <div>
         <p className="text-xs text-surface-400">
-          ★ = code centroid · dots = coded segments · click a star to drill in
+          â˜… = code centroid Â· dots = coded segments Â· click a star or label below to drill in
         </p>
         <p className="text-[10px] text-surface-400 mt-0.5">
-          {uniqueCodes.length} codes · {facets.length} facets · {totalSegments} segments
+          {uniqueCodes.length} codes Â· {facets.length} facets Â· {totalSegments} segments
         </p>
       </div>
 
-      {/* Scatter plot */}
-      <div className="w-full overflow-x-auto">
+      {/* Responsive scatter plot container */}
+      <div ref={containerRef} className="w-full">
         <FacetScatterPlot
           facets={facets}
           colourMap={colourMap}
           drillCodeId={null}
           onStarClick={(codeId) => setDrillCodeId(codeId)}
-          width={640}
-          height={420}
+          width={containerWidth}
+          height={plotHeight}
         />
       </div>
 
-      {/* Legend */}
+      {/* Legend â€” colours from codebook */}
       <div className="flex flex-wrap gap-x-4 gap-y-1.5">
         {uniqueCodes.map(([codeId, codeName]) => (
           <button
@@ -181,3 +215,4 @@ export default function FacetExplorerTab({ projectId }: FacetExplorerTabProps) {
     </div>
   );
 }
+

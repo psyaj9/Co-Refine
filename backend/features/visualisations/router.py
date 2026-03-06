@@ -90,4 +90,4 @@ def explain_facet_endpoint(
     if not facet:
         raise HTTPException(status_code=404, detail="Facet not found")
     code = db.query(Code).filter(Code.id == facet.code_id).first()
-    return explain_facet(facet, code)
+    return explain_facet(db, facet, code)

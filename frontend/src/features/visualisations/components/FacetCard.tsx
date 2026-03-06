@@ -124,7 +124,7 @@ export default function FacetCard({
             </div>
           ) : (
             <div className="flex items-center gap-1.5 group">
-              <span className="font-medium text-surface-800 dark:text-surface-100 truncate">
+              <span className="font-medium text-surface-800 dark:text-surface-100 break-words">
                 {facet.facet_label}
               </span>
               {facet.label_source === "ai" && (

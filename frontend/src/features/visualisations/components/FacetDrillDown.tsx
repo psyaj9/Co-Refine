@@ -2,8 +2,9 @@
  * FacetDrillDown — zoomed view for a single code.
  * Shows the scatter plot of just this code's segments (labelled by facet),
  * plus FacetCards for each facet with the AI explanation feature.
+ * Hover a card to highlight its segments in the scatter plot.
  */
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { ArrowLeft } from "lucide-react";
 import FacetScatterPlot from "./FacetScatterPlot";
 import FacetCard from "./FacetCard";
@@ -30,7 +31,24 @@ export default function FacetDrillDown({
 }: FacetDrillDownProps) {
   const [highlightFacetId, setHighlightFacetId] = useState<string | null>(null);
 
+  // Responsive width for left scatter column
+  const scatterContainerRef = useRef<HTMLDivElement>(null);
+  const [scatterWidth, setScatterWidth] = useState(520);
+
+  useEffect(() => {
+    const el = scatterContainerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      const w = entries[0]?.contentRect.width;
+      if (w && w > 0) setScatterWidth(Math.floor(w));
+    });
+    ro.observe(el);
+    setScatterWidth(Math.floor(el.getBoundingClientRect().width) || 520);
+    return () => ro.disconnect();
+  }, []);
+
   const codeFacets = facets.filter((f) => f.code_id === codeId);
+  const plotHeight = Math.min(Math.round(scatterWidth * 0.72), 480);
 
   return (
     <div className="flex flex-col gap-4">
@@ -52,24 +70,22 @@ export default function FacetDrillDown({
 
       <div className="flex gap-4 min-h-0">
         {/* Scatter — left side */}
-        <div className="flex-1 min-w-0">
+        <div ref={scatterContainerRef} className="flex-1 min-w-0">
           <p className="text-[10px] text-surface-400 mb-2">
             Hover a facet card to highlight its segments. Dots are labelled with their facet sub-theme.
           </p>
-          <div className="w-full">
-            <FacetScatterPlot
-              facets={codeFacets}
-              colourMap={colourMap}
-              drillCodeId={codeId}
-              highlightFacetId={highlightFacetId}
-              width={520}
-              height={380}
-            />
-          </div>
+          <FacetScatterPlot
+            facets={codeFacets}
+            colourMap={colourMap}
+            drillCodeId={codeId}
+            highlightFacetId={highlightFacetId}
+            width={scatterWidth}
+            height={plotHeight}
+          />
         </div>
 
         {/* Facet cards — right side */}
-        <div className="w-64 flex-shrink-0 flex flex-col gap-2 overflow-y-auto max-h-[420px] pr-1">
+        <div className="w-64 flex-shrink-0 flex flex-col gap-2 overflow-y-auto max-h-[480px] pr-1">
           <p className="text-[10px] font-semibold text-surface-500 uppercase tracking-wide">
             Facets ({codeFacets.length})
           </p>

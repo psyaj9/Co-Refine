@@ -2,9 +2,11 @@
  * FacetScatterPlot — D3-driven 2D scatter plot.
  *
  * Overview mode: star shapes for code centroids, faded circles for facet segments.
+ *   - No code labels on stars (legend at bottom covers that).
  * Drill-down mode: only segments for the selected code, labelled with facet name.
+ *   - Hover a dot to see the full segment text in a floating tooltip.
  */
-import { useMemo, useRef, useEffect } from "react";
+import { useMemo, useRef, useEffect, useState } from "react";
 import * as d3 from "d3";
 import type { FacetData } from "@/types";
 
@@ -26,6 +28,15 @@ interface SegmentDot {
   x: number;
   y: number;
   colour: string;
+  text: string;
+}
+
+interface Tooltip {
+  /** Screen-relative X inside the container div */
+  x: number;
+  /** Screen-relative Y inside the container div */
+  y: number;
+  text: string;
 }
 
 export interface FacetScatterPlotProps {
@@ -69,6 +80,8 @@ export default function FacetScatterPlot({
   height = 420,
 }: FacetScatterPlotProps) {
   const svgRef = useRef<SVGSVGElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [tooltip, setTooltip] = useState<Tooltip | null>(null);
 
   const plotW = width - MARGIN.left - MARGIN.right;
   const plotH = height - MARGIN.top - MARGIN.bottom;
@@ -91,6 +104,7 @@ export default function FacetScatterPlot({
           x: s.tsne_x,
           y: s.tsne_y,
           colour: colourMap[f.code_id] ?? "#6b7280",
+          text: s.text_preview,
         }))
       ),
     [visibleFacets, colourMap]
@@ -131,9 +145,9 @@ export default function FacetScatterPlot({
       };
     }
 
-    // Add 8% padding around actual data spread
-    const xBand = (d3.max(allX)! - d3.min(allX)!) * 0.08 || 1;
-    const yBand = (d3.max(allY)! - d3.min(allY)!) * 0.08 || 1;
+    // Add 22% padding around actual data spread so points don't clump in centre
+    const xBand = (d3.max(allX)! - d3.min(allX)!) * 0.22 || 1;
+    const yBand = (d3.max(allY)! - d3.min(allY)!) * 0.22 || 1;
 
     return {
       xScale: d3
@@ -179,91 +193,118 @@ export default function FacetScatterPlot({
 
   const isDrillDown = Boolean(drillCodeId);
 
+  function handleDotMouseEnter(e: React.MouseEvent<SVGCircleElement>, dot: SegmentDot) {
+    if (!dot.text) return;
+    const container = containerRef.current;
+    if (!container) return;
+    const rect = container.getBoundingClientRect();
+    const TOOLTIP_W = 260;
+    const TOOLTIP_H = 120; // approximate
+    let x = e.clientX - rect.left + 12;
+    let y = e.clientY - rect.top + 12;
+    // Clamp so tooltip doesn't overflow the right/bottom edge
+    if (x + TOOLTIP_W > rect.width) x = e.clientX - rect.left - TOOLTIP_W - 8;
+    if (y + TOOLTIP_H > rect.height) y = e.clientY - rect.top - TOOLTIP_H - 8;
+    setTooltip({ x, y, text: dot.text });
+  }
+
   return (
-    <svg
-      ref={svgRef}
-      width={width}
-      height={height}
-      aria-label="Facet scatter plot"
-      style={{ overflow: "visible" }}
-    >
-      <g transform={`translate(${MARGIN.left},${MARGIN.top})`}>
-        {/* Axes (managed by D3 useEffect) */}
-        <g className="axes" />
+    <div ref={containerRef} style={{ position: "relative", width, height }}>
+      <svg
+        ref={svgRef}
+        width={width}
+        height={height}
+        aria-label="Facet scatter plot"
+        style={{ overflow: "visible" }}
+      >
+        <g transform={`translate(${MARGIN.left},${MARGIN.top})`}>
+          {/* Axes (managed by D3 useEffect) */}
+          <g className="axes" />
 
-        {/* Segment dots */}
-        {allSegments.map((dot) => {
-          const isHighlighted = highlightFacetId ? dot.facetId === highlightFacetId : true;
-          return (
-            <g key={dot.segmentId}>
-              <circle
-                cx={xScale(dot.x)}
-                cy={yScale(dot.y)}
-                r={isDrillDown ? 5 : 4}
-                fill={dot.colour}
-                opacity={isHighlighted ? (isDrillDown ? 0.75 : 0.45) : 0.12}
-                stroke={dot.colour}
-                strokeWidth={0.5}
-              />
-              {/* In drill-down, show facet label near each dot */}
-              {isDrillDown && isHighlighted && (
-                <text
-                  x={xScale(dot.x) + 6}
-                  y={yScale(dot.y) + 4}
-                  fontSize={8}
+          {/* Segment dots */}
+          {allSegments.map((dot) => {
+            const isHighlighted = highlightFacetId ? dot.facetId === highlightFacetId : true;
+            return (
+              <g key={dot.segmentId}>
+                <circle
+                  cx={xScale(dot.x)}
+                  cy={yScale(dot.y)}
+                  r={isDrillDown ? 5 : 4}
                   fill={dot.colour}
-                  opacity={0.8}
-                  style={{ pointerEvents: "none", userSelect: "none" }}
-                >
-                  {dot.facetLabel.length > 20
-                    ? dot.facetLabel.slice(0, 18) + "…"
-                    : dot.facetLabel}
-                </text>
-              )}
-            </g>
-          );
-        })}
+                  opacity={isHighlighted ? (isDrillDown ? 0.75 : 0.45) : 0.12}
+                  stroke={dot.colour}
+                  strokeWidth={0.5}
+                  style={{ cursor: dot.text ? "pointer" : "default" }}
+                  onMouseEnter={(e) => handleDotMouseEnter(e, dot)}
+                  onMouseLeave={() => setTooltip(null)}
+                />
+                {/* In drill-down, show truncated facet label near each dot */}
+                {isDrillDown && isHighlighted && (
+                  <text
+                    x={xScale(dot.x) + 7}
+                    y={yScale(dot.y) + 4}
+                    fontSize={8}
+                    fill={dot.colour}
+                    opacity={0.85}
+                    style={{ pointerEvents: "none", userSelect: "none" }}
+                  >
+                    {dot.facetLabel.length > 25
+                      ? dot.facetLabel.slice(0, 23) + "…"
+                      : dot.facetLabel}
+                  </text>
+                )}
+              </g>
+            );
+          })}
 
-        {/* Code centroids as stars (overview mode only) */}
-        {centroids.map((c) => (
-          <g
-            key={c.codeId}
-            style={{ cursor: onStarClick ? "pointer" : "default" }}
-            onClick={() => onStarClick?.(c.codeId)}
-            role="button"
-            aria-label={`Drill into code: ${c.codeName}`}
-          >
-            {/* Glow/halo */}
-            <circle
-              cx={xScale(c.x)}
-              cy={yScale(c.y)}
-              r={14}
-              fill={c.colour}
-              opacity={0.12}
-            />
-            {/* Star shape */}
-            <path
-              d={starPath(xScale(c.x), yScale(c.y), 10, 4.5)}
-              fill={c.colour}
-              stroke="white"
-              strokeWidth={1}
-              opacity={0.95}
-            />
-            {/* Code label */}
-            <text
-              x={xScale(c.x)}
-              y={yScale(c.y) + 18}
-              textAnchor="middle"
-              fontSize={9}
-              fontWeight={600}
-              fill={c.colour}
-              style={{ pointerEvents: "none", userSelect: "none" }}
+          {/* Code centroids as stars (overview mode only) — no code labels (see legend below chart) */}
+          {centroids.map((c) => (
+            <g
+              key={c.codeId}
+              style={{ cursor: onStarClick ? "pointer" : "default" }}
+              onClick={() => onStarClick?.(c.codeId)}
+              role="button"
+              aria-label={`Drill into code: ${c.codeName}`}
             >
-              {c.codeName.length > 22 ? c.codeName.slice(0, 20) + "…" : c.codeName}
-            </text>
-          </g>
-        ))}
-      </g>
-    </svg>
+              <title>{c.codeName}</title>
+              {/* Glow/halo */}
+              <circle
+                cx={xScale(c.x)}
+                cy={yScale(c.y)}
+                r={14}
+                fill={c.colour}
+                opacity={0.15}
+              />
+              {/* Star shape */}
+              <path
+                d={starPath(xScale(c.x), yScale(c.y), 10, 4.5)}
+                fill={c.colour}
+                stroke="white"
+                strokeWidth={1}
+                opacity={0.95}
+              />
+            </g>
+          ))}
+        </g>
+      </svg>
+
+      {/* Floating tooltip — renders full segment text on dot hover */}
+      {tooltip && (
+        <div
+          role="tooltip"
+          style={{
+            position: "absolute",
+            left: tooltip.x,
+            top: tooltip.y,
+            maxWidth: 260,
+            pointerEvents: "none",
+            zIndex: 50,
+          }}
+          className="rounded-lg border border-surface-200 dark:border-surface-700 bg-surface-900 dark:bg-surface-900 text-surface-100 shadow-xl px-3 py-2 text-xs leading-relaxed"
+        >
+          {tooltip.text}
+        </div>
+      )}
+    </div>
   );
 }
