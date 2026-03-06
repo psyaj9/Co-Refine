@@ -98,19 +98,7 @@ export default function VisOverviewTab({ projectId }: VisOverviewTabProps) {
           sparkKey="avg_consistency"
         />
       </div>
-
-      {/* KPI cards — row 2 */}
-      <div className="grid grid-cols-2 gap-4">
-        <KPICard
-          label="Avg Centroid Similarity"
-          value={pct(data.avg_centroid_sim)}
-          trend={centroidTrend}
-          sparkData={mot}
-          sparkKey="avg_centroid_sim"
-        />
-        <KPICard label="Escalation Rate" value={pct(data.escalation_rate)} />
-      </div>
-
+      
       {noData ? (
         <EmptyOverview />
       ) : (
