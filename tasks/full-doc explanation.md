@@ -679,7 +679,7 @@ frontend/src/
 │   ├── codes/                           # CodesTabContent, CodeListItem, ExpandedCodeDetail
 │   ├── documents/                       # DocumentUpload, DocumentViewer, MarginPills
 │   ├── history/                         # EditHistoryView, HistoryTimeline, CodeChangeBanner
-│   ├── project/                         # AgentSettingsModal (perspectives + thresholds)
+│   ├── project/                         # SettingsModal (thresholds)
 │   ├── selection/                       # HighlightPopover, SelectionView, ClickedSegmentsView
 │   └── visualisations/                  # VisOverviewTab, FacetExplorerTab, ConsistencyTab
 ├── widgets/                             # LeftPanel, RightPanel, Toolbar, StatusBar
@@ -746,7 +746,7 @@ AZURE_ENDPOINT=your_endpoint
 AZURE_API_VERSION=2024-02-15-preview
 AZURE_DEPLOYMENT_FAST=your_fast_deployment_name
 AZURE_DEPLOYMENT_REASONING=your_reasoning_deployment_name
-# Leave AZURE_EMBEDDING_MODEL empty to use local SentenceTransformer
+AZURE_EMBEDDING_MODEL
 ```
 
 If no API key is configured, the app runs with the document viewer, codebook management, and history features fully functional. AI-dependent features (audit pipeline, chat, analysis) are silently skipped.

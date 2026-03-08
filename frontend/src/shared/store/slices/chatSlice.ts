@@ -1,4 +1,4 @@
-import type { ChatMessageOut } from "@/types";
+import type { ChatMessageOut, ConversationPreview } from "@/types";
 import * as api from "@/api/client";
 
 const CURRENT_USER = "default";
@@ -7,11 +7,14 @@ export interface ChatSlice {
   chatMessages: ChatMessageOut[];
   chatConversationId: string | null;
   chatStreaming: boolean;
+  conversations: ConversationPreview[];
   sendChatMessage: (text: string) => Promise<void>;
   appendChatToken: (token: string) => void;
   finishChatStream: () => void;
   clearChat: () => void;
   loadChatHistory: (conversationId: string) => Promise<void>;
+  loadConversations: (projectId: string) => Promise<void>;
+  deleteConversationById: (conversationId: string) => Promise<void>;
 }
 
 export const createChatSlice = (
@@ -21,6 +24,7 @@ export const createChatSlice = (
   chatMessages: [],
   chatConversationId: null,
   chatStreaming: false,
+  conversations: [],
 
   sendChatMessage: async (text) => {
     const { activeProjectId, chatConversationId } = get();
@@ -50,6 +54,11 @@ export const createChatSlice = (
         content: "",
         created_at: new Date().toISOString(),
       };
+
+      // Optimistically prepend new conversation to the sidebar list
+      const isNewConversation = !chatConversationId;
+      const preview = text.slice(0, 80) + (text.length > 80 ? "..." : "");
+
       set((s: any) => ({
         chatConversationId: res.conversation_id,
         chatStreaming: true,
@@ -61,6 +70,16 @@ export const createChatSlice = (
           ),
           assistantPlaceholder,
         ],
+        conversations: isNewConversation
+          ? [
+              {
+                conversation_id: res.conversation_id,
+                preview,
+                started_at: new Date().toISOString(),
+              },
+              ...s.conversations,
+            ]
+          : s.conversations,
       }));
     } catch (e) {
       console.error("Chat send error:", e);
@@ -80,10 +99,37 @@ export const createChatSlice = (
 
   finishChatStream: () => set({ chatStreaming: false }),
 
-  clearChat: () => set({ chatMessages: [], chatConversationId: null, chatStreaming: false }),
+  clearChat: () =>
+    set({ chatMessages: [], chatConversationId: null, chatStreaming: false }),
 
   loadChatHistory: async (conversationId) => {
     const msgs = await api.fetchChatHistory(conversationId);
     set({ chatMessages: msgs, chatConversationId: conversationId, chatStreaming: false });
+  },
+
+  loadConversations: async (projectId) => {
+    try {
+      const conversations = await api.fetchConversations(projectId, CURRENT_USER);
+      set({ conversations });
+    } catch (e) {
+      console.error("Failed to load conversations:", e);
+    }
+  },
+
+  deleteConversationById: async (conversationId) => {
+    try {
+      await api.deleteConversation(conversationId);
+      const { chatConversationId, conversations } = get();
+      set({
+        conversations: conversations.filter(
+          (c: ConversationPreview) => c.conversation_id !== conversationId,
+        ),
+        ...(chatConversationId === conversationId
+          ? { chatMessages: [], chatConversationId: null, chatStreaming: false }
+          : {}),
+      });
+    } catch (e) {
+      console.error("Failed to delete conversation:", e);
+    }
   },
 });

@@ -10,7 +10,7 @@ import {
   Settings2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import AgentSettingsModal from "@/features/project/components/SettingsModal";
+import SettingsModal from "@/features/project/components/SettingsModal";
 import { useToolbarKeyNav } from "./hooks/useToolbarKeyNav";
 
 export default function Toolbar() {
@@ -91,7 +91,7 @@ export default function Toolbar() {
           />
         )}
       </div>
-      <AgentSettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </header>
   );
 }

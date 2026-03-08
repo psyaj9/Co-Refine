@@ -1,1 +1,1 @@
-export { default as AgentSettingsModal } from "./components/SettingsModal";
+export { default as SettingsModal } from "./components/SettingsModal";

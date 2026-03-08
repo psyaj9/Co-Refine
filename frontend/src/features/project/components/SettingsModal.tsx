@@ -1,20 +1,20 @@
 import { useState } from "react";
-import { X, Eye, SlidersHorizontal, RefreshCw } from "lucide-react";
+import { X, SlidersHorizontal, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useProjectSettings } from "@/features/project/hooks/useProjectSettings";
 import { useStore } from "@/stores/store";
 import { triggerBatchAudit } from "@/api/client";
 import ThresholdsTab from "./ThresholdsTab";
 
-type SettingsTab = "perspectives" | "thresholds";
+type SettingsTab = "thresholds";
 
 interface Props {
   open: boolean;
   onClose: () => void;
 }
 
-export default function AgentSettingsModal({ open, onClose }: Props) {
-  const [tab, setTab] = useState<SettingsTab>("perspectives");
+export default function SettingsModal({ open, onClose }: Props) {
+  const [tab, setTab] = useState<SettingsTab>("thresholds");
   const settings = useProjectSettings(open);
   const activeProjectId = useStore((s) => s.activeProjectId);
   const batchAuditRunning = useStore((s) => s.batchAuditRunning);
@@ -59,18 +59,6 @@ export default function AgentSettingsModal({ open, onClose }: Props) {
 
         {/* Tabs */}
         <div className="flex border-b panel-border px-5">
-          <button
-            onClick={() => setTab("perspectives")}
-            className={cn(
-              "px-3 py-2 text-xs font-medium border-b-2 transition-colors",
-              tab === "perspectives"
-                ? "border-brand-500 text-brand-600 dark:text-brand-400"
-                : "border-transparent text-surface-500 hover:text-surface-700 dark:hover:text-surface-300",
-            )}
-          >
-            <Eye size={13} className="inline-block mr-1.5 -mt-0.5" />
-            Perspectives
-          </button>
           <button
             onClick={() => setTab("thresholds")}
             className={cn(

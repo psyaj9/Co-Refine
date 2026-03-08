@@ -135,7 +135,7 @@ frontend/src/
 │   │
 │   ├── project/                         # Project management + settings
 │   │   ├── components/
-│   │   │   ├── AgentSettingsModal.tsx   # Orchestrator (~114L)
+│   │   │   ├── SettingsModal.tsx   # Orchestrator (~114L)
 │   │   │   ├── PerspectivesTab.tsx      # Perspective checkboxes tab
 │   │   │   └── ThresholdsTab.tsx        # Threshold sliders tab
 │   │   ├── hooks/
