@@ -1,7 +1,9 @@
 import { useState } from "react";
-import { X, Eye, SlidersHorizontal } from "lucide-react";
+import { X, Eye, SlidersHorizontal, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useProjectSettings } from "@/features/project/hooks/useProjectSettings";
+import { useStore } from "@/stores/store";
+import { triggerBatchAudit } from "@/api/client";
 import ThresholdsTab from "./ThresholdsTab";
 
 type SettingsTab = "perspectives" | "thresholds";
@@ -14,6 +16,13 @@ interface Props {
 export default function AgentSettingsModal({ open, onClose }: Props) {
   const [tab, setTab] = useState<SettingsTab>("perspectives");
   const settings = useProjectSettings(open);
+  const activeProjectId = useStore((s) => s.activeProjectId);
+  const batchAuditRunning = useStore((s) => s.batchAuditRunning);
+
+  const handleBatchAudit = async () => {
+    if (!activeProjectId || batchAuditRunning) return;
+    await triggerBatchAudit(activeProjectId, "default");
+  };
 
   if (!open) return null;
 
@@ -89,7 +98,22 @@ export default function AgentSettingsModal({ open, onClose }: Props) {
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-2 px-5 py-3 border-t panel-border">
+        <div className="flex items-center justify-between gap-2 px-5 py-3 border-t panel-border">
+          <button
+            onClick={handleBatchAudit}
+            disabled={!activeProjectId || batchAuditRunning}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors",
+              !activeProjectId || batchAuditRunning
+                ? "bg-surface-100 text-surface-400 dark:bg-surface-800 dark:text-surface-600 cursor-not-allowed"
+                : "bg-surface-100 text-surface-700 dark:bg-surface-800 dark:text-surface-300 hover:bg-surface-200 dark:hover:bg-surface-700",
+            )}
+            aria-label="Run batch audit across all codes"
+          >
+            <RefreshCw size={12} className={cn(batchAuditRunning && "animate-spin")} aria-hidden="true" />
+            {batchAuditRunning ? "Auditing…" : "Run Batch Audit"}
+          </button>
+          <div className="flex items-center gap-2">
           <button
             onClick={onClose}
             className="px-3 py-1.5 text-xs rounded border border-surface-200 dark:border-surface-700 text-surface-600 dark:text-surface-300 hover:bg-surface-50 dark:hover:bg-surface-800"
@@ -108,6 +132,7 @@ export default function AgentSettingsModal({ open, onClose }: Props) {
           >
             {settings.saving ? "Saving…" : "Save"}
           </button>
+          </div>
         </div>
       </div>
     </div>
