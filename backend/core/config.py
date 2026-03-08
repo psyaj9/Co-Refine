@@ -14,7 +14,6 @@ class Settings(BaseSettings):
     azure_embedding_model: str = ""
     fast_model: str = "gpt-5-mini"
     reasoning_model: str = "gpt-5.2"
-    embedding_model: str = "local"
 
     min_segments_for_consistency: int = 3
     auto_analysis_threshold: int = 3

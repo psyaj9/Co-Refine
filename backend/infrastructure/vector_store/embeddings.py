@@ -1,36 +1,16 @@
-"""Text embedding strategies: local SentenceTransformer or Azure OpenAI.
-
-Strategy is selected at call time:
-  - If settings.azure_embedding_model is set → Azure OpenAI embeddings
-  - Otherwise → local all-MiniLM-L6-v2 via SentenceTransformer
-"""
+"""Text embedding via Azure OpenAI."""
 
 import threading
 
 from core.config import settings
-
-_embed_model = None
-_embed_lock = threading.Lock()
 
 _embed_api_client = None
 _embed_api_lock = threading.Lock()
 
 
 def embed_text(text: str) -> list[float]:
-    """Embed a text string using the configured strategy."""
-    if settings.azure_embedding_model:
-        return _embed_api(text)
-    return _embed_local(text)
-
-
-def _embed_local(text: str) -> list[float]:
-    global _embed_model
-    if _embed_model is None:
-        with _embed_lock:
-            if _embed_model is None:
-                from sentence_transformers import SentenceTransformer
-                _embed_model = SentenceTransformer("all-MiniLM-L6-v2")
-    return _embed_model.encode(text).tolist()
+    """Embed a text string using Azure OpenAI."""
+    return _embed_api(text)
 
 
 def _get_embed_api_client():
