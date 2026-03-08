@@ -4,11 +4,13 @@
  * plus FacetCards for each facet with the AI explanation feature.
  * Hover a card to highlight its segments in the scatter plot.
  */
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { ArrowLeft } from "lucide-react";
 import FacetScatterPlot from "./FacetScatterPlot";
 import FacetCard from "./FacetCard";
 import type { FacetData } from "@/types";
+
+const FACET_PALETTE = ["#ef4444", "#3b82f6", "#22c55e", "#eab308"];
 
 export interface FacetDrillDownProps {
   codeName: string;
@@ -49,6 +51,11 @@ export default function FacetDrillDown({
 
   const codeFacets = facets.filter((f) => f.code_id === codeId);
   const plotHeight = Math.min(Math.round(scatterWidth * 0.72), 480);
+
+  const facetColourMap = useMemo<Record<string, string>>(
+    () => Object.fromEntries(codeFacets.map((f, i) => [f.facet_id, FACET_PALETTE[i % FACET_PALETTE.length]])),
+    [codeFacets]
+  );
 
   return (
     <div className="flex flex-col gap-4">
@@ -97,7 +104,7 @@ export default function FacetDrillDown({
                 key={facet.facet_id}
                 facet={facet}
                 projectId={projectId}
-                colour={colourMap[facet.code_id] ?? "#6b7280"}
+                colour={facetColourMap[facet.facet_id] ?? "#6b7280"}
                 isHighlighted={highlightFacetId === facet.facet_id}
                 onMouseEnter={() => setHighlightFacetId(facet.facet_id)}
                 onMouseLeave={() => setHighlightFacetId(null)}

@@ -1,3 +1,4 @@
+import { useState, useCallback } from "react";
 import { Info, RotateCcw } from "lucide-react";
 import type { ThresholdDefinition } from "@/types";
 
@@ -14,6 +15,25 @@ export default function ThresholdsTab({
   onSetThreshold,
   onResetThreshold,
 }: ThresholdsTabProps) {
+  const [draftValues, setDraftValues] = useState<Record<string, string>>({});
+
+  const commitDraft = useCallback(
+    (def: ThresholdDefinition) => {
+      const draft = draftValues[def.key];
+      if (draft === undefined) return;
+      const parsed = def.type === "int" ? parseInt(draft, 10) : parseFloat(draft);
+      if (!isNaN(parsed)) {
+        onSetThreshold(def.key, Math.min(def.max, Math.max(def.min, parsed)));
+      }
+      setDraftValues((prev) => {
+        const next = { ...prev };
+        delete next[def.key];
+        return next;
+      });
+    },
+    [draftValues, onSetThreshold],
+  );
+
   return (
     <div className="space-y-4">
       <p className="text-xs text-surface-500 dark:text-surface-400 flex items-start gap-1.5">
@@ -25,6 +45,12 @@ export default function ThresholdsTab({
       {thresholdDefs.map((def) => {
         const value = localThresholds[def.key] ?? def.default;
         const isDefault = value === def.default;
+        const inputDisplay =
+          draftValues[def.key] !== undefined
+            ? draftValues[def.key]
+            : def.type === "int"
+              ? String(value)
+              : value.toFixed(2);
 
         return (
           <div key={def.key} className="space-y-1">
@@ -33,12 +59,30 @@ export default function ThresholdsTab({
                 {def.label}
               </label>
               <div className="flex items-center gap-2">
-                <span className="text-xs font-mono text-surface-500 tabular-nums">
-                  {def.type === "int" ? value : value.toFixed(2)}
-                </span>
+                <input
+                  type="number"
+                  min={def.min}
+                  max={def.max}
+                  step={def.step}
+                  value={inputDisplay}
+                  onChange={(e) =>
+                    setDraftValues((prev) => ({ ...prev, [def.key]: e.target.value }))
+                  }
+                  onBlur={() => commitDraft(def)}
+                  onKeyDown={(e) => { if (e.key === "Enter") commitDraft(def); }}
+                  aria-label={`${def.label} value`}
+                  className="w-16 text-right text-xs font-mono tabular-nums bg-transparent border border-surface-200 dark:border-surface-700 rounded px-1.5 py-0.5 text-surface-600 dark:text-surface-300 focus:outline-none focus:border-brand-500 focus:text-surface-800 dark:focus:text-surface-100 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                />
                 {!isDefault && (
                   <button
-                    onClick={() => onResetThreshold(def.key)}
+                    onClick={() => {
+                      onResetThreshold(def.key);
+                      setDraftValues((prev) => {
+                        const next = { ...prev };
+                        delete next[def.key];
+                        return next;
+                      });
+                    }}
                     className="text-surface-400 hover:text-brand-500 transition-colors"
                     title={`Reset to default (${def.default})`}
                     aria-label={`Reset ${def.label} to default`}
