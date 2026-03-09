@@ -15,6 +15,7 @@
   ConsistencyData,
   CodeOverlapData,
   TokenResponse,
+  CodeCooccurrenceData,
 } from "@/types";
 
 const BASE = "/api";
@@ -337,6 +338,12 @@ export async function fetchVisOverlap(projectId: string) {
 }
 
 // -- Facet Explorer
+
+export async function fetchVisCooccurrence(projectId: string) {
+  return json<CodeCooccurrenceData>(
+    await fetch(`${BASE}/projects/${projectId}/vis/code-cooccurrence`)
+  );
+}
 
 export async function fetchFacets(projectId: string, codeId?: string | null) {
   return fetchVisFacets(projectId, codeId);

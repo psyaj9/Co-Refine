@@ -1,11 +1,10 @@
-"""Visualisations router: overview, facets, consistency."""
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from core.database import get_db
 from core.models import Project, Facet, Code, User
-from features.visualisations.schemas import RelabelFacetBody
-from features.visualisations.service import get_overview, get_facets, get_consistency, get_code_overlap, explain_facet
+from features.visualisations.schemas import RelabelFacetBody, CodeCooccurrenceOut
+from features.visualisations.service import get_overview, get_facets, get_consistency, get_code_overlap, explain_facet, compute_cooccurrence
 from features.facets.service import suggest_facet_labels
 from infrastructure.auth.dependencies import get_current_user
 
@@ -49,6 +48,16 @@ def get_vis_overlap(project_id: str, db: Session = Depends(get_db)):
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     return get_code_overlap(db, project_id, user_id="default")
+
+
+@router.get("/code-cooccurrence", response_model=CodeCooccurrenceOut)
+def get_vis_code_cooccurrence(project_id: str, db: Session = Depends(get_db)):
+    """Return a symmetric co-occurrence matrix counting how often each pair of codes
+    has been applied to the exact same text span within the project."""
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return compute_cooccurrence(db, project_id)
 
 
 @router.patch("/facets/{facet_id}/label")
