@@ -8,6 +8,7 @@ import {
   FileText,
   Sparkles,
   Settings2,
+  LogOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import SettingsModal from "@/features/project/components/SettingsModal";
@@ -20,6 +21,8 @@ export default function Toolbar() {
   const activeDocumentId = useStore((s) => s.activeDocumentId);
   const showUploadPage = useStore((s) => s.showUploadPage);
   const setShowUploadPage = useStore((s) => s.setShowUploadPage);
+  const authUser = useStore((s) => s.authUser);
+  const logout = useStore((s) => s.logout);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   // "Document View" is active only when actually viewing a document (not upload page)
@@ -89,6 +92,22 @@ export default function Toolbar() {
             active={viewMode === "history"}
             onClick={() => setViewMode(viewMode === "history" ? "document" : "history")}
           />
+        )}
+        {authUser && (
+          <>
+            <div className="w-px h-4 bg-surface-200 dark:bg-surface-700 mx-1" />
+            <span className="text-xs text-surface-500 dark:text-surface-400 max-w-[120px] truncate" title={authUser.display_name}>
+              {authUser.display_name}
+            </span>
+            <button
+              onClick={logout}
+              title="Sign out"
+              aria-label="Sign out"
+              className="flex items-center rounded px-1.5 py-1 text-xs text-surface-500 dark:text-surface-400 hover:bg-surface-100 dark:hover:bg-surface-800 hover:text-red-500 transition-colors"
+            >
+              <LogOut size={14} aria-hidden="true" />
+            </button>
+          </>
         )}
       </div>
       <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />

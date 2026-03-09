@@ -73,13 +73,14 @@ app.include_router(vis_router)
 
 
 @app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket, token: str):
+async def websocket_endpoint(websocket: WebSocket, token: str = ""):
     from jose import JWTError
     from infrastructure.auth.jwt import decode_token
     try:
         payload = decode_token(token)
         user_id = payload["sub"]
     except (JWTError, KeyError):
+        await websocket.accept()
         await websocket.close(code=4001)
         return
     await ws_manager.connect(websocket, user_id)

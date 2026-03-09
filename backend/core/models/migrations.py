@@ -14,6 +14,11 @@ def _migrate_add_columns() -> None:
     insp = inspect(engine)
     if "projects" in insp.get_table_names():
         cols = {c["name"] for c in insp.get_columns("projects")}
+        if "user_id" not in cols:
+            with engine.begin() as conn:
+                conn.execute(text(
+                    "ALTER TABLE projects ADD COLUMN user_id VARCHAR(36) REFERENCES users(id)"
+                ))
         if "enabled_perspectives" not in cols:
             with engine.begin() as conn:
                 conn.execute(text(

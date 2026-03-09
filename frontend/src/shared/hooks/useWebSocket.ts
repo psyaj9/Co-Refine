@@ -5,6 +5,7 @@ const RECONNECT_DELAY = 3000;
 
 export function useWebSocket() {
   const token = useStore((s) => s.token);
+  const logout = useStore((s) => s.logout);
   const pushAlert = useStore((s) => s.pushAlert);
   const loadAnalyses = useStore((s) => s.loadAnalyses);
   const loadCodes = useStore((s) => s.loadCodes);
@@ -77,8 +78,13 @@ export function useWebSocket() {
         }
       };
 
-      ws.onclose = () => {
+      ws.onclose = (event) => {
         wsRef.current = null;
+        if (event.code === 4001) {
+          // Auth failure — token is invalid, force logout so user re-authenticates
+          logout();
+          return;
+        }
         if (!disposed) {
           reconnectTimer.current = setTimeout(connect, RECONNECT_DELAY);
         }

@@ -51,20 +51,10 @@ export default function App() {
   }, [authUser]);
 
   const [showRegister, setShowRegister] = useState(false);
-
-  if (!authUser) {
-    return showRegister ? (
-      <RegisterPage onShowLogin={() => setShowRegister(false)} />
-    ) : (
-      <LoginPage onShowRegister={() => setShowRegister(true)} />
-    );
-  }
-
-  const showUpload = !activeProjectId || showUploadPage || !activeDocumentId;
-  const showRightPanel = !!(activeProjectId && activeDocumentId && !showUploadPage);
-
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(false);
+
+  const showRightPanel = !!(activeProjectId && activeDocumentId && !showUploadPage);
 
   const toggleLeftPanel = useCallback(() => {
     const panel = leftPanelRef.current;
@@ -98,6 +88,16 @@ export default function App() {
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [toggleLeftPanel, toggleRightPanel, showRightPanel]);
+
+  if (!authUser) {
+    return showRegister ? (
+      <RegisterPage onShowLogin={() => setShowRegister(false)} />
+    ) : (
+      <LoginPage onShowRegister={() => setShowRegister(true)} />
+    );
+  }
+
+  const showUpload = !activeProjectId || showUploadPage || !activeDocumentId;
 
   return (
     <div className="flex flex-col h-screen h-dvh overflow-hidden bg-surface-50 dark:bg-surface-900 text-surface-800 dark:text-surface-100">
