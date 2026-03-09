@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse
 from core.models.migrations import init_db
 from core.exceptions import NotFoundError, ValidationError, ConflictError, ExternalServiceError
 from core.logging import get_logger
+from features.auth.router import router as auth_router
 from features.projects.router import router as projects_router
 from features.documents.router import router as documents_router
 from features.codes.router import router as codes_router
@@ -16,6 +17,7 @@ from features.chat.router import router as chat_router
 from features.edit_history.router import router as edit_history_router
 from features.visualisations.router import router as vis_router
 from infrastructure.websocket.manager import ws_manager
+from infrastructure.auth.jwt import decode_token
 from core.config import settings
 
 logger = get_logger(__name__)
@@ -38,7 +40,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ── Domain exception → HTTP response handlers ────────────────────────────────
 
 @app.exception_handler(NotFoundError)
 async def not_found_handler(request: Request, exc: NotFoundError) -> JSONResponse:
@@ -60,6 +61,7 @@ async def external_service_handler(request: Request, exc: ExternalServiceError) 
     logger.error("External service error", extra={"message": exc.message})
     return JSONResponse(status_code=502, content={"detail": exc.message or "External service error"})
 
+app.include_router(auth_router)
 app.include_router(projects_router)
 app.include_router(documents_router)
 app.include_router(codes_router)
@@ -70,8 +72,16 @@ app.include_router(edit_history_router)
 app.include_router(vis_router)
 
 
-@app.websocket("/ws/{user_id}")
-async def websocket_endpoint(websocket: WebSocket, user_id: str):
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket, token: str):
+    payload = decode_token(token)
+    if payload is None:
+        await websocket.close(code=4001)
+        return
+    user_id: str = payload.get("sub", "")
+    if not user_id:
+        await websocket.close(code=4001)
+        return
     await ws_manager.connect(websocket, user_id)
     try:
         while True:

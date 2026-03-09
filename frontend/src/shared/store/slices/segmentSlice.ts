@@ -1,35 +1,28 @@
 import type { SegmentOut, TextSelection, PendingApplication } from "@/types";
 import * as api from "@/api/client";
 
-const CURRENT_USER = "default";
-
 export interface SegmentSlice {
   segments: SegmentOut[];
   loadSegments: (docId?: string) => Promise<void>;
   applyCode: (sel: TextSelection, codeId?: string) => Promise<void>;
 
-  /** Pending select-then-confirm code applications shown in PendingApplicationsBar */
   pendingApplications: PendingApplication[];
   queueCodeApplication: (sel: TextSelection, codeId: string) => void;
   removePendingApplication: (id: string) => void;
   clearPendingApplications: () => void;
   confirmPendingApplications: () => Promise<void>;
 
-  /** Segments fetched for a specific code (shown in RetrievedSegments panel) */
   retrievedSegments: SegmentOut[];
   retrievedCodeId: string | null;
   loadRetrievedSegments: (codeId: string) => Promise<void>;
   clearRetrievedSegments: () => void;
 
-  /** Triggers the DocumentViewer to scroll a specific segment into view */
   scrollToSegmentId: string | null;
   setScrollToSegmentId: (id: string | null) => void;
 
-  /** Current text selection from the document viewer */
   selection: TextSelection | null;
   setSelection: (s: TextSelection | null) => void;
 
-  /** Segments that were clicked in the margin pills (shows popover) */
   clickedSegments: SegmentOut[] | null;
   setClickedSegments: (segs: SegmentOut[] | null) => void;
   removeSegment: (segmentId: string) => Promise<void>;
@@ -57,13 +50,11 @@ export const createSegmentSlice = (
       start_index: sel.startIndex,
       end_index: sel.endIndex,
       code_id: resolvedCodeId,
-      user_id: CURRENT_USER,
     });
     await get().loadSegments(activeDocumentId);
     await get().loadCodes();
   },
 
-  // ── Pending applications ────────────────────────────────────────────
   pendingApplications: [],
 
   queueCodeApplication: (sel, codeId) => {
@@ -92,7 +83,7 @@ export const createSegmentSlice = (
   clearPendingApplications: () => set({ pendingApplications: [] }),
 
   confirmPendingApplications: async () => {
-    const { pendingApplications, currentUser, loadSegments, loadCodes, activeDocumentId } = get();
+    const { pendingApplications, loadSegments, loadCodes, activeDocumentId } = get();
     if (pendingApplications.length === 0) return;
     try {
       await api.batchCreateSegments(
@@ -102,7 +93,6 @@ export const createSegmentSlice = (
           start_index: p.startIndex,
           end_index: p.endIndex,
           code_id: p.codeId,
-          user_id: currentUser,
         })),
       );
       set({ pendingApplications: [] });
@@ -113,26 +103,22 @@ export const createSegmentSlice = (
     }
   },
 
-  // ── Retrieved segments ──────────────────────────────────────────────
   retrievedSegments: [],
   retrievedCodeId: null,
 
   loadRetrievedSegments: async (codeId: string) => {
-    const forCode = await api.fetchCodeSegments(codeId, CURRENT_USER);
+    const forCode = await api.fetchCodeSegments(codeId);
     set({ retrievedSegments: forCode, retrievedCodeId: codeId });
   },
 
   clearRetrievedSegments: () => set({ retrievedSegments: [], retrievedCodeId: null }),
 
-  // ── Scroll-to-segment ───────────────────────────────────────────────
   scrollToSegmentId: null,
   setScrollToSegmentId: (id) => set({ scrollToSegmentId: id }),
 
-  // ── Selection / clicked segments ───────────────────────────────────
   selection: null,
 
   setSelection: (s) => {
-    // Discard queued pending applications when selection changes to avoid orphans
     if (get().pendingApplications.length > 0) {
       set({ pendingApplications: [] });
     }
@@ -156,7 +142,6 @@ export const createSegmentSlice = (
       set({ clickedSegments: remaining.length > 0 ? remaining : null });
     }
 
-    // Clean up stale alerts and inconsistent-segment highlights referencing this segment
     set((s: any) => {
       const newAlerts = s.alerts.filter(
         (al: { segment_id?: string }) => al.segment_id !== segmentId,

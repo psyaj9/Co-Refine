@@ -1,4 +1,3 @@
-"""Codes feature schemas."""
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
@@ -8,7 +7,6 @@ class CodeCreate(BaseModel):
     label: str
     definition: Optional[str] = None
     colour: Optional[str] = "#FFEB3B"
-    user_id: str
     project_id: str
 
 

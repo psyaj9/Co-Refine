@@ -1,11 +1,10 @@
-"""Chat feature router: send, history, conversations."""
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
 
 from core.database import get_db
-from core.models import ChatMessage
+from core.models import ChatMessage, User
 from core.config import settings
 from features.chat.schemas import ChatRequest, ChatMessageOut
 from features.chat.repository import (
@@ -21,6 +20,7 @@ from features.chat.service import (
     get_conversation_history_dicts,
     stream_response_background,
 )
+from infrastructure.auth.dependencies import get_current_user
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
@@ -30,6 +30,7 @@ async def send_chat_message(
     body: ChatRequest,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     if not settings.azure_api_key:
         raise HTTPException(status_code=503, detail="No API key configured")
@@ -40,21 +41,21 @@ async def send_chat_message(
         id=str(uuid.uuid4()),
         conversation_id=conversation_id,
         project_id=body.project_id,
-        user_id=body.user_id,
+        user_id=current_user.id,
         role="user",
         content=body.message,
     )
     create_message(db, user_msg)
 
     codebook = build_codebook(db, body.project_id)
-    retrieved = retrieve_segments(body.user_id, body.message)
+    retrieved = retrieve_segments(current_user.id, body.message)
     history = get_conversation_history_dicts(db, conversation_id)
 
     background_tasks.add_task(
         stream_response_background,
         conversation_id=conversation_id,
         project_id=body.project_id,
-        user_id=body.user_id,
+        user_id=current_user.id,
         user_message=body.message,
         codebook=codebook,
         retrieved_segments=retrieved,
@@ -65,7 +66,11 @@ async def send_chat_message(
 
 
 @router.get("/history/{conversation_id}", response_model=list[ChatMessageOut])
-def get_history(conversation_id: str, db: Session = Depends(get_db)):
+def get_history(
+    conversation_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     messages = get_conversation_messages(db, conversation_id)
     return [
         ChatMessageOut(id=m.id, conversation_id=m.conversation_id, role=m.role,
@@ -77,10 +82,10 @@ def get_history(conversation_id: str, db: Session = Depends(get_db)):
 @router.get("/conversations")
 def list_conversations(
     project_id: str,
-    user_id: str = "default",
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    stubs = list_conversation_stubs(db, project_id, user_id)
+    stubs = list_conversation_stubs(db, project_id, current_user.id)
     results = []
     for conv_id, started_at in stubs:
         first_msg = get_first_user_message(db, conv_id)
@@ -96,6 +101,10 @@ def list_conversations(
 
 
 @router.delete("/conversations/{conversation_id}")
-def delete_conversation(conversation_id: str, db: Session = Depends(get_db)):
+def delete_conversation(
+    conversation_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     delete_conversation_messages(db, conversation_id)
     return {"status": "deleted"}

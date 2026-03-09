@@ -18,15 +18,20 @@ import { DocumentUpload, DocumentViewer } from "@/features/documents";
 import { Visualisations } from "@/features/visualisations";
 import { EditHistoryView } from "@/features/history";
 import { HighlightPopover } from "@/features/selection";
+import { LoginPage, RegisterPage } from "@/features/auth";
 
 const PANEL_IDS = ["left-panel", "center-panel", "right-panel"];
 
 export default function App() {
+  const authUser = useStore((s) => s.authUser);
+  const initAuth = useStore((s) => s.initAuth);
   const activeProjectId = useStore((s) => s.activeProjectId);
   const activeDocumentId = useStore((s) => s.activeDocumentId);
   const showUploadPage = useStore((s) => s.showUploadPage);
   const viewMode = useStore((s) => s.viewMode);
   const loadProjects = useStore((s) => s.loadProjects);
+
+  const [showRegister, setShowRegister] = useState(false);
 
   const leftPanelRef = usePanelRef();
   const rightPanelRef = usePanelRef();
@@ -40,8 +45,12 @@ export default function App() {
   useWebSocket();
 
   useEffect(() => {
-    loadProjects();
+    initAuth();
   }, []);
+
+  useEffect(() => {
+    if (authUser) loadProjects();
+  }, [authUser]);
 
   const showUpload = !activeProjectId || showUploadPage || !activeDocumentId;
   const showRightPanel = !!(activeProjectId && activeDocumentId && !showUploadPage);
@@ -81,6 +90,14 @@ export default function App() {
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [toggleLeftPanel, toggleRightPanel, showRightPanel]);
+
+  if (!authUser) {
+    return showRegister ? (
+      <RegisterPage onShowLogin={() => setShowRegister(false)} />
+    ) : (
+      <LoginPage onShowRegister={() => setShowRegister(true)} />
+    );
+  }
 
   return (
     <div className="flex flex-col h-screen h-dvh overflow-hidden bg-surface-50 dark:bg-surface-900 text-surface-800 dark:text-surface-100">
