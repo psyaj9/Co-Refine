@@ -1,11 +1,10 @@
-"""Codes feature router: CRUD + cascade delete."""
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from core.database import get_db
-from core.models import Code
+from core.models import Code, User
 from features.codes.schemas import CodeCreate, CodeOut, CodeUpdate, SegmentOut
 from features.codes.repository import (
     get_code_by_id,
@@ -18,6 +17,7 @@ from features.codes.repository import (
     get_segments_for_code,
 )
 from features.codes.service import record_code_event, cascade_delete_code
+from infrastructure.auth.dependencies import get_current_user
 
 router = APIRouter(prefix="/api/codes", tags=["codes"])
 
@@ -31,7 +31,11 @@ def _code_to_out(code: Code, count: int = 0) -> CodeOut:
 
 
 @router.post("/", response_model=CodeOut)
-def create_code_endpoint(body: CodeCreate, db: Session = Depends(get_db)):
+def create_code_endpoint(
+    body: CodeCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     existing = get_code_by_label_and_project(db, body.label, body.project_id)
     if existing:
         raise HTTPException(status_code=409, detail="Code label already exists in this project")
@@ -41,7 +45,7 @@ def create_code_endpoint(body: CodeCreate, db: Session = Depends(get_db)):
         label=body.label,
         definition=body.definition,
         colour=body.colour or "#FFEB3B",
-        created_by=body.user_id,
+        created_by=current_user.id,
         project_id=body.project_id,
     )
     create_code(db, code)
@@ -49,7 +53,7 @@ def create_code_endpoint(body: CodeCreate, db: Session = Depends(get_db)):
         db, project_id=body.project_id, action="created",
         code_id=code.id, code_label=body.label,
         code_colour=body.colour or "#FFEB3B",
-        user_id=body.user_id, definition=body.definition,
+        user_id=current_user.id, definition=body.definition,
     )
     db.commit()
     counts = segment_counts(db, [code.id])
@@ -57,14 +61,23 @@ def create_code_endpoint(body: CodeCreate, db: Session = Depends(get_db)):
 
 
 @router.get("/", response_model=list[CodeOut])
-def list_codes_endpoint(project_id: str = "", db: Session = Depends(get_db)):
+def list_codes_endpoint(
+    project_id: str = "",
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     codes = list_codes(db, project_id)
     counts = segment_counts(db, [c.id for c in codes])
     return [_code_to_out(c, counts.get(c.id, 0)) for c in codes]
 
 
 @router.patch("/{code_id}", response_model=CodeOut)
-def update_code_endpoint(code_id: str, body: CodeUpdate, db: Session = Depends(get_db)):
+def update_code_endpoint(
+    code_id: str,
+    body: CodeUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     code = get_code_by_id(db, code_id)
     if not code:
         raise HTTPException(status_code=404, detail="Code not found")
@@ -88,7 +101,7 @@ def update_code_endpoint(code_id: str, body: CodeUpdate, db: Session = Depends(g
         record_code_event(
             db, project_id=code.project_id, action="updated",
             code_id=code_id, code_label=code.label, code_colour=code.colour,
-            user_id=code.created_by, field_changed=field,
+            user_id=current_user.id, field_changed=field,
             old_value=old_val, new_value=new_val,
         )
 
@@ -99,7 +112,11 @@ def update_code_endpoint(code_id: str, body: CodeUpdate, db: Session = Depends(g
 
 
 @router.delete("/{code_id}")
-def delete_code_endpoint(code_id: str, user_id: str = "default", db: Session = Depends(get_db)):
+def delete_code_endpoint(
+    code_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     code = get_code_by_id(db, code_id)
     if not code:
         raise HTTPException(status_code=404, detail="Code not found")
@@ -107,9 +124,9 @@ def delete_code_endpoint(code_id: str, user_id: str = "default", db: Session = D
     record_code_event(
         db, project_id=code.project_id, action="deleted",
         code_id=code_id, code_label=code.label, code_colour=code.colour,
-        user_id=user_id, definition=code.definition,
+        user_id=current_user.id, definition=code.definition,
     )
-    cascade_delete_code(db, code, user_id)
+    cascade_delete_code(db, code, current_user.id)
     delete_code_record(db, code)
     return {"status": "deleted"}
 
@@ -117,14 +134,14 @@ def delete_code_endpoint(code_id: str, user_id: str = "default", db: Session = D
 @router.get("/{code_id}/segments", response_model=list[SegmentOut])
 def get_code_segments(
     code_id: str,
-    user_id: str = "default",
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     code = get_code_by_id(db, code_id)
     if not code:
         raise HTTPException(status_code=404, detail="Code not found")
 
-    rows = get_segments_for_code(db, code_id, user_id)
+    rows = get_segments_for_code(db, code_id, current_user.id)
     return [
         SegmentOut(
             id=s.id, document_id=s.document_id, text=s.text,

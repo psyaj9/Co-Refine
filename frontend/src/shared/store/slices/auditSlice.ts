@@ -1,9 +1,6 @@
 import type { AlertPayload } from "@/types";
 import * as api from "@/api/client";
 
-const CURRENT_USER = "default";
-
-/** Two-stage audit pipeline progress */
 export interface AuditStage {
   current: 0 | 1 | 2;
   stage1Scores: Record<string, unknown> | null;
@@ -35,10 +32,8 @@ export interface AuditSlice {
 
   auditStage: AuditStage;
 
-  /** Segment IDs flagged as inconsistent — used for red highlights in DocumentViewer */
   inconsistentSegmentIds: Set<string>;
 
-  /** Latest code overlap matrix from batch audit WS event or REST fetch */
   overlapMatrix: Record<string, Record<string, number>> | null;
   setOverlapMatrix: (matrix: Record<string, Record<string, number>>) => void;
 }
@@ -58,7 +53,6 @@ export const createAuditSlice = (
 
   pushAlert: (a) =>
     set((s: any) => {
-      // ── Batch audit lifecycle ─────────────────────────────────────
       if (a.type === "batch_audit_started") {
         return {
           batchAuditRunning: true,
@@ -77,7 +71,6 @@ export const createAuditSlice = (
         return { batchAuditRunning: false, batchAuditProgress: null };
       }
 
-      // ── Agent lifecycle ───────────────────────────────────────────
       if (a.type === "agents_started") {
         return {
           agentsRunning: true,
@@ -101,7 +94,6 @@ export const createAuditSlice = (
         };
       }
 
-      // ── Stage 1 → Stage 2 (initial judgment) ─────────────────────
       if (a.type === "deterministic_scores") {
         return {
           auditStage: {
@@ -119,7 +111,6 @@ export const createAuditSlice = (
         };
       }
 
-      // ── Per-segment audit / analysis alerts ──────────────────────
       if (
         a.type === "coding_audit" ||
         a.type === "consistency" ||
@@ -136,13 +127,11 @@ export const createAuditSlice = (
         };
         const agentName = agentMap[a.type];
 
-        // Remove any stale "thinking" indicator for this agent
         let filtered = s.alerts.filter(
           (al: AlertPayload) =>
             !(al.type === "agent_thinking" && al.agent === agentName),
         );
 
-        // Replace a stale audit card when re-auditing the same segment+code
         if (a.type === "coding_audit" && a.replaces_segment_id && a.replaces_code_id) {
           filtered = filtered.filter(
             (al: AlertPayload) =>
@@ -154,7 +143,6 @@ export const createAuditSlice = (
           );
         }
 
-        // Track inconsistent segment IDs for red highlights
         if (a.type === "coding_audit" && a.segment_id) {
           const selfLens = a.data?.self_lens as Record<string, unknown> | undefined;
           const isFlagged = selfLens?.is_consistent === false;
@@ -185,7 +173,6 @@ export const createAuditSlice = (
         return { alerts: [a, ...filtered].slice(0, 50) };
       }
 
-      // ── Default: prepend alert ────────────────────────────────────
       return { alerts: [a, ...s.alerts].slice(0, 50) };
     }),
 
@@ -224,7 +211,6 @@ export const createAuditSlice = (
         start_index: seg.start_index,
         end_index: seg.end_index,
         code_id: matchingCode.id,
-        user_id: CURRENT_USER,
       });
       set((s: any) => ({ alerts: s.alerts.filter((_: unknown, i: number) => i !== alertIdx) }));
       if (activeDocumentId) {

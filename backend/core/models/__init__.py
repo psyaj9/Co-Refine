@@ -1,12 +1,5 @@
-"""ORM model package — re-exports all SQLAlchemy models.
-
-Import models from here (not from individual files) to ensure
-all relationship strings resolve before any DB queries execute.
-
-Usage:
-    from core.models import Project, Document, Code, CodedSegment, ...
-"""
-
+from core.models.user import User
+from core.models.project_member import ProjectMember
 from core.models.project import Project
 from core.models.document import Document
 from core.models.code import Code
@@ -19,6 +12,8 @@ from core.models.consistency_score import ConsistencyScore
 from core.models.facet import Facet, FacetAssignment
 
 __all__ = [
+    "User",
+    "ProjectMember",
     "Project",
     "Document",
     "Code",

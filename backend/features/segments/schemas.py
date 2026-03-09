@@ -1,4 +1,6 @@
-"""Segments feature schemas."""
+from pydantic import BaseModel
+from typing import Optional
+from datetime import datetime
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
@@ -10,7 +12,6 @@ class SegmentCreate(BaseModel):
     start_index: int
     end_index: int
     code_id: str
-    user_id: str
 
 
 class SegmentOut(BaseModel):

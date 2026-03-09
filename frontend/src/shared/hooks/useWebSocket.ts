@@ -4,7 +4,7 @@ import { useStore } from "@/stores/store";
 const RECONNECT_DELAY = 3000;
 
 export function useWebSocket() {
-  const currentUser = useStore((s) => s.currentUser);
+  const token = useStore((s) => s.token);
   const pushAlert = useStore((s) => s.pushAlert);
   const loadAnalyses = useStore((s) => s.loadAnalyses);
   const loadCodes = useStore((s) => s.loadCodes);
@@ -19,9 +19,9 @@ export function useWebSocket() {
     let disposed = false;
 
     function connect() {
-      if (disposed) return;
+      if (disposed || !token) return;
       const protocol = window.location.protocol === "https:" ? "wss" : "ws";
-      const url = `${protocol}://${window.location.host}/ws/${encodeURIComponent(currentUser)}`;
+      const url = `${protocol}://${window.location.host}/ws?token=${encodeURIComponent(token)}`;
       const ws = new WebSocket(url);
       wsRef.current = ws;
 
@@ -29,7 +29,6 @@ export function useWebSocket() {
         try {
           const msg = JSON.parse(event.data);
 
-          // Chat streaming messages — handle without pushing to alerts
           if (msg.type === "chat_token") {
             appendChatToken(msg.token);
             return;
@@ -39,19 +38,15 @@ export function useWebSocket() {
             return;
           }
           if (msg.type === "chat_stream_start" || msg.type === "chat_error") {
-            // stream_start is handled by the store on send;
-            // error: finish streaming and let store show the error
             if (msg.type === "chat_error") finishChatStream();
             return;
           }
 
-          // facet_updated — trigger vis refresh without pushing to alerts
           if (msg.type === "facet_updated") {
             triggerVisRefresh();
             return;
           }
 
-          // code_overlap_matrix — update store directly, do not push to alerts
           if (msg.type === "code_overlap_matrix") {
             setOverlapMatrix(msg.data as Record<string, Record<string, number>>);
             return;
@@ -63,7 +58,6 @@ export function useWebSocket() {
             void Promise.all([loadAnalyses(), loadCodes()]);
           }
 
-          // Audit completion events — refresh vis tabs with new data
           if (
             msg.type === "coding_audit" ||
             msg.type === "agents_done" ||
@@ -73,7 +67,6 @@ export function useWebSocket() {
             triggerVisRefresh();
           }
         } catch {
-          // ignore malformed messages
         }
       };
 
@@ -97,5 +90,5 @@ export function useWebSocket() {
       wsRef.current?.close();
       wsRef.current = null;
     };
-  }, [currentUser]);
+  }, [token]);
 }
