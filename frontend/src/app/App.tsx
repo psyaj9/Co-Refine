@@ -19,10 +19,13 @@ import { Visualisations } from "@/features/visualisations";
 import { EditHistoryView } from "@/features/history";
 import { HighlightPopover } from "@/features/selection";
 import { LoginPage, RegisterPage } from "@/features/auth";
+import { LoginPage, RegisterPage } from "@/features/auth";
 
 const PANEL_IDS = ["left-panel", "center-panel", "right-panel"];
 
 export default function App() {
+  const authUser = useStore((s) => s.authUser);
+  const initAuth = useStore((s) => s.initAuth);
   const authUser = useStore((s) => s.authUser);
   const initAuth = useStore((s) => s.initAuth);
   const activeProjectId = useStore((s) => s.activeProjectId);
@@ -30,6 +33,8 @@ export default function App() {
   const showUploadPage = useStore((s) => s.showUploadPage);
   const viewMode = useStore((s) => s.viewMode);
   const loadProjects = useStore((s) => s.loadProjects);
+
+  const [showRegister, setShowRegister] = useState(false);
 
   const leftPanelRef = usePanelRef();
   const rightPanelRef = usePanelRef();
@@ -45,6 +50,7 @@ export default function App() {
   useWebSocket();
 
   useEffect(() => {
+    initAuth();
     initAuth();
   }, []);
 

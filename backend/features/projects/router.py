@@ -1,4 +1,3 @@
-"""Project feature router: CRUD + settings + thresholds."""
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
@@ -9,10 +8,12 @@ from features.projects.schemas import ProjectCreate, ProjectOut, ProjectSettings
 from features.projects.constants import AVAILABLE_PERSPECTIVES, THRESHOLD_DEFINITIONS
 from features.projects.repository import (
     get_project_by_id,
-    list_all_projects,
+    list_projects_for_user,
     delete_project,
     update_project,
     batch_project_counts,
+    get_membership,
+    add_project_member,
 )
 from features.projects.service import (
     create_new_project,
@@ -21,6 +22,7 @@ from features.projects.service import (
     build_settings_out,
     cleanup_project_vectors,
 )
+from infrastructure.auth.dependencies import get_current_user
 from infrastructure.auth.dependencies import get_current_user
 
 logger = get_logger(__name__)
@@ -53,7 +55,6 @@ def list_projects(
 
 @router.get("/threshold-definitions")
 def get_threshold_definitions():
-    """Return metadata for all configurable thresholds (labels, ranges, defaults)."""
     return THRESHOLD_DEFINITIONS
 
 

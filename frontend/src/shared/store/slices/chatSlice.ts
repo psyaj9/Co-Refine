@@ -54,7 +54,6 @@ export const createChatSlice = (
         created_at: new Date().toISOString(),
       };
 
-      // Optimistically prepend new conversation to the sidebar list
       const isNewConversation = !chatConversationId;
       const preview = text.slice(0, 80) + (text.length > 80 ? "..." : "");
 

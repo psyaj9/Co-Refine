@@ -1,12 +1,13 @@
-"""Visualisations router: overview, facets, consistency."""
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from core.database import get_db
 from core.models import Project, Facet, Code, User
+from core.models import Project, Facet, Code, User
 from features.visualisations.schemas import RelabelFacetBody, CodeCooccurrenceOut
 from features.visualisations.service import get_overview, get_facets, get_consistency, get_code_overlap, explain_facet, compute_cooccurrence
 from features.facets.service import suggest_facet_labels
+from infrastructure.auth.dependencies import get_current_user
 from infrastructure.auth.dependencies import get_current_user
 
 router = APIRouter(prefix="/api/projects/{project_id}/vis", tags=["visualisations"])
@@ -122,6 +123,7 @@ def get_vis_facets(
     project_id: str,
     code_id: str | None = None,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     return get_facets(db, project_id, code_id)
 

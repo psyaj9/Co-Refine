@@ -15,7 +15,6 @@ export interface CodeSlice {
     patch: { label?: string; colour?: string; definition?: string },
   ) => Promise<void>;
 
-  /** AI analysis results per code (co-loaded with codes on project switch) */
   analyses: AnalysisOut[];
   loadAnalyses: () => Promise<void>;
 }
@@ -46,7 +45,6 @@ export const createCodeSlice = (
     await api.deleteCode(id);
     await get().loadCodes();
     await get().loadAnalyses();
-    // Segment highlights may have changed if the deleted code had segments
     const { activeDocumentId, loadSegments } = get();
     if (activeDocumentId) {
       await loadSegments(activeDocumentId);

@@ -1,13 +1,17 @@
-"""Project service: business logic for settings and count aggregation."""
 import uuid
 from sqlalchemy.orm import Session
 
-from core.models import Project
+from core.models import Project, ProjectMember
 from core.config import settings as global_settings
 from core.logging import get_logger
 from features.projects.constants import AVAILABLE_PERSPECTIVES, THRESHOLD_DEFINITIONS
 from features.projects.schemas import ProjectOut, ProjectSettingsOut
-from features.projects.repository import batch_project_counts, get_segment_ids_for_project, create_project
+from features.projects.repository import (
+    batch_project_counts,
+    get_segment_ids_for_project,
+    create_project,
+    add_project_member,
+)
 
 logger = get_logger(__name__)
 
@@ -29,7 +33,6 @@ def project_to_out(project: Project, doc_count: int = 0, code_count: int = 0) ->
 
 
 def get_merged_thresholds(project: Project) -> dict[str, float | int]:
-    """Merge project overrides on top of global defaults."""
     defaults = {td["key"]: getattr(global_settings, td["key"], td["default"]) for td in THRESHOLD_DEFINITIONS}
     overrides = project.thresholds_json or {}
     return {**defaults, **{k: v for k, v in overrides.items() if k in defaults}}
@@ -44,7 +47,6 @@ def build_settings_out(project: Project) -> ProjectSettingsOut:
 
 
 def cleanup_project_vectors(db: Session, project_id: str, user_id: str) -> None:
-    """Delete all ChromaDB embeddings for segments belonging to a project."""
     seg_ids = get_segment_ids_for_project(db, project_id)
     if not seg_ids:
         return

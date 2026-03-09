@@ -90,7 +90,6 @@ export interface AlertPayload {
   data: Record<string, unknown>;
 }
 
-// ── Reflection Metadata (Feature 6) ────────────────────────────────
 
 export interface ScoreDelta {
   consistency_score: number;
@@ -184,7 +183,6 @@ export interface EditEventOut {
   created_at: string;
 }
 
-// ── Scoring Pipeline Types ──────────────────────────────────────────
 
 export interface DeterministicScores {
   centroid_similarity: number | null;
@@ -193,7 +191,6 @@ export interface DeterministicScores {
   segment_count: number | null;
 }
 
-// ── Project Settings (Perspectives) ─────────────────────────────────
 
 export interface Perspective {
   id: string;
@@ -218,7 +215,6 @@ export interface ThresholdDefinition {
   type: "int" | "float";
 }
 
-// ── Visualisation Data Types ─────────────────────────────────────────
 
 export interface MetricPoint {
   date: string;
@@ -230,14 +226,11 @@ export interface OverviewData {
   total_segments: number;
   total_codes: number;
   avg_consistency_score: number;
-  /** Average cosine similarity between segments and their code's centroid (pseudo-centroid excluded). */
   avg_centroid_sim: number;
   escalation_rate: number;
   score_over_time: { date: string; avg_score: number }[];
   metrics_over_time: MetricPoint[];
-  /** Std-dev of LLM consistency scores per code — high = inconsistent application. */
   top_variable_codes: { code_name: string; variability_score: number }[];
-  /** Average Stage 1 temporal drift per code (LOGOS metric). Only populated once codes have >= 10 segments. */
   top_temporal_drift_codes: { code_name: string; avg_drift: number }[];
 }
 
@@ -293,11 +286,8 @@ export interface ConsistencyData {
 }
 
 export interface CodeOverlapData {
-  /** Symmetric matrix of pairwise cosine similarities between code centroids. */
   matrix: Record<string, Record<string, number>>;
-  /** Ordered list of code labels present in the matrix. */
   code_labels: string[];
-  /** Similarity threshold above which overlap is flagged as potential redundancy. */
   threshold: number;
 }
 
@@ -312,10 +302,9 @@ export interface CodeCooccurrenceData {
   co_occurrence_counts: Record<string, number> | null;
 }
 
-// ── Pending Code Application (Select-then-Confirm) ──────────────────
 
 export interface PendingApplication {
-  id: string;             // unique key for React rendering
+  id: string;
   documentId: string;
   text: string;
   startIndex: number;

@@ -1,4 +1,3 @@
-"""Edit history router: read-only audit trail."""
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
@@ -21,7 +20,6 @@ def get_edit_history_endpoint(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Return edit events for a project, newest first."""
     events = get_edit_history(
         db, project_id, document_id=document_id,
         entity_type=entity_type, limit=limit, offset=offset,

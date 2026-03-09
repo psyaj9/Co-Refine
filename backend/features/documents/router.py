@@ -1,8 +1,8 @@
-"""Documents feature router: upload, paste, list, get, delete."""
 from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from core.database import get_db
+from core.models import User
 from core.models import User
 from features.documents.schemas import DocumentOut, DocumentUploadResponse
 from features.documents.file_parser import extract_text, extract_html
@@ -16,6 +16,7 @@ from features.documents.service import (
     cleanup_document_vectors,
     create_document_from_upload,
 )
+from infrastructure.auth.dependencies import get_current_user
 from infrastructure.auth.dependencies import get_current_user
 
 router = APIRouter(prefix="/api/documents", tags=["documents"])
@@ -101,6 +102,7 @@ async def upload_document(
     doc_type: str = Form("transcript"),
     project_id: str = Form(...),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     content = await file.read()
     text = extract_text(file.filename or "file.txt", content)
@@ -133,7 +135,11 @@ def list_documents_endpoint(project_id: str = "", db: Session = Depends(get_db))
 
 
 @router.get("/{doc_id}", response_model=DocumentOut)
-def get_document(doc_id: str, db: Session = Depends(get_db)):
+def get_document(
+    doc_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     doc = get_document_by_id(db, doc_id)
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
@@ -144,10 +150,14 @@ def get_document(doc_id: str, db: Session = Depends(get_db)):
 
 
 @router.delete("/{doc_id}")
-def delete_document_endpoint(doc_id: str, user_id: str = "default", db: Session = Depends(get_db)):
+def delete_document_endpoint(
+    doc_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     doc = get_document_by_id(db, doc_id)
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
-    cleanup_document_vectors(db, doc_id, user_id)
+    cleanup_document_vectors(db, doc_id, current_user.id)
     delete_document(db, doc)
     return {"status": "deleted"}

@@ -1,6 +1,7 @@
 import { create } from "zustand";
 
 import { createAuthSlice, type AuthSlice } from "./slices/authSlice";
+import { createAuthSlice, type AuthSlice } from "./slices/authSlice";
 import { createUiSlice, type UiSlice } from "./slices/uiSlice";
 import { createProjectSlice, type ProjectSlice } from "./slices/projectSlice";
 import { createDocumentSlice, type DocumentSlice } from "./slices/documentSlice";
@@ -10,6 +11,8 @@ import { createAuditSlice, type AuditSlice } from "./slices/auditSlice";
 import { createChatSlice, type ChatSlice } from "./slices/chatSlice";
 import { createHistorySlice, type HistorySlice } from "./slices/historySlice";
 
+export type AppState = AuthSlice &
+  UiSlice &
 export type AppState = AuthSlice &
   UiSlice &
   ProjectSlice &

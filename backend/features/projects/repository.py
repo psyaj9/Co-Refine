@@ -1,8 +1,7 @@
-"""Project repository: pure DB queries, no business logic."""
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
-from core.models import Project, Document, Code
+from core.models import Project, Document, Code, ProjectMember
 
 
 def get_project_by_id(db: Session, project_id: str) -> Project | None:
@@ -33,7 +32,6 @@ def update_project(db: Session) -> None:
 
 
 def batch_project_counts(db: Session, project_ids: list[str]) -> dict[str, dict]:
-    """Return doc_count and code_count for each project in a single query each."""
     doc_rows = (
         db.query(Document.project_id, func.count(Document.id))
         .filter(Document.project_id.in_(project_ids))
@@ -55,7 +53,6 @@ def batch_project_counts(db: Session, project_ids: list[str]) -> dict[str, dict]
 
 
 def get_segment_ids_for_project(db: Session, project_id: str) -> list[str]:
-    """Return all CodedSegment IDs that belong to a project (for vector store cleanup)."""
     from core.models import CodedSegment
     return [
         row[0]
