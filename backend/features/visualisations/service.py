@@ -235,6 +235,73 @@ def get_code_overlap(db: Session, project_id: str, user_id: str) -> dict:
     }
 
 
+def compute_cooccurrence(db: Session, project_id: str) -> dict:
+    """Tab 5: Code co-occurrence matrix — counts how often pairs of codes are
+    applied to the exact same text span (document_id + start_index + end_index).
+
+    Diagonal = total usage count of that code (segments coded with it, counting
+    each span once even if the code appears multiple times on that span).
+    Off-diagonal = number of spans where both codes were applied simultaneously.
+    """
+    codes = (
+        db.query(Code)
+        .filter(Code.project_id == project_id)
+        .order_by(Code.label)
+        .all()
+    )
+    if not codes:
+        return {"codes": [], "matrix": [], "total_segments": 0, "co_occurrence_counts": {}}
+
+    code_id_to_label = {c.id: c.label for c in codes}
+    code_labels = [c.label for c in codes]
+    label_to_idx = {label: i for i, label in enumerate(code_labels)}
+    n = len(code_labels)
+
+    # Fetch all segments for this project (joined through Code.project_id)
+    rows = (
+        db.query(CodedSegment.document_id, CodedSegment.start_index, CodedSegment.end_index, CodedSegment.code_id)
+        .join(Code, CodedSegment.code_id == Code.id)
+        .filter(Code.project_id == project_id)
+        .all()
+    )
+
+    # Group by exact span → set of code labels at that span
+    from collections import defaultdict
+    span_codes: dict[tuple, set[str]] = defaultdict(set)
+    for doc_id, start, end, code_id in rows:
+        label = code_id_to_label.get(code_id)
+        if label:
+            span_codes[(doc_id, start, end)].add(label)
+
+    total_segments = len(span_codes)
+    matrix = [[0] * n for _ in range(n)]
+
+    for labels_at_span in span_codes.values():
+        label_list = sorted(labels_at_span)  # stable order
+        for i_label in label_list:
+            idx_i = label_to_idx[i_label]
+            matrix[idx_i][idx_i] += 1  # diagonal = total usage
+            for j_label in label_list:
+                if i_label != j_label:
+                    idx_j = label_to_idx[j_label]
+                    matrix[idx_i][idx_j] += 1
+
+    # Flattened co_occurrence_counts (upper triangle only, excluding diagonal)
+    flat: dict[str, int] = {}
+    for i in range(n):
+        for j in range(i + 1, n):
+            count = matrix[i][j]
+            if count > 0:
+                flat[f"{code_labels[i]}__{code_labels[j]}"] = count
+
+    return {
+        "codes": code_labels,
+        "matrix": matrix,
+        "total_segments": total_segments,
+        "co_occurrence_counts": flat,
+    }
+
+
 def explain_facet(db: Session, facet: Facet, code: Code | None) -> dict:
     """Call LLM to produce a plain-English explanation of a discovered facet sub-theme.
 

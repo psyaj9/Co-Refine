@@ -278,6 +278,17 @@ export interface CodeOverlapData {
   threshold: number;
 }
 
+export interface CodeCooccurrenceData {
+  /** Ordered list of code labels (rows/columns of the matrix). */
+  codes: string[];
+  /** Symmetric n×n matrix; diagonal = total usage count for that code. */
+  matrix: number[][];
+  /** Total number of distinct text spans (regardless of how many codes cover each). */
+  total_segments: number;
+  /** Flattened upper-triangle counts: "CodeA__CodeB" → count. */
+  co_occurrence_counts: Record<string, number> | null;
+}
+
 // ── Pending Code Application (Select-then-Confirm) ──────────────────
 
 export interface PendingApplication {
