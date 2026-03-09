@@ -1,4 +1,4 @@
-"""Code overlap matrix (GATOS-inspired)."""
+"""Code overlap matrix"""
 from __future__ import annotations
 
 from features.scoring.centroid import get_code_centroid, cosine_similarity
