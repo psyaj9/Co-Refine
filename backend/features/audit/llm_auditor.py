@@ -64,7 +64,6 @@ def run_coding_audit(
           overall_severity_score: float [0.0–1.0]
           overall_severity: 'high' | 'medium' | 'low'
           score_grounding_note: str
-          _escalation: {was_escalated, reason}
     """
     messages = build_coding_audit_prompt(
         user_history=user_history,
@@ -81,8 +80,4 @@ def run_coding_audit(
     )
 
     result = call_llm(messages, model=settings.azure_deployment_reasoning)
-
-    # Escalation metadata kept for backward compatibility (DB field, WS consumers)
-    result["_escalation"] = {"was_escalated": False, "reason": None}
-
     return result

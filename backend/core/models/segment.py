@@ -24,5 +24,4 @@ class CodedSegment(Base):
     code = relationship("Code", back_populates="segments")
     alerts = relationship("AgentAlert", back_populates="segment", cascade="all, delete-orphan")
     consistency_scores = relationship("ConsistencyScore", back_populates="segment", cascade="all, delete-orphan")
-    human_feedback = relationship("HumanFeedback", back_populates="segment", cascade="all, delete-orphan")
     facet_assignments = relationship("FacetAssignment", back_populates="segment", cascade="all, delete-orphan")

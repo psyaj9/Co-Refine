@@ -19,11 +19,8 @@ class Settings(BaseSettings):
     auto_analysis_threshold: int = 3
     vector_search_top_k: int = 8
 
-    # Scoring pipeline thresholds
-    stage_divergence_threshold: float = 0.25            # |centroid_sim - llm_score| triggers escalation
-    drift_warning_threshold: float = 0.3                # temporal drift above this triggers a warning
-    code_overlap_warning_threshold: float = 0.85        # centroid overlap above this flags code pair
-    consistency_escalation_threshold: float = 0.7       # consistency score above which reasoning model is used
+    drift_warning_threshold: float = 0.3
+    code_overlap_warning_threshold: float = 0.85
 
     database_url: str = "sqlite:///./inductive_lens.db"
     chroma_persist_dir: str = "./chroma_data"
@@ -39,7 +36,6 @@ settings = Settings()
 
 
 def get_threshold(key: str, project_thresholds: dict | None = None) -> float | int:
-    """Return a threshold value, preferring project-level override over global default."""
     if project_thresholds and key in project_thresholds:
         return project_thresholds[key]
     return getattr(settings, key)

@@ -44,9 +44,6 @@ def get_overview(db: Session, project_id: str) -> dict:
     ]
     avg_centroid_sim = _safe_avg(centroid_vals) or 0.0
 
-    total_all = len(scores)
-    escalation_rate = round(sum(1 for s in scores if s.was_escalated) / max(1, total_all), 3)
-
     # Multi-metric time-series — only metrics that are meaningful and drive real decisions:
     # avg_consistency = Stage 2 LLM judgment; avg_centroid_sim = Stage 1 embedding guardrail
     metrics_by_date: dict[str, dict[str, list[float]]] = {}
@@ -111,7 +108,6 @@ def get_overview(db: Session, project_id: str) -> dict:
         "total_codes": total_codes,
         "avg_consistency_score": round(avg_score, 3),
         "avg_centroid_sim": round(avg_centroid_sim, 3),
-        "escalation_rate": escalation_rate,
         "score_over_time": score_trend,
         "metrics_over_time": metrics_over_time,
         "top_variable_codes": top_variable[:5],
@@ -199,7 +195,6 @@ def get_consistency(db: Session, project_id: str, code_id: str | None = None) ->
 
     scores_by_code = []
     timeline = []
-    reflection_data = []
 
     for code in codes:
         code_scores = scores_lookup.get(code.id, [])
@@ -220,20 +215,9 @@ def get_consistency(db: Session, project_id: str, code_id: str | None = None) ->
             }
             timeline.append(entry)
 
-            if s.was_reflected and s.initial_consistency_score is not None:
-                reflection_data.append({
-                    "date": s.created_at.isoformat(),
-                    "code_id": code.id,
-                    "code_name": code.label,
-                    "initial_score": s.initial_consistency_score,
-                    "final_score": s.llm_consistency_score,
-                    "delta": round((s.llm_consistency_score or 0.0) - s.initial_consistency_score, 3),
-                })
-
     return {
         "scores_by_code": scores_by_code,
         "timeline": sorted(timeline, key=lambda x: x["date"]),
-        "reflection_data": reflection_data,
     }
 
 

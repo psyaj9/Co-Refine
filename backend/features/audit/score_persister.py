@@ -48,11 +48,7 @@ def persist_consistency_score(
             ConsistencyScore.code_id == code_id,
         ).delete()
 
-    escalation = audit_result.get("_escalation", {})
-    reflection = audit_result.get("_reflection", {})
     self_lens = audit_result.get("self_lens", {})
-
-    was_reflected = reflection.get("was_reflected", False)
 
     score_row = ConsistencyScore(
         id=str(uuid.uuid4()),
@@ -66,12 +62,6 @@ def persist_consistency_score(
         llm_consistency_score=self_lens.get("consistency_score"),
         llm_intent_score=self_lens.get("intent_alignment_score"),
         llm_overall_severity=audit_result.get("overall_severity_score"),
-        initial_consistency_score=reflection.get("initial_scores", {}).get("consistency_score") if was_reflected else None,
-        initial_intent_score=reflection.get("initial_scores", {}).get("intent_alignment_score") if was_reflected else None,
-        initial_severity_score=reflection.get("initial_scores", {}).get("overall_severity_score") if was_reflected else None,
-        was_reflected=was_reflected,
-        was_escalated=escalation.get("was_escalated", False),
-        escalation_reason=escalation.get("reason"),
     )
     db.add(score_row)
     return score_row

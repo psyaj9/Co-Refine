@@ -16,7 +16,6 @@ from core.models.alert import AgentAlert
 from core.models.chat import ChatMessage
 from core.models.edit_event import EditEvent
 from core.models.consistency_score import ConsistencyScore
-from core.models.human_feedback import HumanFeedback
 from core.models.facet import Facet, FacetAssignment
 
 __all__ = [
@@ -29,7 +28,6 @@ __all__ = [
     "ChatMessage",
     "EditEvent",
     "ConsistencyScore",
-    "HumanFeedback",
     "Facet",
     "FacetAssignment",
 ]

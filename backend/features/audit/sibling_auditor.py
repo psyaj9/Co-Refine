@@ -123,7 +123,6 @@ def reaudit_siblings(
             )
             db.commit()
 
-            escalation = audit_result.get("_escalation", {})
             is_consistent = self_lens.get("is_consistent", True)
             _ws_send(user_id, {
                 "type": ev.CODING_AUDIT,
@@ -138,7 +137,6 @@ def reaudit_siblings(
                     "centroid_similarity": stage1_centroid,
                     "temporal_drift": stage1_drift,
                 } if stage1_centroid is not None else None,
-                "escalation": escalation,
                 "data": audit_result,
             })
             logger.info("Re-audited sibling segment", extra={"segment_id": sib_seg.id, "code": sib_code.label})

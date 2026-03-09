@@ -45,25 +45,6 @@ async def upload_document(
     )
 
 
-@router.post("/paste", response_model=DocumentUploadResponse)
-async def paste_document(
-    title: str = Form(...),
-    text: str = Form(...),
-    doc_type: str = Form("transcript"),
-    project_id: str = Form(...),
-    db: Session = Depends(get_db),
-):
-    text = normalise_text(text)
-    doc = create_document_from_upload(
-        db, project_id=project_id, title=title, text=text,
-        doc_type=doc_type, html=None, original_filename=None,
-    )
-    return DocumentUploadResponse(
-        id=doc.id, title=doc.title, doc_type=doc.doc_type,
-        char_count=len(text), project_id=project_id,
-    )
-
-
 @router.get("/", response_model=list[DocumentOut])
 def list_documents_endpoint(project_id: str = "", db: Session = Depends(get_db)):
     docs = list_documents(db, project_id)

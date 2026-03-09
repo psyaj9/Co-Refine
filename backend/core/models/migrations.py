@@ -24,27 +24,6 @@ def _migrate_add_columns() -> None:
                 conn.execute(text(
                     "ALTER TABLE projects ADD COLUMN thresholds_json JSON"
                 ))
-    if "consistency_scores" in insp.get_table_names():
-        cols = {c["name"] for c in insp.get_columns("consistency_scores")}
-        if "llm_predicted_codes_json" not in cols:
-            with engine.begin() as conn:
-                conn.execute(text(
-                    "ALTER TABLE consistency_scores ADD COLUMN llm_predicted_codes_json JSON"
-                ))
-        # Feature 6: Reflection loop columns
-        for col_name, col_default in [
-            ("initial_consistency_score", "NULL"),
-            ("initial_intent_score", "NULL"),
-            ("initial_severity_score", "NULL"),
-            ("was_reflected", "0"),
-            ("was_challenged", "0"),
-        ]:
-            if col_name not in cols:
-                col_type = "FLOAT" if "score" in col_name else "BOOLEAN DEFAULT 0"
-                with engine.begin() as conn:
-                    conn.execute(text(
-                        f"ALTER TABLE consistency_scores ADD COLUMN {col_name} {col_type}"
-                    ))
     if "facets" in insp.get_table_names():
         cols = {c["name"] for c in insp.get_columns("facets")}
         if "suggested_label" not in cols:

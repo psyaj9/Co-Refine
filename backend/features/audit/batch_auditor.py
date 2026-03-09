@@ -114,7 +114,6 @@ def run_batch_audit_background(*, project_id: str, user_id: str) -> None:
                 )
                 db.commit()
 
-                escalation = audit_result.get("_escalation", {})
                 _ws_send(user_id, {
                     "type": ev.CODING_AUDIT,
                     "segment_id": representative["id"],
@@ -123,7 +122,6 @@ def run_batch_audit_background(*, project_id: str, user_id: str) -> None:
                     "code_label": code.label,
                     "batch": True,
                     "deterministic_scores": stage1,
-                    "escalation": escalation,
                     "data": audit_result,
                 })
             except Exception as e:

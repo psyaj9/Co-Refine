@@ -133,6 +133,7 @@ def run_background_agents(
             )
             db.commit()
 
+
             # Temporal drift warning
             try:
                 if stage1 and stage1.get("temporal_drift") is not None:
@@ -172,7 +173,6 @@ def run_background_agents(
             except Exception as e:
                 logger.error("Facet analysis error", extra={"code_id": code_id, "error": str(e)})
 
-            escalation = audit_result.get("_escalation", {})
             _ws_send(user_id, {
                 "type": ev.CODING_AUDIT,
                 "segment_id": segment_id,
@@ -181,7 +181,6 @@ def run_background_agents(
                 "code_label": code_label,
                 "is_consistent": is_consistent,
                 "deterministic_scores": stage1,
-                "escalation": escalation,
                 "data": audit_result,
             })
         except Exception as e:

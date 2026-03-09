@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Float, Boolean, DateTime, JSON, ForeignKey
+from sqlalchemy import Column, String, Float, Boolean, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
 
@@ -27,22 +27,7 @@ class ConsistencyScore(Base):
     # Stage 2
     llm_consistency_score = Column(Float, nullable=True)
     llm_intent_score = Column(Float, nullable=True)
-    llm_conflict_severity = Column(Float, nullable=True)
     llm_overall_severity = Column(Float, nullable=True)
-    llm_predicted_code = Column(String, nullable=True)
-    llm_predicted_confidence = Column(Float, nullable=True)
-    llm_predicted_codes_json = Column(JSON, nullable=True)
-
-    # Reflection loop (Feature 6)
-    initial_consistency_score = Column(Float, nullable=True)    # pre-reflection score
-    initial_intent_score = Column(Float, nullable=True)         # pre-reflection intent
-    initial_severity_score = Column(Float, nullable=True)       # pre-reflection severity
-    was_reflected = Column(Boolean, default=False)
-    was_challenged = Column(Boolean, default=False)
-
-    # Stage 3: Escalation metadata
-    was_escalated = Column(Boolean, default=False)
-    escalation_reason = Column(String, nullable=True)
 
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
