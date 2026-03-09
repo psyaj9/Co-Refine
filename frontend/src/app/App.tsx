@@ -40,6 +40,8 @@ export default function App() {
     storage: localStorage,
   });
 
+  const logout = useStore((s) => s.logout);
+
   useWebSocket();
 
   useEffect(() => {
@@ -49,6 +51,12 @@ export default function App() {
   useEffect(() => {
     if (authUser) loadProjects();
   }, [authUser]);
+
+  useEffect(() => {
+    const handler = () => logout();
+    window.addEventListener("co_refine:unauthorized", handler);
+    return () => window.removeEventListener("co_refine:unauthorized", handler);
+  }, [logout]);
 
   const [showRegister, setShowRegister] = useState(false);
   const [leftCollapsed, setLeftCollapsed] = useState(false);

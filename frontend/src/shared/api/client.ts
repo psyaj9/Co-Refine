@@ -31,13 +31,17 @@ function authHeaders(): Record<string, string> {
 }
 
 async function apiFetch(input: string, init?: RequestInit): Promise<Response> {
-  return fetch(input, {
+  const res = await fetch(input, {
     ...init,
     headers: {
       ...authHeaders(),
       ...(init?.headers || {}),
     },
   });
+  if (res.status === 401) {
+    window.dispatchEvent(new CustomEvent("co_refine:unauthorized"));
+  }
+  return res;
 }
 
 async function json<T>(res: Response): Promise<T> {
