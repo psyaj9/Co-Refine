@@ -64,12 +64,6 @@ def _migrate_add_columns() -> None:
 
 
 def init_db() -> None:
-    """Create all tables and run lightweight migrations.
-
-    IMPORTANT: import core.models before calling this so all ORM classes
-    are registered on Base.metadata.
-    """
-    # Ensure all models are loaded (side-effect import)
     import core.models  # noqa: F401
 
     Base.metadata.create_all(bind=engine)

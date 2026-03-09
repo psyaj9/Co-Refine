@@ -1,11 +1,21 @@
 """Project service: business logic for settings and count aggregation."""
+import uuid
 from sqlalchemy.orm import Session
 
 from core.models import Project
 from core.config import settings as global_settings
+from core.logging import get_logger
 from features.projects.constants import AVAILABLE_PERSPECTIVES, THRESHOLD_DEFINITIONS
 from features.projects.schemas import ProjectOut, ProjectSettingsOut
-from features.projects.repository import batch_project_counts
+from features.projects.repository import batch_project_counts, get_segment_ids_for_project, create_project
+
+logger = get_logger(__name__)
+
+
+def create_new_project(db: Session, name: str) -> Project:
+    """Create and persist a new Project."""
+    project = Project(id=str(uuid.uuid4()), name=name)
+    return create_project(db, project)
 
 
 def project_to_out(project: Project, doc_count: int = 0, code_count: int = 0) -> ProjectOut:
@@ -31,3 +41,16 @@ def build_settings_out(project: Project) -> ProjectSettingsOut:
         available_perspectives=AVAILABLE_PERSPECTIVES,
         thresholds=get_merged_thresholds(project),
     )
+
+
+def cleanup_project_vectors(db: Session, project_id: str, user_id: str) -> None:
+    """Delete all ChromaDB embeddings for segments belonging to a project."""
+    seg_ids = get_segment_ids_for_project(db, project_id)
+    if not seg_ids:
+        return
+    try:
+        from infrastructure.vector_store.store import get_collection
+        get_collection(user_id).delete(ids=seg_ids)
+    except Exception as e:
+        logger.warning("Vector store cleanup failed during project delete", extra={"error": str(e)})
+

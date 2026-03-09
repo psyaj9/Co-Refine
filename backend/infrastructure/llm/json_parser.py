@@ -1,9 +1,3 @@
-"""Robust JSON parser for LLM responses.
-
-Handles markdown code fences, <think>...</think> reasoning blocks,
-and partial JSON patterns that models sometimes emit.
-"""
-
 import json
 import re
 from typing import Any
@@ -13,14 +7,8 @@ PARSE_FAILED_SENTINEL = "Unable to parse response"
 
 
 def parse_json_response(response_text: str) -> dict[str, Any]:
-    """Robustly parse JSON from a model response.
 
-    Strips <think>...</think> reasoning blocks (Gemini 2.5 / DeepSeek style)
-    and markdown code fences before attempting to parse.
-    """
-    # Strip closed <think>...</think> blocks (case-insensitive)
     text = re.sub(r"<\s*think\s*>[\s\S]*?<\s*/\s*think\s*>", "", response_text, flags=re.IGNORECASE).strip()
-    # Strip unclosed <think> blocks — everything from <think> to end of string
     text = re.sub(r"<\s*think\s*>[\s\S]*$", "", text, flags=re.IGNORECASE).strip()
     if not text:
         return _create_error_response(response_text)

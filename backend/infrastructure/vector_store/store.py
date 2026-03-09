@@ -9,7 +9,10 @@ import chromadb
 from chromadb.config import Settings
 
 from core.config import settings
+from core.logging import get_logger
 from infrastructure.vector_store.embeddings import embed_text
+
+logger = get_logger(__name__)
 
 _chroma_client: chromadb.ClientAPI | None = None
 
@@ -95,8 +98,8 @@ def delete_segment_embedding(user_id: str, segment_id: str) -> None:
     """Remove a single segment embedding (silently no-ops if not found)."""
     try:
         get_collection(user_id).delete(ids=[segment_id])
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("Failed to delete segment embedding", extra={"segment_id": segment_id, "error": str(e)})
 
 
 def get_all_segments_for_code(
@@ -132,5 +135,6 @@ def get_segment_count(user_id: str) -> int:
     """Return the total number of embedded segments for a user."""
     try:
         return get_collection(user_id).count()
-    except Exception:
+    except Exception as e:
+        logger.warning("Failed to count segment embeddings", extra={"user_id": user_id, "error": str(e)})
         return 0

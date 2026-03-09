@@ -403,12 +403,13 @@ backend/
 │   │   ├── router.py                # /api/segments/analyze, /batch-audit, /challenge
 │   │   ├── schemas.py               # AnalysisTrigger, BatchAuditRequest, ChallengeRequest/Response
 │   │   ├── orchestrator.py          # Top-level: _run_background_agents (dispatches sub-steps)
-│   │   ├── segment_auditor.py       # CORE: audit_single_segment() — shared by all 3 audit flows
+│   │   ├── llm_auditor.py           # CORE: audit_single_segment() — shared by all 3 audit flows
 │   │   ├── batch_auditor.py         # Batch audit across all project codes
 │   │   ├── sibling_auditor.py       # Re-audit overlapping segments on span change
 │   │   ├── auto_analyzer.py         # Auto-analysis trigger when segment count reaches threshold
-│   │   ├── challenge_handler.py     # Human challenge cycle (pass 3)
+│   │   ├── challenge_handler.py     # Stub — challenge feature pending implementation
 │   │   ├── score_persister.py       # ConsistencyScore + AgentAlert write helpers
+│   │   ├── repository.py            # Pure DB query functions for the audit feature
 │   │   └── context_builder.py       # Codebook builder, window extractor, history builder
 │   │
 │   ├── scoring/                     # Deterministic Stage 1 (pure math, no LLM)

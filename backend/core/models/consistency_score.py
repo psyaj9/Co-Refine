@@ -19,19 +19,19 @@ class ConsistencyScore(Base):
     user_id = Column(String, nullable=False)
     project_id = Column(String, ForeignKey("projects.id"), nullable=False, index=True)
 
-    # Stage 1: Deterministic (reproducible, no LLM)
-    centroid_similarity = Column(Float, nullable=True)      # cosine(segment, code_centroid) [0,1]
-    is_pseudo_centroid = Column(Boolean, default=False)       # cold-start fallback used?
-    temporal_drift = Column(Float, nullable=True)            # centroid drift for this code [0,1]
+    # Stage 1
+    centroid_similarity = Column(Float, nullable=True)
+    is_pseudo_centroid = Column(Boolean, default=False)
+    temporal_drift = Column(Float, nullable=True)
 
-    # Stage 2: LLM-produced (grounded on Stage 1)
-    llm_consistency_score = Column(Float, nullable=True)     # [0.0-1.0]
-    llm_intent_score = Column(Float, nullable=True)          # [0.0-1.0]
-    llm_conflict_severity = Column(Float, nullable=True)     # [0.0-1.0]
-    llm_overall_severity = Column(Float, nullable=True)      # [0.0-1.0]
-    llm_predicted_code = Column(String, nullable=True)       # inter-rater top prediction
-    llm_predicted_confidence = Column(Float, nullable=True)  # [0.0-1.0]
-    llm_predicted_codes_json = Column(JSON, nullable=True)   # ranked list [{code, confidence, reasoning}]
+    # Stage 2
+    llm_consistency_score = Column(Float, nullable=True)
+    llm_intent_score = Column(Float, nullable=True)
+    llm_conflict_severity = Column(Float, nullable=True)
+    llm_overall_severity = Column(Float, nullable=True)
+    llm_predicted_code = Column(String, nullable=True)
+    llm_predicted_confidence = Column(Float, nullable=True)
+    llm_predicted_codes_json = Column(JSON, nullable=True)
 
     # Reflection loop (Feature 6)
     initial_consistency_score = Column(Float, nullable=True)    # pre-reflection score

@@ -600,17 +600,15 @@ backend/
 │   ├── documents/               # router, service, repository, schemas, file_parser
 │   ├── codes/                   # router, service, repository, schemas
 │   ├── segments/                # router, service, repository, schemas
-│   ├── audit/                   # orchestrator, batch_auditor, sibling_auditor,
-│   │                            # auto_analyzer, context_builder, score_persister,
-│   │                            # router, schemas
+│   ├── audit/                   # orchestrator, batch_auditor, sibling_auditor, auto_analyzer,
+│   │                            # llm_auditor (core LLM call), context_builder, score_persister,
+│   │                            # challenge_handler (stub), repository, router, schemas
 │   ├── scoring/                 # pipeline, centroid, temporal_drift, code_overlap
 │   ├── chat/                    # router, service, repository, schemas
-│   ├── facets/                  # service (DB operations co-located in service.py)
+│   ├── facets/                  # service, repository
 │   ├── visualisations/          # router, service, schemas
 │   └── edit_history/            # router, repository, schemas
-├── prompts/                     # Prompt builders (audit, analysis, chat, facet_label)
-└── services/
-    └── ai_analyzer.py           # LLM orchestration for audit + analysis (still used by audit/)
+└── prompts/                     # Prompt builders (audit, analysis, chat, facet_label)
 ```
 
 ### Layer Rules (STRICT)
@@ -619,7 +617,6 @@ backend/
 features/X/router.py  →  features/X/service.py  →  features/X/repository.py
                                                  →  infrastructure/*
                                                  →  core/*
-                                                 →  services/ai_analyzer.py
 
   ✓  feature/router   → feature/service, feature/schemas
   ✓  feature/service  → feature/repository, infrastructure/*, core/*
@@ -757,12 +754,12 @@ If no API key is configured, the app runs with the document viewer, codebook man
 
 1. **`distribution.py` is empty**: `features/scoring/distribution.py` previously implemented softmax codebook distribution scoring (entropy, conflict score). This was removed; the file contains only a removal comment. Stage 1 currently produces three metrics: centroid similarity, temporal drift, segment count.
 
-2. **Legacy root-level files**: `backend/routers/`, `backend/services/` (except `services/ai_analyzer.py`), `backend/models.py`, and `backend/database.py` are retained from a prior architecture. They are **not imported by `main.py`** and are unused in the active application.
+2. **Legacy root-level files**: `backend/routers/`, `backend/services/`, `backend/models.py`, and `backend/database.py` are retained from a prior architecture. They are **not imported by `main.py`** and are unused in the active application. The LLM orchestration previously in `services/ai_analyzer.py` has been moved to `features/audit/llm_auditor.py`.
 
-3. **`services/ai_analyzer.py` is still used**: The refactored vertical-slice architecture has not yet extracted `ai_analyzer.py` into a feature service. `features/audit/orchestrator.py` and `features/audit/batch_auditor.py` both import from `services.ai_analyzer`.
+3. **`cosine_similarity` canonical location**: The single source-of-truth definition lives in `infrastructure/vector_store/mmr.py`. `features/scoring/centroid.py` re-imports it from there. All other scoring files (`code_overlap.py`, `temporal_drift.py`) import it via `centroid.py`'s `__all__` export.
 
-4. **No challenge endpoint**: The `ChallengeRequest`/`ChallengeResponse` schemas exist in `features/audit/schemas.py` and frontend types include `ChallengeMeta` and `ChallengeReflectionResponse`, but no challenge route is mounted in the active router. The challenge feature fields in `ConsistencyScore` are preserved for future implementation.
+4. **No challenge endpoint**: `features/audit/challenge_handler.py` is a stub document. The `ChallengeRequest`/`ChallengeResponse` schemas exist and frontend types include `ChallengeMeta`, but no challenge route is mounted. The `was_challenged` column on `ConsistencyScore` is preserved for future implementation.
 
-5. **`facets/` has no `repository.py`**: All facet DB operations are handled within `features/facets/service.py` directly.
+5. **No reflection pass**: The `was_reflected` field exists in `ConsistencyScore` for backward compatibility. The current pipeline makes a single LLM call per segment — no reflection loop exists.
 
-6. **No reflection pass**: The `was_reflected` field exists in `ConsistencyScore` for backward compatibility and future implementation. The current pipeline makes a single LLM call per segment — no reflection loop exists.
+6. **Global domain exception handlers**: `main.py` now registers `@app.exception_handler` for all four domain exceptions (`NotFoundError` → 404, `ValidationError` → 422, `ConflictError` → 409, `ExternalServiceError` → 502). Features can raise these anywhere in the router → service → repository call stack.

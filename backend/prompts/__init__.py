@@ -5,7 +5,5 @@ from .chat_prompt import build_chat_messages
 __all__ = [
     "build_analysis_prompt",
     "build_coding_audit_prompt",
-    "build_reflection_prompt",
-    "build_challenge_prompt",
     "build_chat_messages",
 ]

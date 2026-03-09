@@ -5,18 +5,17 @@ from core.database import Base
 
 
 class EditEvent(Base):
-    """Audit trail for code/segment mutations — powers the Edit History view."""
     __tablename__ = "edit_events"
 
     id = Column(String, primary_key=True)
     project_id = Column(String, ForeignKey("projects.id"), nullable=False, index=True)
     document_id = Column(String, ForeignKey("documents.id"), nullable=True)
-    entity_type = Column(String, nullable=False)      # "segment" | "code"
-    action = Column(String, nullable=False)            # "created" | "updated" | "deleted"
+    entity_type = Column(String, nullable=False)
+    action = Column(String, nullable=False)
     entity_id = Column(String, nullable=False)
-    field_changed = Column(String, nullable=True)      # e.g. "label", "definition", "colour"
+    field_changed = Column(String, nullable=True)
     old_value = Column(Text, nullable=True)
     new_value = Column(Text, nullable=True)
-    metadata_json = Column(JSON, nullable=True)        # snapshot context
+    metadata_json = Column(JSON, nullable=True)
     user_id = Column(String, nullable=False)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

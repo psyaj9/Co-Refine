@@ -1,9 +1,12 @@
 from contextlib import asynccontextmanager
 import asyncio
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from core.models.migrations import init_db
+from core.exceptions import NotFoundError, ValidationError, ConflictError, ExternalServiceError
+from core.logging import get_logger
 from features.projects.router import router as projects_router
 from features.documents.router import router as documents_router
 from features.codes.router import router as codes_router
@@ -15,12 +18,12 @@ from features.visualisations.router import router as vis_router
 from infrastructure.websocket.manager import ws_manager
 from core.config import settings
 
+logger = get_logger(__name__)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
-    # Store the running event loop so background threads can send WebSocket
-    # messages safely via run_coroutine_threadsafe (avoids RuntimeError).
     ws_manager.set_loop(asyncio.get_event_loop())
     yield
 
@@ -34,6 +37,28 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ── Domain exception → HTTP response handlers ────────────────────────────────
+
+@app.exception_handler(NotFoundError)
+async def not_found_handler(request: Request, exc: NotFoundError) -> JSONResponse:
+    return JSONResponse(status_code=404, content={"detail": exc.message or "Not found"})
+
+
+@app.exception_handler(ValidationError)
+async def validation_handler(request: Request, exc: ValidationError) -> JSONResponse:
+    return JSONResponse(status_code=422, content={"detail": exc.message or "Validation error"})
+
+
+@app.exception_handler(ConflictError)
+async def conflict_handler(request: Request, exc: ConflictError) -> JSONResponse:
+    return JSONResponse(status_code=409, content={"detail": exc.message or "Conflict"})
+
+
+@app.exception_handler(ExternalServiceError)
+async def external_service_handler(request: Request, exc: ExternalServiceError) -> JSONResponse:
+    logger.error("External service error", extra={"message": exc.message})
+    return JSONResponse(status_code=502, content={"detail": exc.message or "External service error"})
 
 app.include_router(projects_router)
 app.include_router(documents_router)

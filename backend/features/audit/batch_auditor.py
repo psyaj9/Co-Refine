@@ -9,6 +9,7 @@ from core.logging import get_logger
 from infrastructure.websocket.manager import ws_manager
 from infrastructure.vector_store.store import get_all_segments_for_code
 from features.audit.context_builder import build_code_definitions, build_user_code_definitions
+from core import events as ev
 from features.audit.score_persister import persist_consistency_score, persist_agent_alert
 from features.scoring.code_overlap import compute_code_overlap_matrix
 
@@ -21,7 +22,7 @@ def _ws_send(user_id: str, payload: dict) -> None:
 
 def run_batch_audit_background(*, project_id: str, user_id: str) -> None:
     """Background task: run audit for every code in a project using MMR sampling."""
-    from services.ai_analyzer import run_coding_audit
+    from features.audit.llm_auditor import run_coding_audit
     from features.scoring.pipeline import compute_stage1_scores
 
     db = SessionLocal()
@@ -29,7 +30,7 @@ def run_batch_audit_background(*, project_id: str, user_id: str) -> None:
         all_codes = db.query(Code).filter(Code.project_id == project_id).all()
         total = len(all_codes)
 
-        _ws_send(user_id, {"type": "batch_audit_started", "data": {"total_codes": total}})
+        _ws_send(user_id, {"type": ev.BATCH_AUDIT_STARTED, "data": {"total_codes": total}})
 
         user_code_definitions = build_user_code_definitions(db, project_id)
         code_definitions = build_code_definitions(db, project_id)
@@ -42,7 +43,7 @@ def run_batch_audit_background(*, project_id: str, user_id: str) -> None:
 
             if not diverse:
                 _ws_send(user_id, {
-                    "type": "batch_audit_progress",
+                    "type": ev.BATCH_AUDIT_PROGRESS,
                     "data": {"completed": i + 1, "total": total, "code_label": code.label, "skipped": True},
                 })
                 continue
@@ -115,7 +116,7 @@ def run_batch_audit_background(*, project_id: str, user_id: str) -> None:
 
                 escalation = audit_result.get("_escalation", {})
                 _ws_send(user_id, {
-                    "type": "coding_audit",
+                    "type": ev.CODING_AUDIT,
                     "segment_id": representative["id"],
                     "segment_text": representative["text"],
                     "code_id": code.id,
@@ -129,14 +130,14 @@ def run_batch_audit_background(*, project_id: str, user_id: str) -> None:
                 logger.error("Batch audit error", extra={"code": code.label, "error": str(e)})
 
             _ws_send(user_id, {
-                "type": "batch_audit_progress",
+                "type": ev.BATCH_AUDIT_PROGRESS,
                 "data": {"completed": i + 1, "total": total, "code_label": code.label},
             })
 
         try:
             overlap_matrix = compute_code_overlap_matrix(user_id, all_code_labels)
             _ws_send(user_id, {
-                "type": "code_overlap_matrix",
+                "type": ev.CODE_OVERLAP_MATRIX,
                 "project_id": project_id,
                 "data": overlap_matrix,
             })
@@ -145,7 +146,6 @@ def run_batch_audit_background(*, project_id: str, user_id: str) -> None:
 
         # Temporal drift warnings: emit per-code if avg drift exceeds threshold
         try:
-            from core import events as ev
             threshold = settings.drift_warning_threshold
             for code in all_codes:
                 drift_rows = (
@@ -180,9 +180,9 @@ def run_batch_audit_background(*, project_id: str, user_id: str) -> None:
         except Exception as e:
             logger.error("Temporal drift warning check error", extra={"error": str(e)})
 
-        _ws_send(user_id, {"type": "batch_audit_done", "data": {"total_codes": total}})
+        _ws_send(user_id, {"type": ev.BATCH_AUDIT_DONE, "data": {"total_codes": total}})
     except Exception as e:
         logger.error("Batch audit fatal error", extra={"error": str(e)})
-        _ws_send(user_id, {"type": "batch_audit_done", "data": {"error": str(e)}})
+        _ws_send(user_id, {"type": ev.BATCH_AUDIT_DONE, "data": {"error": str(e)}})
     finally:
         db.close()

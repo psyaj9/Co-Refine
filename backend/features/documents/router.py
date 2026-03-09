@@ -1,20 +1,20 @@
 """Documents feature router: upload, paste, list, get, delete."""
-import uuid
-
 from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from core.database import get_db
-from core.models import Document
 from features.documents.schemas import DocumentOut, DocumentUploadResponse
 from features.documents.file_parser import extract_text, extract_html
 from features.documents.repository import (
     get_document_by_id,
     list_documents,
-    create_document,
     delete_document,
 )
-from features.documents.service import normalise_text, cleanup_document_vectors
+from features.documents.service import (
+    normalise_text,
+    cleanup_document_vectors,
+    create_document_from_upload,
+)
 
 router = APIRouter(prefix="/api/documents", tags=["documents"])
 
@@ -33,24 +33,15 @@ async def upload_document(
         raise HTTPException(status_code=400, detail="Could not extract text from file.")
     text = normalise_text(text)
     html = extract_html(file.filename or "", content)
-
-    doc_id = str(uuid.uuid4())
     doc_title = title or (file.filename or "Untitled").rsplit(".", 1)[0]
 
-    doc = Document(
-        id=doc_id,
-        project_id=project_id,
-        title=doc_title,
-        full_text=text,
-        doc_type=doc_type,
-        html_content=html,
-        original_filename=file.filename,
+    doc = create_document_from_upload(
+        db, project_id=project_id, title=doc_title, text=text,
+        doc_type=doc_type, html=html, original_filename=file.filename,
     )
-    create_document(db, doc)
-
     return DocumentUploadResponse(
-        id=doc_id, title=doc_title, doc_type=doc_type, char_count=len(text),
-        project_id=project_id,
+        id=doc.id, title=doc.title, doc_type=doc.doc_type,
+        char_count=len(text), project_id=project_id,
     )
 
 
@@ -63,14 +54,13 @@ async def paste_document(
     db: Session = Depends(get_db),
 ):
     text = normalise_text(text)
-    doc_id = str(uuid.uuid4())
-    doc = Document(
-        id=doc_id, project_id=project_id, title=title, full_text=text, doc_type=doc_type
+    doc = create_document_from_upload(
+        db, project_id=project_id, title=title, text=text,
+        doc_type=doc_type, html=None, original_filename=None,
     )
-    create_document(db, doc)
     return DocumentUploadResponse(
-        id=doc_id, title=title, doc_type=doc_type, char_count=len(text),
-        project_id=project_id,
+        id=doc.id, title=doc.title, doc_type=doc.doc_type,
+        char_count=len(text), project_id=project_id,
     )
 
 

@@ -9,6 +9,7 @@ from core.models import CodedSegment, AnalysisResult
 from core.config import settings
 from core.logging import get_logger
 from infrastructure.websocket.manager import ws_manager
+from core import events as ev
 from infrastructure.llm.json_parser import PARSE_FAILED_SENTINEL
 
 logger = get_logger(__name__)
@@ -26,11 +27,11 @@ def run_manual_analysis(
     user_definition: str | None,
 ) -> None:
     """Background task for manual analysis trigger."""
-    from services.ai_analyzer import analyze_quotes
+    from features.audit.llm_auditor import analyze_quotes
 
     db = SessionLocal()
-    _ws_send(user_id, {"type": "agents_started", "data": {"source": "manual_analysis"}})
-    _ws_send(user_id, {"type": "agent_thinking", "agent": "analysis", "data": {}})
+    _ws_send(user_id, {"type": ev.AGENTS_STARTED, "data": {"source": "manual_analysis"}})
+    _ws_send(user_id, {"type": ev.AGENT_THINKING, "agent": "analysis", "data": {}})
 
     try:
         all_quotes = [
@@ -44,7 +45,7 @@ def run_manual_analysis(
         if analysis_result.get("definition") == PARSE_FAILED_SENTINEL:
             logger.warning("Analysis parse failure", extra={"code_label": code_label})
             _ws_send(user_id, {
-                "type": "agent_error",
+                "type": ev.AGENT_ERROR,
                 "agent": "analysis",
                 "data": {"message": "AI could not generate a definition — please try again."},
             })
@@ -63,16 +64,16 @@ def run_manual_analysis(
             db.merge(analysis)
             db.commit()
             _ws_send(user_id, {
-                "type": "analysis_updated",
+                "type": ev.ANALYSIS_UPDATED,
                 "code_id": code_id,
                 "code_label": code_label,
                 "data": analysis_result,
             })
     except Exception as e:
         logger.error("Manual analysis error", extra={"error": str(e), "code_label": code_label})
-        _ws_send(user_id, {"type": "agent_error", "agent": "analysis", "data": {"message": str(e)}})
+        _ws_send(user_id, {"type": ev.AGENT_ERROR, "agent": "analysis", "data": {"message": str(e)}})
     finally:
-        _ws_send(user_id, {"type": "agents_done", "data": {}})
+        _ws_send(user_id, {"type": ev.AGENTS_DONE, "data": {}})
         db.close()
 
 
@@ -85,7 +86,7 @@ def maybe_run_auto_analysis(
     segment_id: str,
 ) -> None:
     """Trigger auto-analysis if segment count threshold is met."""
-    from services.ai_analyzer import analyze_quotes
+    from features.audit.llm_auditor import analyze_quotes
 
     code_segment_count = (
         db.query(CodedSegment)
@@ -100,7 +101,7 @@ def maybe_run_auto_analysis(
     if not (code_segment_count - last_count >= settings.auto_analysis_threshold or last_count == 0):
         return
 
-    _ws_send(user_id, {"type": "agent_thinking", "agent": "analysis", "segment_id": segment_id, "data": {}})
+    _ws_send(user_id, {"type": ev.AGENT_THINKING, "agent": "analysis", "segment_id": segment_id, "data": {}})
     try:
         all_quotes = [
             s.text
@@ -116,7 +117,7 @@ def maybe_run_auto_analysis(
         if analysis_result.get("definition") == PARSE_FAILED_SENTINEL:
             logger.warning("Auto-analysis parse failure", extra={"code_label": code_label})
             _ws_send(user_id, {
-                "type": "agent_error",
+                "type": ev.AGENT_ERROR,
                 "agent": "analysis",
                 "segment_id": segment_id,
                 "data": {"message": "AI could not generate a definition — will retry next time."},
@@ -135,11 +136,11 @@ def maybe_run_auto_analysis(
             db.merge(analysis)
             db.commit()
             _ws_send(user_id, {
-                "type": "analysis_updated",
+                "type": ev.ANALYSIS_UPDATED,
                 "code_id": code_id,
                 "code_label": code_label,
                 "data": analysis_result,
             })
     except Exception as e:
         logger.error("Auto-analysis error", extra={"error": str(e), "code_label": code_label})
-        _ws_send(user_id, {"type": "agent_error", "agent": "analysis", "segment_id": segment_id, "data": {"message": str(e)}})
+        _ws_send(user_id, {"type": ev.AGENT_ERROR, "agent": "analysis", "segment_id": segment_id, "data": {"message": str(e)}})

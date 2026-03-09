@@ -9,6 +9,7 @@ from core.logging import get_logger
 from infrastructure.websocket.manager import ws_manager
 from infrastructure.vector_store.store import get_all_segments_for_code
 from features.audit.context_builder import extract_window, build_code_definitions, build_user_code_definitions
+from core import events as ev
 from features.audit.score_persister import persist_consistency_score, persist_agent_alert
 
 logger = get_logger(__name__)
@@ -28,7 +29,7 @@ def reaudit_siblings(
     user_id: str,
 ) -> None:
     """Re-run audit for every sibling segment on the same text span."""
-    from services.ai_analyzer import run_coding_audit
+    from features.audit.llm_auditor import run_coding_audit
 
     siblings = (
         db.query(CodedSegment, Code)
@@ -125,7 +126,7 @@ def reaudit_siblings(
             escalation = audit_result.get("_escalation", {})
             is_consistent = self_lens.get("is_consistent", True)
             _ws_send(user_id, {
-                "type": "coding_audit",
+                "type": ev.CODING_AUDIT,
                 "segment_id": sib_seg.id,
                 "segment_text": sib_seg.text,
                 "code_id": sib_code.id,

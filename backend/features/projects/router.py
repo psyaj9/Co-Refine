@@ -1,24 +1,25 @@
 """Project feature router: CRUD + settings + thresholds."""
-import uuid
-
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from core.database import get_db
-from core.models import Project
 from core.logging import get_logger
 from features.projects.schemas import ProjectCreate, ProjectOut, ProjectSettingsOut, ProjectSettingsUpdate
 from features.projects.constants import AVAILABLE_PERSPECTIVES, THRESHOLD_DEFINITIONS
 from features.projects.repository import (
     get_project_by_id,
     list_all_projects,
-    create_project,
     delete_project,
     update_project,
     batch_project_counts,
-    get_segment_ids_for_project,
 )
-from features.projects.service import project_to_out, get_merged_thresholds, build_settings_out
+from features.projects.service import (
+    create_new_project,
+    project_to_out,
+    get_merged_thresholds,
+    build_settings_out,
+    cleanup_project_vectors,
+)
 
 logger = get_logger(__name__)
 
@@ -27,8 +28,7 @@ router = APIRouter(prefix="/api/projects", tags=["projects"])
 
 @router.post("/", response_model=ProjectOut)
 def create_project_endpoint(body: ProjectCreate, db: Session = Depends(get_db)):
-    project = Project(id=str(uuid.uuid4()), name=body.name)
-    created = create_project(db, project)
+    created = create_new_project(db, body.name)
     return project_to_out(created)
 
 
@@ -64,14 +64,7 @@ def delete_project_endpoint(project_id: str, user_id: str = "default", db: Sessi
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    seg_ids = get_segment_ids_for_project(db, project_id)
-    if seg_ids:
-        try:
-            from infrastructure.vector_store.store import get_collection
-            get_collection(user_id).delete(ids=seg_ids)
-        except Exception as e:
-            logger.warning("Vector store cleanup failed during project delete", extra={"error": str(e)})
-
+    cleanup_project_vectors(db, project_id, user_id)
     delete_project(db, project)
     return {"status": "deleted"}
 

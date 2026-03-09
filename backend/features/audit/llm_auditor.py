@@ -1,17 +1,20 @@
-from typing import Generator
+"""LLM-based audit functions: coding audit and auto-analysis.
+
+Moved here from services/ai_analyzer.py to eliminate the cross-layer
+dependency (features/ must not depend on services/).
+"""
+from __future__ import annotations
 
 from core.config import settings
-from infrastructure.llm.client import call_llm, get_client
-from prompts import (
-    build_analysis_prompt,
-    build_coding_audit_prompt,
-)
+from infrastructure.llm.client import call_llm
+from prompts.analysis_prompt import build_analysis_prompt
+from prompts.audit_prompt import build_coding_audit_prompt
 
 _ORDINAL_SCORE_MAP = {"high": 0.9, "medium": 0.6, "low": 0.3}
 
 
 def _to_float(val: object, default: float = 0.5) -> float:
-    """Coerce an LLM-returned value to float, handling ordinal strings and None."""
+    """Coerce an LLM-returned value to a float, handling ordinal strings and None."""
     if val is None:
         return default
     if isinstance(val, (int, float)):
@@ -24,7 +27,15 @@ def _to_float(val: object, default: float = 0.5) -> float:
         return default
 
 
-def analyze_quotes(code_label: str, quotes: list[str], user_definition: str | None = None) -> dict:
+def analyze_quotes(
+    code_label: str,
+    quotes: list[str],
+    user_definition: str | None = None,
+) -> dict:
+    """Call reasoning model to synthesise an operational definition for a code.
+
+    Returns a dict with keys: definition, lens, reasoning.
+    """
     prompt = build_analysis_prompt(code_label, quotes, user_definition=user_definition)
     return call_llm(prompt, model=settings.azure_deployment_reasoning)
 
@@ -37,24 +48,23 @@ def run_coding_audit(
     document_context: str = "",
     user_code_definitions: dict[str, str] | None = None,
     existing_codes_on_span: list[str] | None = None,
-    # Stage 1 deterministic scores (None = no grounding available)
     centroid_similarity: float | None = None,
     temporal_drift: float | None = None,
     is_pseudo_centroid: bool = False,
     segment_count: int | None = None,
 ) -> dict:
-    """Two-stage coding audit.
+    """Run Stage 2 LLM self-consistency audit on a single coded segment.
 
-    Stage 2: LLM self-consistency judgment (fast model).
-    Stage 3: Escalation with reasoning model when evidence diverges.
+    Uses the reasoning model for every audit call.
 
-    Returns a dict with keys:
-      self_lens: { is_consistent, consistency_score (float), intent_alignment_score (float),
-                   reasoning, definition_match, drift_warning, alternative_codes, suggestion }
-      overall_severity_score: float [0.0–1.0]
-      overall_severity: 'high' | 'medium' | 'low'
-      score_grounding_note: str
-      _escalation: { was_escalated, reason }
+    Returns:
+        dict with keys:
+          self_lens: {is_consistent, consistency_score, intent_alignment_score,
+                      reasoning, definition_match, drift_warning, alternative_codes, suggestion}
+          overall_severity_score: float [0.0–1.0]
+          overall_severity: 'high' | 'medium' | 'low'
+          score_grounding_note: str
+          _escalation: {was_escalated, reason}
     """
     messages = build_coding_audit_prompt(
         user_history=user_history,
@@ -70,29 +80,9 @@ def run_coding_audit(
         segment_count=segment_count,
     )
 
-    # ── Stage 2: Reasoning model — deep audit every segment ──
     result = call_llm(messages, model=settings.azure_deployment_reasoning)
 
-    # Escalation metadata kept for backward compatibility (DB field, WS payload consumers)
+    # Escalation metadata kept for backward compatibility (DB field, WS consumers)
     result["_escalation"] = {"was_escalated": False, "reason": None}
 
     return result
-
-
-def stream_chat_response(
-    messages: list[dict],
-    model: str | None = None,
-) -> Generator[str, None, None]:
-    """Stream chat tokens from Azure OpenAI. Yields text chunks as they arrive."""
-    client = get_client()
-    response = client.chat.completions.create(
-        model=model or settings.azure_deployment_fast,
-        messages=messages,
-        stream=True,
-    )
-
-    for chunk in response:
-        delta = chunk.choices[0].delta if chunk.choices else None
-        if not delta or not delta.content:
-            continue
-        yield delta.content

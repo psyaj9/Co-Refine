@@ -7,17 +7,19 @@ from sqlalchemy.orm import Session
 from core.database import get_db
 from core.models import CodedSegment
 from core.config import settings
+from core.logging import get_logger
 from features.segments.schemas import SegmentCreate, SegmentOut, BatchSegmentCreate, AlertOut
 from features.segments.repository import (
     get_segment_by_id,
     list_segments,
-    create_segment,
     delete_segment_record,
     get_code_for_segment,
     get_document,
     list_alerts,
 )
-from features.segments.service import record_segment_event
+from features.segments.service import create_segment_with_event, record_segment_event
+
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api/segments", tags=["segments"])
 
@@ -61,18 +63,11 @@ async def create_segment_endpoint(
         raise HTTPException(status_code=404, detail="Document not found")
 
     seg_id = str(uuid.uuid4())
-    segment = CodedSegment(
-        id=seg_id, document_id=body.document_id, text=body.text,
+    segment = create_segment_with_event(
+        db,
+        segment_id=seg_id, document_id=body.document_id, text=body.text,
         start_index=body.start_index, end_index=body.end_index,
-        code_id=body.code_id, user_id=body.user_id,
-    )
-    create_segment(db, segment)
-    record_segment_event(
-        db, project_id=code.project_id, document_id=body.document_id,
-        action="created", segment_id=seg_id,
-        code_label=code.label, code_colour=code.colour, code_id=body.code_id,
-        segment_text=body.text, start_index=body.start_index, end_index=body.end_index,
-        user_id=body.user_id,
+        code_id=body.code_id, user_id=body.user_id, code=code,
     )
     db.commit()
 
@@ -113,20 +108,11 @@ async def batch_create_segments(
             continue
 
         seg_id = str(uuid.uuid4())
-        segment = CodedSegment(
-            id=seg_id, document_id=item.document_id, text=item.text,
+        segment = create_segment_with_event(
+            db,
+            segment_id=seg_id, document_id=item.document_id, text=item.text,
             start_index=item.start_index, end_index=item.end_index,
-            code_id=item.code_id, user_id=item.user_id,
-        )
-        db.add(segment)
-        db.flush()
-
-        record_segment_event(
-            db, project_id=code.project_id, document_id=item.document_id,
-            action="created", segment_id=seg_id,
-            code_label=code.label, code_colour=code.colour, code_id=item.code_id,
-            segment_text=item.text, start_index=item.start_index, end_index=item.end_index,
-            user_id=item.user_id, batch=True,
+            code_id=item.code_id, user_id=item.user_id, code=code, batch=True,
         )
 
         context_window = extract_window(doc.full_text, item.start_index, item.end_index)
@@ -196,8 +182,8 @@ def delete_segment_endpoint(
     try:
         from infrastructure.vector_store.store import delete_segment_embedding
         delete_segment_embedding(user_id, segment_id)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("Vector store cleanup failed for segment", extra={"segment_id": segment_id, "error": str(e)})
 
     delete_segment_record(db, seg)
 

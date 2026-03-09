@@ -99,7 +99,6 @@ def _build_deterministic_evidence_section(
     segment_count: int | None = None,
     proposed_code: str = "",
 ) -> str:
-    """Build the DETERMINISTIC EMBEDDING SCORES block for the prompt."""
     if centroid_similarity is None:
         return (
             "**DETERMINISTIC EMBEDDING SCORES: NOT AVAILABLE**\n"
@@ -148,21 +147,12 @@ def build_coding_audit_prompt(
     document_context: str = "",
     user_code_definitions: dict[str, str] | None = None,
     existing_codes_on_span: list[str] | None = None,
-    # Stage 1 parameters (None = no grounding available)
     centroid_similarity: float | None = None,
     temporal_drift: float | None = None,
     is_pseudo_centroid: bool = False,
     segment_count: int | None = None,
 ) -> list[dict]:
-    """Build the coding audit prompt as a list of messages (system + user).
-
-    When Stage 1 scores are provided, they are injected as FACTS that the
-    LLM must ground its judgment on. When they are None, the prompt tells
-    the LLM to be conservative (cold-start handling).
-
-    Returns list[dict] with 'role' and 'content' keys.
-    """
-    # Document context section
+# Document context section
     document_context_section = (
         f'"""\n{document_context}\n"""' if document_context else "(No surrounding context)"
     )
@@ -192,7 +182,7 @@ def build_coding_audit_prompt(
 
     co_applied_label_list = ", ".join(f'"{c}"' for c in all_applied) if all_applied else "(none)"
 
-    # Researcher-supplied definitions (canonical codebook)
+    # Researcher-supplied definitions
     if user_code_definitions:
         user_def_lines = []
         for code, defn in user_code_definitions.items():
@@ -204,7 +194,7 @@ def build_coding_audit_prompt(
     else:
         user_definitions_str = "(No researcher-supplied definitions yet)"
 
-    # AI-inferred definitions (supplementary)
+    # AI-inferred definitions
     if code_definitions:
         def_lines = []
         for code, analysis in code_definitions.items():

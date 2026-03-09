@@ -12,10 +12,10 @@ class Facet(Base):
     id = Column(String, primary_key=True)
     code_id = Column(String, ForeignKey("codes.id"), nullable=False)
     project_id = Column(String, ForeignKey("projects.id"), nullable=False)
-    label = Column(String, nullable=False)           # e.g. "immediate shock"
-    suggested_label = Column(String, nullable=True)  # AI's original suggestion (preserved after user renames)
-    label_source = Column(String, default="auto")    # "auto" | "ai" | "user"
-    centroid_json = Column(Text, nullable=False)     # JSON list of floats (embedding vector)
+    label = Column(String, nullable=False)
+    suggested_label = Column(String, nullable=True)
+    label_source = Column(String, default="auto")
+    centroid_json = Column(Text, nullable=False)
     segment_count = Column(Integer, default=0)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
@@ -27,13 +27,13 @@ class Facet(Base):
 
 
 class FacetAssignment(Base):
-    """Links a coded segment to a facet (cluster centroid)."""
+
     __tablename__ = "facet_assignments"
 
     id = Column(String, primary_key=True)
     segment_id = Column(String, ForeignKey("coded_segments.id"), nullable=False)
     facet_id = Column(String, ForeignKey("facets.id"), nullable=False)
-    similarity_score = Column(Float, nullable=False)  # cosine sim to facet centroid
+    similarity_score = Column(Float, nullable=False)
     is_dominant = Column(Boolean, default=True)
     assigned_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 

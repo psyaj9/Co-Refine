@@ -1,6 +1,3 @@
-"""Prompt builder for AI-powered facet label suggestions."""
-
-
 def build_facet_label_prompt(
     code_label: str,
     code_definition: str | None,

@@ -1,15 +1,14 @@
 """Main audit orchestrator: run_background_agents pipeline."""
 from __future__ import annotations
-import uuid
 
+from core import events as ev
 from core.database import SessionLocal
-from core.models import Code, CodedSegment, Document, AnalysisResult
+from core.models import Code, CodedSegment
 from core.config import settings
 from core.logging import get_logger
 from infrastructure.websocket.manager import ws_manager
-from infrastructure.vector_store.store import add_segment_embedding
-from infrastructure.vector_store.store import get_all_segments_for_code
-from features.audit.context_builder import build_code_definitions, build_user_code_definitions
+from infrastructure.vector_store.store import add_segment_embedding, get_all_segments_for_code
+from features.audit.context_builder import build_code_definitions
 from features.audit.score_persister import persist_consistency_score, persist_agent_alert
 from features.audit.auto_analyzer import maybe_run_auto_analysis
 
@@ -34,11 +33,11 @@ def run_background_agents(
     created_at: str | None = None,
 ) -> None:
     """Full audit pipeline for a newly created segment."""
-    from services.ai_analyzer import run_coding_audit
+    from features.audit.llm_auditor import run_coding_audit
     from features.scoring.pipeline import compute_stage1_scores
 
     db = SessionLocal()
-    _ws_send(user_id, {"type": "agents_started", "segment_id": segment_id, "data": {}})
+    _ws_send(user_id, {"type": ev.AGENTS_STARTED, "segment_id": segment_id, "data": {}})
 
     try:
         # 1. Embed segment
@@ -86,7 +85,7 @@ def run_background_agents(
                 code_definition=current_definition,
             )
             _ws_send(user_id, {
-                "type": "deterministic_scores",
+                "type": ev.DETERMINISTIC_SCORES,
                 "segment_id": segment_id,
                 "code_id": code_id,
                 "data": stage1,
@@ -95,7 +94,7 @@ def run_background_agents(
             logger.exception(f"Stage 1 scoring failed [segment_id={segment_id}]")
 
         # 3. Coding Audit
-        _ws_send(user_id, {"type": "agent_thinking", "agent": "coding_audit", "segment_id": segment_id, "data": {}})
+        _ws_send(user_id, {"type": ev.AGENT_THINKING, "agent": "coding_audit", "segment_id": segment_id, "data": {}})
         try:
             diverse = get_all_segments_for_code(
                 user_id=user_id, code_label=code_label, exclude_id=segment_id,
@@ -134,9 +133,8 @@ def run_background_agents(
             )
             db.commit()
 
-            # Temporal drift warning: emit if this segment's drift exceeds threshold
+            # Temporal drift warning
             try:
-                from core import events as ev
                 if stage1 and stage1.get("temporal_drift") is not None:
                     drift = stage1["temporal_drift"]
                     threshold = settings.drift_warning_threshold
@@ -166,7 +164,7 @@ def run_background_agents(
                 facet_result = run_facet_analysis(db=db, user_id=user_id, code_id=code_id, project_id=project_id or "")
                 if facet_result["status"] == "success":
                     _ws_send(user_id, {
-                        "type": "facet_updated",
+                        "type": ev.FACET_UPDATED,
                         "code_id": code_id,
                         "facet_count": facet_result["facet_count"],
                         "segment_count": facet_result["segment_count"],
@@ -176,7 +174,7 @@ def run_background_agents(
 
             escalation = audit_result.get("_escalation", {})
             _ws_send(user_id, {
-                "type": "coding_audit",
+                "type": ev.CODING_AUDIT,
                 "segment_id": segment_id,
                 "segment_text": text,
                 "code_id": code_id,
@@ -188,7 +186,7 @@ def run_background_agents(
             })
         except Exception as e:
             logger.error("Coding audit error", extra={"segment_id": segment_id, "error": str(e)})
-            _ws_send(user_id, {"type": "agent_error", "agent": "coding_audit", "segment_id": segment_id, "data": {"message": str(e)}})
+            _ws_send(user_id, {"type": ev.AGENT_ERROR, "agent": "coding_audit", "segment_id": segment_id, "data": {"message": str(e)}})
 
         # 4. Auto-analysis
         maybe_run_auto_analysis(
@@ -196,5 +194,5 @@ def run_background_agents(
         )
 
     finally:
-        _ws_send(user_id, {"type": "agents_done", "segment_id": segment_id, "data": {}})
+        _ws_send(user_id, {"type": ev.AGENTS_DONE, "segment_id": segment_id, "data": {}})
         db.close()

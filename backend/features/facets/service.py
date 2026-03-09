@@ -1,8 +1,3 @@
-"""Facet clustering service.
-
-Extracted from services/facet_clustering.py.
-Updated to use infrastructure.vector_store.store directly.
-"""
 import json
 import uuid
 
@@ -13,11 +8,19 @@ from sklearn.manifold import TSNE
 from sklearn.decomposition import PCA
 from sqlalchemy.orm import Session
 
-from core.models import Facet, FacetAssignment, CodedSegment, Code, AnalysisResult
+from core.models import Facet, FacetAssignment
 from core.logging import get_logger
 from infrastructure.vector_store.store import get_collection
 from infrastructure.llm.client import call_llm
 from prompts.facet_label_prompt import build_facet_label_prompt
+from features.facets.repository import (
+    get_segments_for_code,
+    get_active_facets_for_code,
+    get_code,
+    get_latest_analysis_for_code,
+    get_top_assignments_for_facet,
+    get_segments_by_ids,
+)
 
 logger = get_logger(__name__)
 
@@ -59,7 +62,8 @@ def _get_embeddings_by_ids(user_id: str, ids: list[str]) -> dict[str, list[float
         collection = get_collection(user_id)
         result = collection.get(ids=ids, include=["embeddings"])
         return {doc_id: emb for doc_id, emb in zip(result["ids"], result["embeddings"])}
-    except Exception:
+    except Exception as e:
+        logger.warning("Failed to retrieve embeddings from vector store", extra={"error": str(e)})
         return {}
 
 
@@ -70,11 +74,7 @@ def run_facet_analysis(
     project_id: str,
 ) -> dict:
     """Cluster segments into facets; upsert Facet/FacetAssignment rows."""
-    segments = (
-        db.query(CodedSegment)
-        .filter(CodedSegment.code_id == code_id, CodedSegment.user_id == user_id)
-        .all()
-    )
+    segments = get_segments_for_code(db, code_id, user_id)
     if len(segments) < MIN_SEGMENTS_FOR_CLUSTERING:
         return {"status": "skipped", "reason": "not_enough_segments"}
 
@@ -91,9 +91,7 @@ def run_facet_analysis(
     centroids = km.cluster_centers_
     coords_2d = _compute_tsne(emb_matrix)
 
-    existing_facets = (
-        db.query(Facet).filter(Facet.code_id == code_id, Facet.is_active == True).all()
-    )
+    existing_facets = get_active_facets_for_code(db, code_id)
     for f in existing_facets:
         f.is_active = False
 
@@ -140,39 +138,23 @@ def run_facet_analysis(
 
 
 def suggest_facet_labels(db: Session, code_id: str, facets: list[Facet]) -> None:
-    """Call LLM to propose descriptive sub-theme labels for each facet.
-
-    Updates Facet.label, Facet.suggested_label, and Facet.label_source in-place.
-    Gracefully degrades — if the LLM call fails, labels remain "Facet N".
-    """
     if not facets:
         return
 
-    code = db.query(Code).filter(Code.id == code_id).first()
+    code = get_code(db, code_id)
     if not code:
         return
 
     # Prefer the most recent AnalysisResult definition as richer context
-    analysis = (
-        db.query(AnalysisResult)
-        .filter(AnalysisResult.code_id == code_id)
-        .order_by(AnalysisResult.created_at.desc())
-        .first()
-    )
+    analysis = get_latest_analysis_for_code(db, code_id)
     code_definition = (analysis.definition if analysis else None) or code.definition
 
     # Build per-facet representative segment texts (top 5 by similarity)
     facet_inputs = []
     for idx, facet in enumerate(facets):
-        top_assignments = (
-            db.query(FacetAssignment)
-            .filter(FacetAssignment.facet_id == facet.id)
-            .order_by(FacetAssignment.similarity_score.desc())
-            .limit(5)
-            .all()
-        )
+        top_assignments = get_top_assignments_for_facet(db, facet.id, limit=5)
         seg_ids = [a.segment_id for a in top_assignments]
-        segs = db.query(CodedSegment).filter(CodedSegment.id.in_(seg_ids)).all()
+        segs = get_segments_by_ids(db, seg_ids)
         segs_by_id = {s.id: s for s in segs}
         texts = [
             (segs_by_id[a.segment_id].text or "")[:300]

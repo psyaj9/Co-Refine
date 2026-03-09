@@ -7,16 +7,9 @@ import math
 
 from infrastructure.vector_store.store import get_collection
 from infrastructure.vector_store.embeddings import embed_text
+from infrastructure.vector_store.mmr import cosine_similarity  # single source of truth
 
-
-def cosine_similarity(a: list[float], b: list[float]) -> float:
-    """Cosine similarity in [-1, 1]."""
-    dot = sum(x * y for x, y in zip(a, b))
-    norm_a = math.sqrt(sum(x * x for x in a))
-    norm_b = math.sqrt(sum(x * x for x in b))
-    if norm_a == 0.0 or norm_b == 0.0:
-        return 0.0
-    return max(-1.0, min(1.0, dot / (norm_a * norm_b)))
+__all__ = ["cosine_similarity", "_compute_centroid", "get_code_centroid"]
 
 
 def _compute_centroid(embeddings: list[list[float]]) -> list[float]:

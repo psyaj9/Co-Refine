@@ -1,9 +1,3 @@
-"""Domain exception hierarchy for Co-Refine.
-
-Router layers catch these and map to appropriate HTTPException status codes.
-"""
-
-
 class DomainError(Exception):
     """Base class for all domain exceptions."""
 
@@ -28,5 +22,5 @@ class ConflictError(DomainError):
 
 
 class ExternalServiceError(DomainError):
-    """Raised when an external service (LLM, ChromaDB, etc.) fails."""
+    """Raised when an external service fails."""
     pass

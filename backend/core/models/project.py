@@ -6,7 +6,6 @@ from core.database import Base
 
 
 class Project(Base):
-    """A project groups documents and codes together."""
     __tablename__ = "projects"
 
     id = Column(String, primary_key=True)

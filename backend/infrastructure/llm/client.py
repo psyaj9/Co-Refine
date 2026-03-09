@@ -1,9 +1,3 @@
-"""Azure OpenAI LLM client adapter.
-
-Owns the HTTP connection singleton and the core call wrapper that all
-feature-level callers (ai_analyzer, chat service) use.
-"""
-
 from openai import AzureOpenAI
 
 from core.config import settings
@@ -13,7 +7,6 @@ _client: AzureOpenAI | None = None
 
 
 def get_client() -> AzureOpenAI:
-    """Return the lazily-initialised AzureOpenAI singleton."""
     global _client
     if _client is None:
         _client = AzureOpenAI(
@@ -29,17 +22,6 @@ def call_llm(
     model: str | None = None,
     retries: int = 1,
 ) -> dict:
-    """Call the LLM and return a parsed JSON dict.
-
-    Args:
-        prompt: Either a plain string (wrapped to user message) or a full
-                messages list (system + user, etc.).
-        model:  Azure deployment name. Defaults to settings.azure_deployment_fast.
-        retries: Number of additional attempts on parse failure.
-
-    Returns:
-        Parsed dict, or error sentinel dict on repeated parse failure.
-    """
     client = get_client()
     deployment = model or settings.azure_deployment_fast
 

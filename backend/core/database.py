@@ -1,9 +1,3 @@
-"""SQLAlchemy engine, session factory, and declarative base.
-
-This module owns ONLY the connection infrastructure.
-ORM models live in core/models/*.py.
-"""
-
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 
@@ -18,7 +12,6 @@ Base = declarative_base()
 
 
 def get_db():
-    """FastAPI dependency: yields a DB session then closes it."""
     db = SessionLocal()
     try:
         yield db

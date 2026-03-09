@@ -3,15 +3,16 @@ from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
 
 from core.database import get_db
-from core.models import Code, CodedSegment, AnalysisResult
 from core.config import settings
-from features.audit.schemas import (
-    AnalysisTrigger,
-    BatchAuditRequest,
-    AnalysisOut,
-)
+from features.audit.schemas import AnalysisTrigger, BatchAuditRequest, AnalysisOut
 from features.audit.auto_analyzer import run_manual_analysis
 from features.audit.batch_auditor import run_batch_audit_background
+from features.audit.repository import (
+    get_code_by_id,
+    count_segments_for_code,
+    list_analyses_for_project,
+    list_codes_for_project,
+)
 
 router = APIRouter(prefix="/api/segments", tags=["audit"])
 
@@ -22,15 +23,11 @@ async def trigger_analysis(
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ):
-    code = db.query(Code).filter(Code.id == body.code_id).first()
+    code = get_code_by_id(db, body.code_id)
     if not code:
         raise HTTPException(status_code=404, detail="Code not found")
 
-    segment_count = (
-        db.query(CodedSegment)
-        .filter(CodedSegment.code_id == body.code_id, CodedSegment.user_id == body.user_id)
-        .count()
-    )
+    segment_count = count_segments_for_code(db, body.code_id, body.user_id)
     if segment_count < 2:
         raise HTTPException(status_code=400, detail="Need at least 2 segments to analyse")
 
@@ -46,9 +43,7 @@ async def trigger_analysis(
 
 @router.get("/analyses", response_model=list[AnalysisOut])
 def list_analyses(project_id: str = "", db: Session = Depends(get_db)):
-    query = db.query(AnalysisResult, Code).join(Code, AnalysisResult.code_id == Code.id)
-    if project_id:
-        query = query.filter(Code.project_id == project_id)
+    rows = list_analyses_for_project(db, project_id)
     return [
         AnalysisOut(
             code_id=r.code_id,
@@ -58,7 +53,7 @@ def list_analyses(project_id: str = "", db: Session = Depends(get_db)):
             reasoning=r.reasoning,
             segment_count=r.segment_count_at_analysis,
         )
-        for r, code in query.all()
+        for r, code in rows
     ]
 
 
@@ -71,7 +66,7 @@ async def batch_audit(
     if not settings.azure_api_key:
         raise HTTPException(status_code=400, detail="No AI API key configured")
 
-    codes = db.query(Code).filter(Code.project_id == body.project_id).all()
+    codes = list_codes_for_project(db, body.project_id)
     if not codes:
         raise HTTPException(status_code=404, detail="No codes found for this project")
 

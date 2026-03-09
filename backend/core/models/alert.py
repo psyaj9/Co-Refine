@@ -6,7 +6,6 @@ from core.database import Base
 
 
 class AgentAlert(Base):
-    """Persisted AI agent alerts so the frontend can fetch missed ones."""
     __tablename__ = "agent_alerts"
 
     id = Column(String, primary_key=True)

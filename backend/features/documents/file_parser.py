@@ -6,6 +6,10 @@ Moved from utils/file_parser.py — utils/file_parser.py is now a shim.
 from typing import Optional
 import io
 
+from core.logging import get_logger
+
+logger = get_logger(__name__)
+
 # Handle optional dependencies
 try:
     from docx import Document as DocxDocument
@@ -51,7 +55,8 @@ def _extract_docx_text(content: bytes) -> Optional[str]:
     try:
         doc = DocxDocument(io.BytesIO(content))
         return "\n".join(p.text for p in doc.paragraphs)
-    except Exception:
+    except Exception as e:
+        logger.warning("Failed to parse DOCX content", extra={"error": str(e)})
         return None
 
 
@@ -62,5 +67,6 @@ def _extract_pdf_text(content: bytes) -> Optional[str]:
         reader = pypdf.PdfReader(io.BytesIO(content))
         pages = [page.extract_text() or "" for page in reader.pages]
         return "\n".join(pages)
-    except Exception:
+    except Exception as e:
+        logger.warning("Failed to parse PDF content", extra={"error": str(e)})
         return None

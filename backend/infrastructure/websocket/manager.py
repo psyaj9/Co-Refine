@@ -1,9 +1,3 @@
-"""WebSocket connection manager for Co-Refine.
-
-Manages per-user connection sets and provides a thread-safe send mechanism
-for background tasks that run outside the asyncio event loop.
-"""
-
 import asyncio
 from typing import Any
 
@@ -16,11 +10,9 @@ class ConnectionManager:
         self._loop: asyncio.AbstractEventLoop | None = None
 
     def set_loop(self, loop: asyncio.AbstractEventLoop) -> None:
-        """Register the main event loop so background threads can send safely."""
         self._loop = loop
 
     def send_alert_threadsafe(self, user_id: str, payload: dict[str, Any]) -> None:
-        """Send a payload from a background thread without asyncio.run() conflicts."""
         if self._loop and self._loop.is_running():
             asyncio.run_coroutine_threadsafe(
                 self.send_alert(user_id, payload), self._loop
@@ -55,5 +47,4 @@ class ConnectionManager:
             await self.send_alert(user_id, alert)
 
 
-# Module-level singleton — imported by main.py and all background tasks.
 ws_manager = ConnectionManager()
