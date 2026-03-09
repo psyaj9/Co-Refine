@@ -21,9 +21,7 @@ export function useWebSocket() {
 
     function connect() {
       if (disposed || !token) return;
-      if (disposed || !token) return;
       const protocol = window.location.protocol === "https:" ? "wss" : "ws";
-      const url = `${protocol}://${window.location.host}/ws?token=${encodeURIComponent(token)}`;
       const url = `${protocol}://${window.location.host}/ws?token=${encodeURIComponent(token)}`;
       const ws = new WebSocket(url);
       wsRef.current = ws;
@@ -98,6 +96,5 @@ export function useWebSocket() {
       wsRef.current?.close();
       wsRef.current = null;
     };
-  }, [token]);
   }, [token]);
 }

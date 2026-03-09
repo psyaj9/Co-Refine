@@ -19,13 +19,10 @@ import { Visualisations } from "@/features/visualisations";
 import { EditHistoryView } from "@/features/history";
 import { HighlightPopover } from "@/features/selection";
 import { LoginPage, RegisterPage } from "@/features/auth";
-import { LoginPage, RegisterPage } from "@/features/auth";
 
 const PANEL_IDS = ["left-panel", "center-panel", "right-panel"];
 
 export default function App() {
-  const authUser = useStore((s) => s.authUser);
-  const initAuth = useStore((s) => s.initAuth);
   const authUser = useStore((s) => s.authUser);
   const initAuth = useStore((s) => s.initAuth);
   const activeProjectId = useStore((s) => s.activeProjectId);
@@ -51,7 +48,6 @@ export default function App() {
 
   useEffect(() => {
     initAuth();
-    initAuth();
   }, []);
 
   useEffect(() => {
@@ -64,7 +60,6 @@ export default function App() {
     return () => window.removeEventListener("co_refine:unauthorized", handler);
   }, [logout]);
 
-  const [showRegister, setShowRegister] = useState(false);
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(false);
 

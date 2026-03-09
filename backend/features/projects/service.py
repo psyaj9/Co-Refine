@@ -17,9 +17,12 @@ logger = get_logger(__name__)
 
 
 def create_new_project(db: Session, name: str, user_id: str | None = None) -> Project:
-    """Create and persist a new Project."""
+    """Create and persist a new Project, adding the creator as owner member."""
     project = Project(id=str(uuid.uuid4()), name=name, user_id=user_id)
-    return create_project(db, project)
+    create_project(db, project)
+    if user_id:
+        add_project_member(db, project.id, user_id, role="owner")
+    return project
 
 
 def project_to_out(project: Project, doc_count: int = 0, code_count: int = 0) -> ProjectOut:

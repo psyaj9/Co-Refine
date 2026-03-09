@@ -1,8 +1,6 @@
 import type { ChatMessageOut, ConversationPreview } from "@/types";
 import * as api from "@/api/client";
 
-
-
 export interface ChatSlice {
   chatMessages: ChatMessageOut[];
   chatConversationId: string | null;

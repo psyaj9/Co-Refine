@@ -5,10 +5,8 @@ from sqlalchemy.orm import Session
 
 from core.database import get_db
 from core.models import ChatMessage, User
-from core.models import ChatMessage, User
 from core.config import settings
 from features.chat.schemas import ChatRequest, ChatMessageOut
-from infrastructure.auth.dependencies import get_current_user
 from features.chat.repository import (
     create_message,
     get_conversation_messages,
@@ -32,7 +30,6 @@ async def send_chat_message(
     body: ChatRequest,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
     current_user: User = Depends(get_current_user),
 ):
     if not settings.azure_api_key:
@@ -84,9 +81,7 @@ def list_conversations(
     project_id: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    current_user: User = Depends(get_current_user),
 ):
-    stubs = list_conversation_stubs(db, project_id, current_user.id)
     stubs = list_conversation_stubs(db, project_id, current_user.id)
     results = []
     for conv_id, started_at in stubs:

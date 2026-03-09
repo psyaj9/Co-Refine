@@ -15,6 +15,33 @@ def list_all_projects(db: Session, user_id: str | None = None) -> list[Project]:
     return q.order_by(Project.created_at.desc()).all()
 
 
+def list_projects_for_user(db: Session, user_id: str) -> list[Project]:
+    """Return all projects where the user is an owner or member."""
+    return (
+        db.query(Project)
+        .join(ProjectMember, Project.id == ProjectMember.project_id)
+        .filter(ProjectMember.user_id == user_id)
+        .order_by(Project.created_at.desc())
+        .all()
+    )
+
+
+def get_membership(db: Session, project_id: str, user_id: str) -> ProjectMember | None:
+    return (
+        db.query(ProjectMember)
+        .filter(ProjectMember.project_id == project_id, ProjectMember.user_id == user_id)
+        .first()
+    )
+
+
+def add_project_member(db: Session, project_id: str, user_id: str, role: str = "owner") -> ProjectMember:
+    member = ProjectMember(project_id=project_id, user_id=user_id, role=role)
+    db.add(member)
+    db.commit()
+    db.refresh(member)
+    return member
+
+
 def create_project(db: Session, project: Project) -> Project:
     db.add(project)
     db.commit()

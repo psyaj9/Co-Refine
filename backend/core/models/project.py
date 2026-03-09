@@ -1,5 +1,4 @@
 from sqlalchemy import Column, String, DateTime, JSON, ForeignKey
-from sqlalchemy import Column, String, DateTime, JSON, ForeignKey
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
 
@@ -19,5 +18,4 @@ class Project(Base):
     documents = relationship("Document", back_populates="project", cascade="all, delete-orphan")
     codes = relationship("Code", back_populates="project", cascade="all, delete-orphan")
     facets = relationship("Facet", back_populates="project", cascade="all, delete-orphan")
-    members = relationship("ProjectMember", back_populates="project", cascade="all, delete-orphan")
     members = relationship("ProjectMember", back_populates="project", cascade="all, delete-orphan")

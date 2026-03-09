@@ -16,7 +16,6 @@
   CodeOverlapData,
   TokenResponse,
   CodeCooccurrenceData,
-  TokenResponse,
 } from "@/types";
 
 const BASE = "/api";
@@ -78,7 +77,6 @@ export async function registerUser(email: string, display_name: string, password
 export async function createProject(name: string) {
   return json<ProjectOut>(
     await apiFetch(`${BASE}/projects/`, {
-    await apiFetch(`${BASE}/projects/`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name }),
@@ -92,7 +90,6 @@ export async function fetchProjects() {
 
 export async function deleteProject(id: string) {
   await apiFetch(`${BASE}/projects/${id}`, { method: "DELETE" });
-  await apiFetch(`${BASE}/projects/${id}`, { method: "DELETE" });
 }
 
 // -- Documents
@@ -105,7 +102,6 @@ export async function uploadDocument(file: File, title: string, docType: string,
   fd.append("project_id", projectId);
   return json<{ id: string; title: string; project_id: string }>(
     await apiFetch(`${BASE}/documents/upload`, { method: "POST", body: fd })
-    await apiFetch(`${BASE}/documents/upload`, { method: "POST", body: fd })
   );
 }
 
@@ -116,7 +112,6 @@ export async function pasteDocument(title: string, text: string, docType: string
   fd.append("doc_type", docType);
   fd.append("project_id", projectId);
   return json<{ id: string; title: string; project_id: string }>(
-    await apiFetch(`${BASE}/documents/paste`, { method: "POST", body: fd })
     await apiFetch(`${BASE}/documents/paste`, { method: "POST", body: fd })
   );
 }
@@ -131,11 +126,9 @@ export async function fetchDocuments(projectId?: string) {
 
 export async function fetchDocument(id: string) {
   return json<DocumentOut>(await apiFetch(`${BASE}/documents/${id}`));
-  return json<DocumentOut>(await apiFetch(`${BASE}/documents/${id}`));
 }
 
 export async function deleteDocument(id: string) {
-  await apiFetch(`${BASE}/documents/${id}`, { method: "DELETE" });
   await apiFetch(`${BASE}/documents/${id}`, { method: "DELETE" });
 }
 
@@ -148,7 +141,6 @@ export async function createCode(
   definition?: string
 ) {
   return json<CodeOut>(
-    await apiFetch(`${BASE}/codes/`, {
     await apiFetch(`${BASE}/codes/`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -173,7 +165,6 @@ export async function fetchCodes(projectId?: string) {
 export async function updateCode(id: string, patch: { label?: string; colour?: string; definition?: string }) {
   return json<CodeOut>(
     await apiFetch(`${BASE}/codes/${id}`, {
-    await apiFetch(`${BASE}/codes/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(patch),
@@ -182,7 +173,6 @@ export async function updateCode(id: string, patch: { label?: string; colour?: s
 }
 
 export async function deleteCode(id: string) {
-  await apiFetch(`${BASE}/codes/${id}`, { method: "DELETE" });
   await apiFetch(`${BASE}/codes/${id}`, { method: "DELETE" });
 }
 
@@ -196,7 +186,6 @@ export async function codeSegment(body: {
   code_id: string;
 }) {
   return json<SegmentOut>(
-    await apiFetch(`${BASE}/segments/`, {
     await apiFetch(`${BASE}/segments/`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -216,7 +205,6 @@ export async function batchCreateSegments(
 ) {
   return json<{ created: number }>(
     await apiFetch(`${BASE}/segments/batch`, {
-    await apiFetch(`${BASE}/segments/batch`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ items }),
@@ -224,7 +212,6 @@ export async function batchCreateSegments(
   );
 }
 
-export async function fetchSegments(documentId?: string) {
 export async function fetchSegments(documentId?: string) {
   const params = new URLSearchParams();
   if (documentId) params.set("document_id", documentId);
@@ -235,22 +222,17 @@ export async function fetchSegments(documentId?: string) {
 
 export async function fetchSegment(segmentId: string) {
   return json<SegmentOut>(await apiFetch(`${BASE}/segments/${segmentId}`));
-  return json<SegmentOut>(await apiFetch(`${BASE}/segments/${segmentId}`));
 }
 
 export async function deleteSegment(id: string) {
   await apiFetch(`${BASE}/segments/${id}`, { method: "DELETE" });
-  await apiFetch(`${BASE}/segments/${id}`, { method: "DELETE" });
 }
 
 export async function triggerAnalysis(codeId: string) {
-export async function triggerAnalysis(codeId: string) {
   return json<{ status: string; code_id: string }>(
-    await apiFetch(`${BASE}/segments/analyze`, {
     await apiFetch(`${BASE}/segments/analyze`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code_id: codeId }),
       body: JSON.stringify({ code_id: codeId }),
     })
   );
@@ -280,20 +262,16 @@ export async function fetchCodeSegments(codeId: string) {
 }
 
 export async function triggerBatchAudit(projectId: string) {
-export async function triggerBatchAudit(projectId: string) {
   return json<{ status: string; code_count: number }>(
-    await apiFetch(`${BASE}/segments/batch-audit`, {
     await apiFetch(`${BASE}/segments/batch-audit`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ project_id: projectId }),
       body: JSON.stringify({ project_id: projectId }),
     })
   );
 }
 
 export async function markAlertRead(alertId: string) {
-  await apiFetch(`${BASE}/segments/alerts/${alertId}/read`, { method: "PATCH" });
   await apiFetch(`${BASE}/segments/alerts/${alertId}/read`, { method: "PATCH" });
 }
 
@@ -311,7 +289,6 @@ export async function sendChatMessage(
   conversationId?: string | null,
 ) {
   return json<{ conversation_id: string; status: string }>(
-    await apiFetch(`${BASE}/chat/`, {
     await apiFetch(`${BASE}/chat/`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -339,7 +316,6 @@ export async function fetchConversations(projectId: string) {
 
 export async function deleteConversation(conversationId: string) {
   await apiFetch(`${BASE}/chat/conversations/${conversationId}`, { method: "DELETE" });
-  await apiFetch(`${BASE}/chat/conversations/${conversationId}`, { method: "DELETE" });
 }
 
 // -- Edit History
@@ -365,7 +341,6 @@ export async function fetchProjectSettings(projectId: string) {
 
 export async function updateProjectSettings(projectId: string, patch: { enabled_perspectives?: string[]; thresholds?: Record<string, number> }) {
   return json<ProjectSettings>(
-    await apiFetch(`${BASE}/projects/${projectId}/settings`, {
     await apiFetch(`${BASE}/projects/${projectId}/settings`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -424,7 +399,6 @@ export async function fetchFacets(projectId: string, codeId?: string | null) {
 
 export async function renameFacet(projectId: string, facetId: string, label: string) {
   return json<{ id: string; label: string; label_source: string }>(
-    await apiFetch(`${BASE}/projects/${projectId}/vis/facets/${facetId}/label`, {
     await apiFetch(`${BASE}/projects/${projectId}/vis/facets/${facetId}/label`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },

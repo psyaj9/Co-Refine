@@ -3,7 +3,6 @@ from sqlalchemy.orm import Session
 
 from core.database import get_db
 from core.models import User
-from core.models import User
 from features.documents.schemas import DocumentOut, DocumentUploadResponse
 from features.documents.file_parser import extract_text, extract_html
 from features.documents.repository import (
@@ -16,7 +15,6 @@ from features.documents.service import (
     cleanup_document_vectors,
     create_document_from_upload,
 )
-from infrastructure.auth.dependencies import get_current_user
 from infrastructure.auth.dependencies import get_current_user
 
 router = APIRouter(prefix="/api/documents", tags=["documents"])

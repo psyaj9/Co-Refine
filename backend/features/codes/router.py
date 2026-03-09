@@ -5,7 +5,6 @@ from sqlalchemy.orm import Session
 
 from core.database import get_db
 from core.models import Code, User
-from core.models import Code, User
 from features.codes.schemas import CodeCreate, CodeOut, CodeUpdate, SegmentOut
 from features.codes.repository import (
     get_code_by_id,
@@ -18,7 +17,6 @@ from features.codes.repository import (
     get_segments_for_code,
 )
 from features.codes.service import record_code_event, cascade_delete_code
-from infrastructure.auth.dependencies import get_current_user
 from infrastructure.auth.dependencies import get_current_user
 
 router = APIRouter(prefix="/api/codes", tags=["codes"])

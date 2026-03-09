@@ -23,7 +23,6 @@ from features.projects.service import (
     cleanup_project_vectors,
 )
 from infrastructure.auth.dependencies import get_current_user
-from infrastructure.auth.dependencies import get_current_user
 
 logger = get_logger(__name__)
 
@@ -45,7 +44,7 @@ def list_projects(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    projects = list_all_projects(db, user_id=current_user.id)
+    projects = list_projects_for_user(db, user_id=current_user.id)
     counts = batch_project_counts(db, [p.id for p in projects])
     return [
         project_to_out(p, counts[p.id]["doc_count"], counts[p.id]["code_count"])
