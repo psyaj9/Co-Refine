@@ -1,7 +1,7 @@
 import type { SegmentOut, TextSelection, PendingApplication } from "@/types";
 import * as api from "@/api/client";
 
-const CURRENT_USER = "default";
+
 
 export interface SegmentSlice {
   segments: SegmentOut[];
@@ -57,7 +57,6 @@ export const createSegmentSlice = (
       start_index: sel.startIndex,
       end_index: sel.endIndex,
       code_id: resolvedCodeId,
-      user_id: CURRENT_USER,
     });
     await get().loadSegments(activeDocumentId);
     await get().loadCodes();
@@ -92,7 +91,7 @@ export const createSegmentSlice = (
   clearPendingApplications: () => set({ pendingApplications: [] }),
 
   confirmPendingApplications: async () => {
-    const { pendingApplications, currentUser, loadSegments, loadCodes, activeDocumentId } = get();
+    const { pendingApplications, loadSegments, loadCodes, activeDocumentId } = get();
     if (pendingApplications.length === 0) return;
     try {
       await api.batchCreateSegments(
@@ -102,7 +101,6 @@ export const createSegmentSlice = (
           start_index: p.startIndex,
           end_index: p.endIndex,
           code_id: p.codeId,
-          user_id: currentUser,
         })),
       );
       set({ pendingApplications: [] });
@@ -118,7 +116,7 @@ export const createSegmentSlice = (
   retrievedCodeId: null,
 
   loadRetrievedSegments: async (codeId: string) => {
-    const forCode = await api.fetchCodeSegments(codeId, CURRENT_USER);
+    const forCode = await api.fetchCodeSegments(codeId);
     set({ retrievedSegments: forCode, retrievedCodeId: codeId });
   },
 

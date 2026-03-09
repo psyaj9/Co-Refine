@@ -1,7 +1,7 @@
 import type { AlertPayload } from "@/types";
 import * as api from "@/api/client";
 
-const CURRENT_USER = "default";
+
 
 /** Two-stage audit pipeline progress */
 export interface AuditStage {
@@ -224,7 +224,6 @@ export const createAuditSlice = (
         start_index: seg.start_index,
         end_index: seg.end_index,
         code_id: matchingCode.id,
-        user_id: CURRENT_USER,
       });
       set((s: any) => ({ alerts: s.alerts.filter((_: unknown, i: number) => i !== alertIdx) }));
       if (activeDocumentId) {

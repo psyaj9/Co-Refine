@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 
 from core.database import get_db
 from core.logging import get_logger
+from core.models import User
 from features.projects.schemas import ProjectCreate, ProjectOut, ProjectSettingsOut, ProjectSettingsUpdate
 from features.projects.constants import AVAILABLE_PERSPECTIVES, THRESHOLD_DEFINITIONS
 from features.projects.repository import (
@@ -20,6 +21,7 @@ from features.projects.service import (
     build_settings_out,
     cleanup_project_vectors,
 )
+from infrastructure.auth.dependencies import get_current_user
 
 logger = get_logger(__name__)
 
@@ -27,14 +29,21 @@ router = APIRouter(prefix="/api/projects", tags=["projects"])
 
 
 @router.post("/", response_model=ProjectOut)
-def create_project_endpoint(body: ProjectCreate, db: Session = Depends(get_db)):
-    created = create_new_project(db, body.name)
+def create_project_endpoint(
+    body: ProjectCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    created = create_new_project(db, body.name, user_id=current_user.id)
     return project_to_out(created)
 
 
 @router.get("/", response_model=list[ProjectOut])
-def list_projects(db: Session = Depends(get_db)):
-    projects = list_all_projects(db)
+def list_projects(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    projects = list_all_projects(db, user_id=current_user.id)
     counts = batch_project_counts(db, [p.id for p in projects])
     return [
         project_to_out(p, counts[p.id]["doc_count"], counts[p.id]["code_count"])
@@ -58,19 +67,27 @@ def get_project(project_id: str, db: Session = Depends(get_db)):
 
 
 @router.delete("/{project_id}")
-def delete_project_endpoint(project_id: str, user_id: str = "default", db: Session = Depends(get_db)):
+def delete_project_endpoint(
+    project_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """Delete a project and ALL its documents, codes, segments, analyses, alerts."""
     project = get_project_by_id(db, project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    cleanup_project_vectors(db, project_id, user_id)
+    cleanup_project_vectors(db, project_id, current_user.id)
     delete_project(db, project)
     return {"status": "deleted"}
 
 
 @router.get("/{project_id}/settings", response_model=ProjectSettingsOut)
-def get_project_settings(project_id: str, db: Session = Depends(get_db)):
+def get_project_settings(
+    project_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     project = get_project_by_id(db, project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
@@ -79,7 +96,10 @@ def get_project_settings(project_id: str, db: Session = Depends(get_db)):
 
 @router.put("/{project_id}/settings", response_model=ProjectSettingsOut)
 def update_project_settings(
-    project_id: str, body: ProjectSettingsUpdate, db: Session = Depends(get_db)
+    project_id: str,
+    body: ProjectSettingsUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     project = get_project_by_id(db, project_id)
     if not project:

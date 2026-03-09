@@ -1,3 +1,26 @@
+export interface AuthUser {
+  user_id: string;
+  email: string;
+  display_name: string;
+}
+
+export interface TokenResponse {
+  access_token: string;
+  token_type: string;
+  user: AuthUser;
+}
+
+export interface LoginRequest {
+  email: string;
+  password: string;
+}
+
+export interface RegisterRequest {
+  email: string;
+  display_name: string;
+  password: string;
+}
+
 export interface ProjectOut {
   id: string;
   name: string;

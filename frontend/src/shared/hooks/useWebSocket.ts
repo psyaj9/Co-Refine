@@ -4,7 +4,7 @@ import { useStore } from "@/stores/store";
 const RECONNECT_DELAY = 3000;
 
 export function useWebSocket() {
-  const currentUser = useStore((s) => s.currentUser);
+  const token = useStore((s) => s.token);
   const pushAlert = useStore((s) => s.pushAlert);
   const loadAnalyses = useStore((s) => s.loadAnalyses);
   const loadCodes = useStore((s) => s.loadCodes);
@@ -19,9 +19,9 @@ export function useWebSocket() {
     let disposed = false;
 
     function connect() {
-      if (disposed) return;
+      if (disposed || !token) return;
       const protocol = window.location.protocol === "https:" ? "wss" : "ws";
-      const url = `${protocol}://${window.location.host}/ws/${encodeURIComponent(currentUser)}`;
+      const url = `${protocol}://${window.location.host}/ws?token=${encodeURIComponent(token)}`;
       const ws = new WebSocket(url);
       wsRef.current = ws;
 
@@ -97,5 +97,5 @@ export function useWebSocket() {
       wsRef.current?.close();
       wsRef.current = null;
     };
-  }, [currentUser]);
+  }, [token]);
 }

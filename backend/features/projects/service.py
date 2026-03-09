@@ -12,9 +12,9 @@ from features.projects.repository import batch_project_counts, get_segment_ids_f
 logger = get_logger(__name__)
 
 
-def create_new_project(db: Session, name: str) -> Project:
+def create_new_project(db: Session, name: str, user_id: str | None = None) -> Project:
     """Create and persist a new Project."""
-    project = Project(id=str(uuid.uuid4()), name=name)
+    project = Project(id=str(uuid.uuid4()), name=name, user_id=user_id)
     return create_project(db, project)
 
 

@@ -8,7 +8,6 @@ import { getNextColour } from "@/lib/constants";
  * Extracted from CodesTabContent to keep the component UI-only.
  */
 export function useCodeActions() {
-  const currentUser = useStore((s) => s.currentUser);
   const codes = useStore((s) => s.codes);
   const addCode = useStore((s) => s.addCode);
   const deleteCode = useStore((s) => s.deleteCode);
@@ -34,13 +33,13 @@ export function useCodeActions() {
   const handleAnalyse = useCallback(
     async (codeId: string) => {
       try {
-        await api.triggerAnalysis(codeId, currentUser);
+        await api.triggerAnalysis(codeId);
         await loadAnalyses();
       } catch (e: unknown) {
         alert(e instanceof Error ? e.message : "Analysis failed");
       }
     },
-    [currentUser, loadAnalyses],
+    [loadAnalyses],
   );
 
   return { handleAddCode, handleDeleteCode, handleAnalyse };

@@ -15,6 +15,7 @@ from features.audit.router import router as audit_router
 from features.chat.router import router as chat_router
 from features.edit_history.router import router as edit_history_router
 from features.visualisations.router import router as vis_router
+from features.auth.router import router as auth_router
 from infrastructure.websocket.manager import ws_manager
 from core.config import settings
 
@@ -60,6 +61,7 @@ async def external_service_handler(request: Request, exc: ExternalServiceError) 
     logger.error("External service error", extra={"message": exc.message})
     return JSONResponse(status_code=502, content={"detail": exc.message or "External service error"})
 
+app.include_router(auth_router)
 app.include_router(projects_router)
 app.include_router(documents_router)
 app.include_router(codes_router)
@@ -70,8 +72,16 @@ app.include_router(edit_history_router)
 app.include_router(vis_router)
 
 
-@app.websocket("/ws/{user_id}")
-async def websocket_endpoint(websocket: WebSocket, user_id: str):
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket, token: str):
+    from jose import JWTError
+    from infrastructure.auth.jwt import decode_token
+    try:
+        payload = decode_token(token)
+        user_id = payload["sub"]
+    except (JWTError, KeyError):
+        await websocket.close(code=4001)
+        return
     await ws_manager.connect(websocket, user_id)
     try:
         while True:

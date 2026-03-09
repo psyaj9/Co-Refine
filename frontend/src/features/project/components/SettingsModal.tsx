@@ -21,7 +21,7 @@ export default function SettingsModal({ open, onClose }: Props) {
 
   const handleBatchAudit = async () => {
     if (!activeProjectId || batchAuditRunning) return;
-    await triggerBatchAudit(activeProjectId, "default");
+    await triggerBatchAudit(activeProjectId);
   };
 
   if (!open) return null;

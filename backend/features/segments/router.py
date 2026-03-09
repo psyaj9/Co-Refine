@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
 
 from core.database import get_db
-from core.models import CodedSegment
+from core.models import CodedSegment, User
 from core.config import settings
 from core.logging import get_logger
 from features.segments.schemas import SegmentCreate, SegmentOut, BatchSegmentCreate, AlertOut
@@ -18,6 +18,7 @@ from features.segments.repository import (
     list_alerts,
 )
 from features.segments.service import create_segment_with_event, record_segment_event
+from infrastructure.auth.dependencies import get_current_user
 
 logger = get_logger(__name__)
 
@@ -36,8 +37,12 @@ def _seg_out(seg: CodedSegment, code_label: str, code_colour: str) -> SegmentOut
 # ── Alerts ──────────────────────────────────────────────────────────────────
 
 @router.get("/alerts", response_model=list[AlertOut])
-def list_alerts_endpoint(user_id: str, unread_only: bool = True, db: Session = Depends(get_db)):
-    alerts = list_alerts(db, user_id, unread_only)
+def list_alerts_endpoint(
+    unread_only: bool = True,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    alerts = list_alerts(db, current_user.id, unread_only)
     return [
         AlertOut(
             id=a.id, alert_type=a.alert_type, payload=a.payload,
@@ -54,6 +59,7 @@ async def create_segment_endpoint(
     body: SegmentCreate,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     code = get_code_for_segment(db, body.code_id)
     if not code:
@@ -62,12 +68,13 @@ async def create_segment_endpoint(
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
 
+    user_id = current_user.id
     seg_id = str(uuid.uuid4())
     segment = create_segment_with_event(
         db,
         segment_id=seg_id, document_id=body.document_id, text=body.text,
         start_index=body.start_index, end_index=body.end_index,
-        code_id=body.code_id, user_id=body.user_id, code=code,
+        code_id=body.code_id, user_id=user_id, code=code,
     )
     db.commit()
 
@@ -78,7 +85,7 @@ async def create_segment_endpoint(
         background_tasks.add_task(
             run_background_agents,
             segment_id=seg_id, text=body.text, code_label=code.label,
-            code_id=body.code_id, user_id=body.user_id, document_id=body.document_id,
+            code_id=body.code_id, user_id=user_id, document_id=body.document_id,
             document_context=context_window, start_index=body.start_index,
             end_index=body.end_index, created_at=segment.created_at.isoformat(),
         )
@@ -91,13 +98,14 @@ async def batch_create_segments(
     body: BatchSegmentCreate,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     if not body.items:
         return {"created": 0}
 
     from features.audit.context_builder import extract_window
     created_segments: list[dict] = []
-    user_id = body.items[0].user_id
+    user_id = current_user.id
 
     for item in body.items:
         code = get_code_for_segment(db, item.code_id)
@@ -112,7 +120,7 @@ async def batch_create_segments(
             db,
             segment_id=seg_id, document_id=item.document_id, text=item.text,
             start_index=item.start_index, end_index=item.end_index,
-            code_id=item.code_id, user_id=item.user_id, code=code, batch=True,
+            code_id=item.code_id, user_id=user_id, code=code, batch=True,
         )
 
         context_window = extract_window(doc.full_text, item.start_index, item.end_index)
@@ -121,7 +129,7 @@ async def batch_create_segments(
             "text": item.text,
             "code_label": code.label,
             "code_id": item.code_id,
-            "user_id": item.user_id,
+            "user_id": user_id,
             "document_id": item.document_id,
             "document_context": context_window,
             "start_index": item.start_index,
@@ -142,10 +150,10 @@ async def batch_create_segments(
 @router.get("/", response_model=list[SegmentOut])
 def list_segments_endpoint(
     document_id: str = "",
-    user_id: str = "",
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    rows = list_segments(db, document_id, user_id)
+    rows = list_segments(db, document_id, current_user.id)
     return [
         _seg_out(s, code.label if code else "?", code.colour if code else "#ccc")
         for s, code in rows
@@ -155,15 +163,16 @@ def list_segments_endpoint(
 @router.delete("/{segment_id}")
 def delete_segment_endpoint(
     segment_id: str,
-    user_id: str = "default",
     background_tasks: BackgroundTasks = None,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     row = get_segment_by_id(db, segment_id)
     if not row:
         raise HTTPException(status_code=404, detail="Segment not found")
     seg, code = row
 
+    user_id = current_user.id
     doc = get_document(db, seg.document_id)
     project_id = code.project_id if code else (doc.project_id if doc else None)
     seg_start, seg_end = seg.start_index, seg.end_index

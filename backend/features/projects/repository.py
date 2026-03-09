@@ -9,8 +9,11 @@ def get_project_by_id(db: Session, project_id: str) -> Project | None:
     return db.query(Project).filter(Project.id == project_id).first()
 
 
-def list_all_projects(db: Session) -> list[Project]:
-    return db.query(Project).order_by(Project.created_at.desc()).all()
+def list_all_projects(db: Session, user_id: str | None = None) -> list[Project]:
+    q = db.query(Project)
+    if user_id:
+        q = q.filter(Project.user_id == user_id)
+    return q.order_by(Project.created_at.desc()).all()
 
 
 def create_project(db: Session, project: Project) -> Project:

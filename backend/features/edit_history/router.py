@@ -3,8 +3,10 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from core.database import get_db
+from core.models import User
 from features.edit_history.schemas import EditEventOut
 from features.edit_history.repository import get_edit_history
+from infrastructure.auth.dependencies import get_current_user
 
 router = APIRouter(prefix="/api/projects", tags=["edit_history"])
 
@@ -17,6 +19,7 @@ def get_edit_history_endpoint(
     limit: int = Query(200, ge=1, le=1000),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Return edit events for a project, newest first."""
     events = get_edit_history(

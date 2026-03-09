@@ -1,0 +1,40 @@
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+
+from core.database import get_db
+from core.exceptions import ConflictError, ValidationError
+from core.models import User
+from features.auth.schemas import RegisterRequest, LoginRequest, TokenResponse, UserOut
+from features.auth.service import register_user, authenticate_user, issue_token
+from infrastructure.auth.dependencies import get_current_user
+
+router = APIRouter(prefix="/api/auth", tags=["auth"])
+
+
+def _user_out(user: User) -> UserOut:
+    return UserOut(user_id=user.id, email=user.email, display_name=user.display_name)
+
+
+@router.post("/register", response_model=TokenResponse, status_code=201)
+def register(body: RegisterRequest, db: Session = Depends(get_db)):
+    try:
+        user = register_user(db, body.email, body.display_name, body.password)
+    except ConflictError as exc:
+        raise HTTPException(status_code=409, detail=exc.message)
+    token = issue_token(user)
+    return TokenResponse(access_token=token, user=_user_out(user))
+
+
+@router.post("/login", response_model=TokenResponse)
+def login(body: LoginRequest, db: Session = Depends(get_db)):
+    try:
+        user = authenticate_user(db, body.email, body.password)
+    except ValidationError as exc:
+        raise HTTPException(status_code=401, detail=exc.message)
+    token = issue_token(user)
+    return TokenResponse(access_token=token, user=_user_out(user))
+
+
+@router.get("/me", response_model=UserOut)
+def me(current_user: User = Depends(get_current_user)):
+    return _user_out(current_user)

@@ -18,10 +18,13 @@ import { DocumentUpload, DocumentViewer } from "@/features/documents";
 import { Visualisations } from "@/features/visualisations";
 import { EditHistoryView } from "@/features/history";
 import { HighlightPopover } from "@/features/selection";
+import { LoginPage, RegisterPage } from "@/features/auth";
 
 const PANEL_IDS = ["left-panel", "center-panel", "right-panel"];
 
 export default function App() {
+  const authUser = useStore((s) => s.authUser);
+  const initAuth = useStore((s) => s.initAuth);
   const activeProjectId = useStore((s) => s.activeProjectId);
   const activeDocumentId = useStore((s) => s.activeDocumentId);
   const showUploadPage = useStore((s) => s.showUploadPage);
@@ -40,8 +43,22 @@ export default function App() {
   useWebSocket();
 
   useEffect(() => {
-    loadProjects();
+    initAuth();
   }, []);
+
+  useEffect(() => {
+    if (authUser) loadProjects();
+  }, [authUser]);
+
+  const [showRegister, setShowRegister] = useState(false);
+
+  if (!authUser) {
+    return showRegister ? (
+      <RegisterPage onShowLogin={() => setShowRegister(false)} />
+    ) : (
+      <LoginPage onShowRegister={() => setShowRegister(true)} />
+    );
+  }
 
   const showUpload = !activeProjectId || showUploadPage || !activeDocumentId;
   const showRightPanel = !!(activeProjectId && activeDocumentId && !showUploadPage);

@@ -1,9 +1,14 @@
 from pydantic_settings import BaseSettings
 from pydantic import ConfigDict
+import secrets
 
 
 class Settings(BaseSettings):
     app_title: str = "Co-Refine"
+
+    jwt_secret: str = secrets.token_hex(32)
+    jwt_algorithm: str = "HS256"
+    access_token_expire_minutes: int = 60 * 24 * 7  # 7 days
 
     azure_api_key: str = ""
     azure_endpoint: str = ""

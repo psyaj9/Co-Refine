@@ -1,7 +1,7 @@
 import type { ChatMessageOut, ConversationPreview } from "@/types";
 import * as api from "@/api/client";
 
-const CURRENT_USER = "default";
+
 
 export interface ChatSlice {
   chatMessages: ChatMessageOut[];
@@ -44,7 +44,6 @@ export const createChatSlice = (
       const res = await api.sendChatMessage(
         text,
         activeProjectId,
-        CURRENT_USER,
         chatConversationId,
       );
       const assistantPlaceholder: ChatMessageOut = {
@@ -109,7 +108,7 @@ export const createChatSlice = (
 
   loadConversations: async (projectId) => {
     try {
-      const conversations = await api.fetchConversations(projectId, CURRENT_USER);
+      const conversations = await api.fetchConversations(projectId);
       set({ conversations });
     } catch (e) {
       console.error("Failed to load conversations:", e);

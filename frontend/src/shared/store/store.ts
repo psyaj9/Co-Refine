@@ -1,5 +1,6 @@
 import { create } from "zustand";
 
+import { createAuthSlice, type AuthSlice } from "./slices/authSlice";
 import { createUiSlice, type UiSlice } from "./slices/uiSlice";
 import { createProjectSlice, type ProjectSlice } from "./slices/projectSlice";
 import { createDocumentSlice, type DocumentSlice } from "./slices/documentSlice";
@@ -9,16 +10,8 @@ import { createAuditSlice, type AuditSlice } from "./slices/auditSlice";
 import { createChatSlice, type ChatSlice } from "./slices/chatSlice";
 import { createHistorySlice, type HistorySlice } from "./slices/historySlice";
 
-/**
- * Full application state — the union of all domain slices.
- *
- * Cross-slice access is available via `get()` inside any slice creator.
- * Consumers always import `useStore` from `@/shared/store` (or the shim at
- * `@/stores/store`) and select the exact fields they need:
- *
- *   const codes = useStore((s) => s.codes)
- */
-export type AppState = UiSlice &
+export type AppState = AuthSlice &
+  UiSlice &
   ProjectSlice &
   DocumentSlice &
   CodeSlice &
@@ -28,6 +21,7 @@ export type AppState = UiSlice &
   HistorySlice;
 
 export const useStore = create<AppState>()((set, get) => ({
+  ...createAuthSlice(set as any, get),
   ...createUiSlice(set as any),
   ...createProjectSlice(set as any, get),
   ...createDocumentSlice(set as any, get),

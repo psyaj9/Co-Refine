@@ -1,7 +1,7 @@
 import type { CodeOut, AnalysisOut } from "@/types";
 import * as api from "@/api/client";
 
-const CURRENT_USER = "default";
+
 
 export interface CodeSlice {
   codes: CodeOut[];
@@ -38,7 +38,7 @@ export const createCodeSlice = (
   addCode: async (label, colour, definition) => {
     const { activeProjectId } = get();
     if (!activeProjectId) return;
-    await api.createCode(label, colour, CURRENT_USER, activeProjectId, definition);
+    await api.createCode(label, colour, activeProjectId, definition);
     await get().loadCodes();
   },
 

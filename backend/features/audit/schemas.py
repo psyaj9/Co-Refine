@@ -1,4 +1,3 @@
-"""Audit feature schemas."""
 from typing import Optional
 from pydantic import BaseModel
 
@@ -14,9 +13,9 @@ class AnalysisOut(BaseModel):
 
 class AnalysisTrigger(BaseModel):
     code_id: str
-    user_id: str
+    user_id: Optional[str] = None
 
 
 class BatchAuditRequest(BaseModel):
     project_id: str
-    user_id: str
+    user_id: Optional[str] = None
