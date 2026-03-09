@@ -14,6 +14,7 @@ import type {
   FacetData,
   ConsistencyData,
   CodeOverlapData,
+  CodeCooccurrenceData,
 } from "@/types";
 
 const BASE = "/api";
@@ -352,6 +353,12 @@ export async function fetchVisConsistency(projectId: string, codeId?: string | n
 export async function fetchVisOverlap(projectId: string) {
   return json<CodeOverlapData>(
     await fetch(`${BASE}/projects/${projectId}/vis/overlap`)
+  );
+}
+
+export async function fetchVisCooccurrence(projectId: string) {
+  return json<CodeCooccurrenceData>(
+    await fetch(`${BASE}/projects/${projectId}/vis/code-cooccurrence`)
   );
 }
 
