@@ -30,13 +30,7 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./inductive_lens.db"
     chroma_persist_dir: str = "./chroma_data"
 
-    # Comma-separated list of allowed CORS origins.
-    # Add your Vercel URL here, e.g.: http://localhost:5173,https://your-app.vercel.app
     allowed_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
-
-    jwt_secret: str = "change-me-in-production-use-a-long-random-string"
-    jwt_algorithm: str = "HS256"
-    access_token_expire_minutes: int = 60 * 24 * 7  # 7 days
 
     model_config = ConfigDict(
         env_file=(".env"),
