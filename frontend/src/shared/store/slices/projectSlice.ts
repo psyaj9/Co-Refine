@@ -1,5 +1,5 @@
-import type { ProjectOut, ProjectSettings } from "@/types";
-import * as api from "@/api/client";
+import type { ProjectOut, ProjectSettings } from "@/shared/types";
+import * as api from "@/shared/api/client";
 import { PROJECT_KEY, DOCUMENT_KEY } from "./authSlice";
 
 export interface ProjectSlice {

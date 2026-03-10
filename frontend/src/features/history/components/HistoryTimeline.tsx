@@ -1,8 +1,8 @@
-import { useStore } from "@/stores/store";
+import { useStore } from "@/shared/store";
 import { Plus, Pencil, Trash2, FileText } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/lib/utils";
 import { formatDateTime, eventSummary } from "@/features/history/lib/history-helpers";
-import type { EditEventOut } from "@/types";
+import type { EditEventOut } from "@/shared/types";
 
 
 function ActionIcon({ action }: { action: string }) {

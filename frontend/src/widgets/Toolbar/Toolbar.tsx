@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useStore } from "@/stores/store";
+import { useStore } from "@/shared/store";
 import {
   FilePlus,
   Search,
@@ -11,7 +11,7 @@ import {
   LogOut,
   Users2,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/lib/utils";
 import SettingsModal from "@/features/project/components/SettingsModal";
 import { useToolbarKeyNav } from "./hooks/useToolbarKeyNav";
 

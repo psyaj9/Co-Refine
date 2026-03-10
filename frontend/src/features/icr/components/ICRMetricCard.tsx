@@ -1,5 +1,5 @@
-import type { ICRMetric } from "@/types";
-import { cn } from "@/lib/utils";
+import type { ICRMetric } from "@/shared/types";
+import { cn } from "@/shared/lib/utils";
 
 interface ICRMetricCardProps {
   label: string;

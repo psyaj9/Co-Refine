@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
-import { fetchVisCooccurrence } from "@/api/client";
-import type { CodeCooccurrenceData } from "@/types";
+import { fetchVisCooccurrence } from "@/shared/api/client";
+import type { CodeCooccurrenceData } from "@/shared/types";
 
 type LoadState = "idle" | "loading" | "error" | "success";
 

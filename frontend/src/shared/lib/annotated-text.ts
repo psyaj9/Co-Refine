@@ -1,5 +1,5 @@
-import { escapeHtml } from "@/lib/utils";
-import type { SegmentOut } from "@/types";
+import { escapeHtml } from "@/shared/lib/utils";
+import type { SegmentOut } from "@/shared/types";
 
 /**
  * Merge overlapping segment ranges, tracking colours and flagged status.

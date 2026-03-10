@@ -1,6 +1,6 @@
 import { Trash2 } from "lucide-react";
-import { cn } from "@/lib/utils";
-import type { ConversationPreview } from "@/types";
+import { cn } from "@/shared/lib/utils";
+import type { ConversationPreview } from "@/shared/types";
 
 interface ConversationListProps {
   conversations: ConversationPreview[];

@@ -1,7 +1,7 @@
 import { ChevronDown, ChevronRight, Trash2 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/lib/utils";
 import ExpandedCodeDetail from "@/features/codes/components/ExpandedCodeDetail";
-import type { CodeOut, AnalysisOut } from "@/types";
+import type { CodeOut, AnalysisOut } from "@/shared/types";
 
 interface CodeListItemProps {
   code: CodeOut;

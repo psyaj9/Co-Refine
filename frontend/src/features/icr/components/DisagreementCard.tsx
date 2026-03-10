@@ -1,6 +1,6 @@
 import { useState } from "react";
-import type { ICRDisagreement } from "@/types";
-import { cn } from "@/lib/utils";
+import type { ICRDisagreement } from "@/shared/types";
+import { cn } from "@/shared/lib/utils";
 import { Bot, ChevronDown, ChevronUp, CheckCircle2 } from "lucide-react";
 
 const TYPE_COLORS: Record<string, string> = {

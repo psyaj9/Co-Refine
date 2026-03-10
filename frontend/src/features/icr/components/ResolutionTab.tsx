@@ -1,5 +1,5 @@
 import { useICRResolutions } from "../hooks/useICRResolutions";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/lib/utils";
 import { CheckCircle2, Clock, Pause } from "lucide-react";
 
 const STATUS_CONFIG = {

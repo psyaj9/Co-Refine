@@ -1,4 +1,4 @@
-import { useStore } from "@/stores/store";
+import { useStore } from "@/shared/store";
 import { ChevronLeft, Upload, PanelLeftClose } from "lucide-react";
 
 interface ProjectHeaderProps {

@@ -1,9 +1,9 @@
 import { useState, useEffect } from "react";
 import { UserPlus, Trash2, Crown, User } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { fetchProjectMembers, inviteProjectMember, removeProjectMember } from "@/api/client";
-import { useStore } from "@/stores/store";
-import type { MemberOut } from "@/types";
+import { cn } from "@/shared/lib/utils";
+import { fetchProjectMembers, inviteProjectMember, removeProjectMember } from "@/shared/api/client";
+import { useStore } from "@/shared/store";
+import type { MemberOut } from "@/shared/types";
 
 interface MembersTabProps {
   projectId: string;

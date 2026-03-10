@@ -1,9 +1,9 @@
 import { ShieldAlert } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { METRIC_EXPLANATIONS } from "@/lib/constants";
+import { cn } from "@/shared/lib/utils";
+import { METRIC_EXPLANATIONS } from "@/shared/lib/constants";
 import MetricTooltip from "@/features/audit/components/MetricTooltip";
-import { alertMetrics } from "@/lib/alert-helpers";
-import type { AlertPayload } from "@/types";
+import { alertMetrics } from "@/shared/lib/alert-helpers";
+import type { AlertPayload } from "@/shared/types";
 
 interface MetricStripProps {
   alert: AlertPayload;

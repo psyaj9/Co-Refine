@@ -1,4 +1,4 @@
-import type { AlertPayload, CodeOut } from "@/types";
+import type { AlertPayload, CodeOut } from "@/shared/types";
 
 interface ConsistencyActionsProps {
   alert: AlertPayload;

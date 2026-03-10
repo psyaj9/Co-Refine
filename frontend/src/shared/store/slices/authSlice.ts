@@ -1,5 +1,5 @@
-import type { AuthUser } from "@/types";
-import * as api from "@/api/client";
+import type { AuthUser } from "@/shared/types";
+import * as api from "@/shared/api/client";
 
 export const TOKEN_KEY = "co_refine_token";
 export const USER_KEY = "co_refine_user";

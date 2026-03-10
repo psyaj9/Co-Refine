@@ -1,13 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import RetrievedSegments from "@/components/RetrievedSegments";
+import RetrievedSegments from "./RetrievedSegments";
 import { defaultStoreState, mockSegment, mockCode, mockDocument } from "@/shared/__tests__/test-helpers";
 
-vi.mock("@/stores/store", () => ({
+vi.mock("@/shared/store", () => ({
   useStore: vi.fn(),
 }));
 
-import { useStore } from "@/stores/store";
+import { useStore } from "@/shared/store";
 const mockedUseStore = vi.mocked(useStore);
 
 function setup(overrides: Record<string, unknown> = {}) {

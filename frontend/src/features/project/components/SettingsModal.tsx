@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { X, SlidersHorizontal, RefreshCw, Users } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/lib/utils";
 import { useProjectSettings } from "@/features/project/hooks/useProjectSettings";
-import { useStore } from "@/stores/store";
-import { triggerBatchAudit } from "@/api/client";
+import { useStore } from "@/shared/store";
+import { triggerBatchAudit } from "@/shared/api/client";
 import ThresholdsTab from "./ThresholdsTab";
 import MembersTab from "./MembersTab";
 

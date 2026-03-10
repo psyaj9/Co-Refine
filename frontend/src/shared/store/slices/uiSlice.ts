@@ -1,4 +1,4 @@
-import type { ViewMode, RightPanelTab } from "@/types";
+import type { ViewMode, RightPanelTab } from "@/shared/types";
 import { VIEW_KEY } from "./authSlice";
 
 export interface UiSlice {

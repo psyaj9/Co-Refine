@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
-import { useTextSelection } from "@/hooks/useTextSelection";
-import { useStore } from "@/stores/store";
+import { useTextSelection } from "@/shared/hooks/useTextSelection";
+import { useStore } from "@/shared/store";
 
-vi.mock("@/stores/store", () => ({
+vi.mock("@/shared/store", () => ({
   useStore: vi.fn(),
 }));
 

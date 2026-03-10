@@ -79,7 +79,7 @@ async def create_segment_endpoint(
     db.commit()
 
     if settings.azure_api_key:
-        from features.audit.orchestrator import run_background_agents
+        from features.audit.service import run_background_agents
         from features.audit.context_builder import extract_window
         context_window = extract_window(doc.full_text, body.start_index, body.end_index)
         background_tasks.add_task(
@@ -139,7 +139,7 @@ async def batch_create_segments(
     db.commit()
 
     if settings.azure_api_key:
-        from features.audit.orchestrator import run_background_agents
+        from features.audit.service import run_background_agents
         for seg_info in created_segments:
             background_tasks.add_task(run_background_agents, **seg_info)
 
@@ -205,7 +205,7 @@ def delete_segment_endpoint(
     delete_segment_record(db, seg)
 
     if settings.azure_api_key:
-        from features.audit.sibling_auditor import reaudit_siblings_background
+        from features.audit.service import reaudit_siblings_background
         background_tasks.add_task(
             reaudit_siblings_background,
             document_id=seg.document_id,

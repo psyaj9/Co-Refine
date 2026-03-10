@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
-import { fetchICROverview, fetchICRPerCode, fetchICRAgreementMatrix } from "@/api/client";
-import type { ICROverview, ICRPerCodeMetric, ICRAgreementMatrix } from "@/types";
+import { fetchICROverview, fetchICRPerCode, fetchICRAgreementMatrix } from "@/shared/api/client";
+import type { ICROverview, ICRPerCodeMetric, ICRAgreementMatrix } from "@/shared/types";
 
 export function useICRMetrics(projectId: string | null) {
   const [overview, setOverview] = useState<ICROverview | null>(null);

@@ -50,6 +50,49 @@ def _metric_result_to_out(r) -> MetricOut:
     )
 
 
+def _compute_all_metrics(all_units: list, coder_ids: list[str]) -> tuple:
+    """Compute all project-level ICR metrics. Returns (pa, fk, ka, ga)."""
+    pa = percent_agreement(all_units, coder_ids)
+    fk = fleiss_kappa(all_units, coder_ids)
+    ka = krippendorffs_alpha(all_units, coder_ids)
+    ga = gwets_ac1(all_units, coder_ids)
+    return pa, fk, ka, ga
+
+
+def _build_pairwise_kappa(all_units: list, coder_ids: list[str], users: dict) -> list[PairwiseKappaOut]:
+    """Compute pairwise Cohen's kappa for every pair of coders."""
+    pairwise: list[PairwiseKappaOut] = []
+    for i, a_id in enumerate(coder_ids):
+        for b_id in coder_ids[i + 1:]:
+            ck = cohens_kappa(all_units, a_id, b_id)
+            a_name = users[a_id].display_name if a_id in users else a_id[:8]
+            b_name = users[b_id].display_name if b_id in users else b_id[:8]
+            pairwise.append(PairwiseKappaOut(
+                coder_a_id=a_id,
+                coder_b_id=b_id,
+                coder_a_name=a_name,
+                coder_b_name=b_name,
+                score=round(ck.score, 4) if ck.score is not None else None,
+                interpretation=ck.interpretation,
+                n_units=ck.n_units,
+            ))
+    return pairwise
+
+
+def _classify_disagreements_summary(all_units: list, coder_ids: list[str]) -> tuple:
+    """Return (disagreements_list, n_agreements, n_disagreements, breakdown)."""
+    disagreements = classify_units(all_units, coder_ids)
+    n_agreements = sum(1 for d in disagreements if d.disagreement_type == "agreement")
+    n_disagreements = len(disagreements) - n_agreements
+    breakdown = DisagreementBreakdownOut(
+        code_mismatch=sum(1 for d in disagreements if d.disagreement_type == "code_mismatch"),
+        boundary=sum(1 for d in disagreements if d.disagreement_type == "boundary"),
+        coverage_gap=sum(1 for d in disagreements if d.disagreement_type == "coverage_gap"),
+        split_merge=sum(1 for d in disagreements if d.disagreement_type == "split_merge"),
+    )
+    return disagreements, n_agreements, n_disagreements, breakdown
+
+
 def _resolution_to_out(r) -> ICRResolutionOut:
     return ICRResolutionOut(
         id=r.id,
@@ -132,38 +175,9 @@ def get_icr_overview(db: Session, project_id: str) -> ICROverviewOut:
         )
 
     all_units, _ = _build_all_units(db, project_id, coder_ids)
-    disagreements = classify_units(all_units, coder_ids)
-
-    n_agreements = sum(1 for d in disagreements if d.disagreement_type == "agreement")
-    n_disagreements = len(disagreements) - n_agreements
-    breakdown = DisagreementBreakdownOut(
-        code_mismatch=sum(1 for d in disagreements if d.disagreement_type == "code_mismatch"),
-        boundary=sum(1 for d in disagreements if d.disagreement_type == "boundary"),
-        coverage_gap=sum(1 for d in disagreements if d.disagreement_type == "coverage_gap"),
-        split_merge=sum(1 for d in disagreements if d.disagreement_type == "split_merge"),
-    )
-
-    pa = percent_agreement(all_units, coder_ids)
-    fk = fleiss_kappa(all_units, coder_ids)
-    ka = krippendorffs_alpha(all_units, coder_ids)
-    ga = gwets_ac1(all_units, coder_ids)
-
-    # Pairwise Cohen's kappa for every pair of coders
-    pairwise: list[PairwiseKappaOut] = []
-    for i, a_id in enumerate(coder_ids):
-        for b_id in coder_ids[i + 1:]:
-            ck = cohens_kappa(all_units, a_id, b_id)
-            a_name = users[a_id].display_name if a_id in users else a_id[:8]
-            b_name = users[b_id].display_name if b_id in users else b_id[:8]
-            pairwise.append(PairwiseKappaOut(
-                coder_a_id=a_id,
-                coder_b_id=b_id,
-                coder_a_name=a_name,
-                coder_b_name=b_name,
-                score=round(ck.score, 4) if ck.score is not None else None,
-                interpretation=ck.interpretation,
-                n_units=ck.n_units,
-            ))
+    _, n_agreements, n_disagreements, breakdown = _classify_disagreements_summary(all_units, coder_ids)
+    pa, fk, ka, ga = _compute_all_metrics(all_units, coder_ids)
+    pairwise = _build_pairwise_kappa(all_units, coder_ids, users)
 
     return ICROverviewOut(
         n_coders=len(coder_ids),
@@ -261,7 +275,7 @@ def get_disagreements(
         return DisagreementListOut(items=[], total=0, offset=offset, limit=limit)
 
     all_units, doc_title_map = _build_all_units(db, project_id, coder_ids)
-    all_disagreements = classify_units(all_units, coder_ids)
+    all_disagreements, _, _, _ = _classify_disagreements_summary(all_units, coder_ids)
 
     # Filter out pure agreements (unless type_filter explicitly asks for them)
     if disagreement_type != "agreement":

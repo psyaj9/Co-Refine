@@ -9,8 +9,8 @@ import {
   ScanSearch,
   TrendingUp,
 } from "lucide-react";
-import { AGENT_LABELS } from "@/lib/constants";
-import type { AlertPayload } from "@/types";
+import { AGENT_LABELS } from "@/shared/lib/constants";
+import type { AlertPayload } from "@/shared/types";
 
 /** Border + background class string for a given alert type */
 export function alertStyle(type: string): string {

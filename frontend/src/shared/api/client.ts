@@ -22,7 +22,7 @@
   ICRPerCodeMetric,
   ICRAgreementMatrix,
   ICRResolution,
-} from "@/types";
+} from "@/shared/types";
 
 const BASE = (import.meta.env.VITE_API_URL ?? "") + "/api";
 const TOKEN_KEY = "co_refine_token";

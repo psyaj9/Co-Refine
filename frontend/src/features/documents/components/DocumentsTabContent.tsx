@@ -1,11 +1,11 @@
-import { useStore } from "@/stores/store";
+import { useStore } from "@/shared/store";
 import {
   FileText,
   Search,
   Trash2,
   Upload,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/lib/utils";
 
 export default function DocumentsTabContent() {
   const documents = useStore((s) => s.documents);

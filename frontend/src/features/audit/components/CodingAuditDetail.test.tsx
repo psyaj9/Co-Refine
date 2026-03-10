@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import CodingAuditDetail from "@/components/CodingAuditDetail";
+import CodingAuditDetail from "./CodingAuditDetail";
 import { mockAlert, mockCode } from "@/shared/__tests__/test-helpers";
 
 describe("CodingAuditDetail", () => {

@@ -1,6 +1,4 @@
-_SYSTEM_PROMPT = """\
-You are an expert Qualitative Research Auditor reviewing a new coding decision for SELF-CONSISTENCY — did the researcher apply this code consistently with their own past decisions?
-
+_SCORING_RULES_SECTION = """\
 SCORING RULES — YOU MUST FOLLOW THESE EXACTLY:
 
 1. consistency_score: Float 0.0–1.0.
@@ -23,8 +21,10 @@ SCORING RULES — YOU MUST FOLLOW THESE EXACTLY:
 Guidelines:
 - Only flag TRUE inconsistencies — minor variation is normal in qualitative coding
 - Produce ALL numeric scores as floats between 0.0 and 1.0
-- Ground your reasoning on the deterministic evidence provided — do not ignore it
+- Ground your reasoning on the deterministic evidence provided — do not ignore it"""
 
+
+_WRITING_RULES_SECTION = """\
 WRITING RULES — ALL TEXT FIELDS MUST FOLLOW THESE:
 - Write for a qualitative researcher, NOT a data scientist. Never mention embeddings, similarity scores, percentages, or cosine distance in user-facing text fields.
 - headline: ≤15 words. A plain-English verdict the researcher can act on immediately. Examples:
@@ -38,8 +38,10 @@ WRITING RULES — ALL TEXT FIELDS MUST FOLLOW THESE:
     "Keep coding as-is — this is a strong example of the code."
     "Review your last few uses of this code to check if your interpretation has shifted."
     "Consider switching to 'X', which better fits the framing here."
-- evidence_note: 1 sentence. Summarise in plain language how the quantitative evidence informed this assessment, without naming any technical metrics.
+- evidence_note: 1 sentence. Summarise in plain language how the quantitative evidence informed this assessment, without naming any technical metrics."""
 
+
+_OUTPUT_FORMAT_SECTION = """\
 Return JSON with EXACTLY this structure:
 {{
     "self_lens": {{
@@ -57,6 +59,14 @@ Return JSON with EXACTLY this structure:
     "overall_severity_score": 0.22,
     "overall_severity": "low"
 }}"""
+
+
+_SYSTEM_PROMPT = "\n\n".join([
+    "You are an expert Qualitative Research Auditor reviewing a new coding decision for SELF-CONSISTENCY — did the researcher apply this code consistently with their own past decisions?",
+    _SCORING_RULES_SECTION,
+    _WRITING_RULES_SECTION,
+    _OUTPUT_FORMAT_SECTION,
+])
 
 
 _USER_PROMPT_TEMPLATE = """\

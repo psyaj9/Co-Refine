@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
-import { useStore } from "@/stores/store";
-import { fetchVisOverview } from "@/api/client";
-import type { OverviewData } from "@/types";
+import { useStore } from "@/shared/store";
+import { fetchVisOverview } from "@/shared/api/client";
+import type { OverviewData } from "@/shared/types";
 
 export type VisLoadState = "idle" | "loading" | "error" | "success";
 

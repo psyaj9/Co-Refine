@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
-import { useStore } from "@/stores/store";
-import { fetchVisOverlap } from "@/api/client";
-import type { CodeOverlapData } from "@/types";
+import { useStore } from "@/shared/store";
+import { fetchVisOverlap } from "@/shared/api/client";
+import type { CodeOverlapData } from "@/shared/types";
 
 type LoadState = "idle" | "loading" | "error" | "success";
 

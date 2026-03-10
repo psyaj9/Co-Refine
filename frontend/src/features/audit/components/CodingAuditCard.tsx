@@ -1,8 +1,8 @@
 import { Lightbulb } from "lucide-react";
-import { alertBody } from "@/lib/alert-helpers";
+import { alertBody } from "@/shared/lib/alert-helpers";
 import MetricStrip from "@/features/audit/components/MetricStrip";
 import CodingAuditDetail from "@/features/audit/components/CodingAuditDetail";
-import type { AlertPayload, CodeOut } from "@/types";
+import type { AlertPayload, CodeOut } from "@/shared/types";
 
 interface CodingAuditCardProps {
   alert: AlertPayload;

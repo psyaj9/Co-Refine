@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { GripHorizontal } from "lucide-react";
-import { useStore } from "@/stores/store";
-import { useDraggable } from "@/hooks/useDraggable";
+import { useStore } from "@/shared/store";
+import { useDraggable } from "@/shared/hooks/useDraggable";
 import { usePopoverInteraction } from "@/features/selection/hooks/usePopoverInteraction";
 import ClickedSegmentsView from "@/features/selection/components/ClickedSegmentsView";
 import SelectionView from "@/features/selection/components/SelectionView";

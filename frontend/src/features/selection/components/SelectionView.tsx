@@ -1,7 +1,7 @@
 import { Check, X, Plus, Trash2, Loader2 } from "lucide-react";
-import { useStore } from "@/stores/store";
-import { getContrastColor } from "@/lib/utils";
-import type { TextSelection } from "@/types";
+import { useStore } from "@/shared/store";
+import { getContrastColor } from "@/shared/lib/utils";
+import type { TextSelection } from "@/shared/types";
 
 interface SelectionViewProps {
   selection: TextSelection;

@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useState } from "react";
+import { useEffect, useState } from "react";
 import { useStore } from "@/shared/store";
 import { useWebSocket } from "@/shared/hooks/useWebSocket";
 import {
@@ -6,7 +6,6 @@ import {
   Group,
   Separator,
   useDefaultLayout,
-  usePanelRef,
 } from "react-resizable-panels";
 import { PanelLeftOpen, PanelRightOpen } from "lucide-react";
 
@@ -20,6 +19,8 @@ import { EditHistoryView } from "@/features/history";
 import { HighlightPopover } from "@/features/selection";
 import { LoginPage, RegisterPage } from "@/features/auth";
 import { ICRView } from "@/features/icr";
+import { useResizablePanels } from "./hooks/useResizablePanels";
+import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 
 const PANEL_IDS = ["left-panel", "center-panel", "right-panel"];
 
@@ -31,11 +32,24 @@ export default function App() {
   const showUploadPage = useStore((s) => s.showUploadPage);
   const viewMode = useStore((s) => s.viewMode);
   const loadProjects = useStore((s) => s.loadProjects);
+  const logout = useStore((s) => s.logout);
 
   const [showRegister, setShowRegister] = useState(false);
 
-  const leftPanelRef = usePanelRef();
-  const rightPanelRef = usePanelRef();
+  const showRightPanel = !!(activeProjectId && activeDocumentId && !showUploadPage);
+
+  const {
+    leftPanelRef,
+    rightPanelRef,
+    leftCollapsed,
+    setLeftCollapsed,
+    rightCollapsed,
+    setRightCollapsed,
+    toggleLeftPanel,
+    toggleRightPanel,
+  } = useResizablePanels(showRightPanel);
+
+  useKeyboardShortcuts(toggleLeftPanel, toggleRightPanel, showRightPanel);
 
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({
     id: "concept-test-layout",
@@ -43,61 +57,15 @@ export default function App() {
     storage: localStorage,
   });
 
-  const logout = useStore((s) => s.logout);
-
   useWebSocket();
 
-  useEffect(() => {
-    initAuth();
-  }, []);
-
-  useEffect(() => {
-    if (authUser) loadProjects();
-  }, [authUser]);
-
+  useEffect(() => { initAuth(); }, []);
+  useEffect(() => { if (authUser) loadProjects(); }, [authUser]);
   useEffect(() => {
     const handler = () => logout();
     window.addEventListener("co_refine:unauthorized", handler);
     return () => window.removeEventListener("co_refine:unauthorized", handler);
   }, [logout]);
-
-  const [leftCollapsed, setLeftCollapsed] = useState(false);
-  const [rightCollapsed, setRightCollapsed] = useState(false);
-
-  const showRightPanel = !!(activeProjectId && activeDocumentId && !showUploadPage);
-
-  const toggleLeftPanel = useCallback(() => {
-    const panel = leftPanelRef.current;
-    if (!panel) return;
-    if (panel.isCollapsed()) panel.expand();
-    else panel.collapse();
-  }, [leftPanelRef]);
-
-  const toggleRightPanel = useCallback(() => {
-    const panel = rightPanelRef.current;
-    if (!panel) return;
-    if (panel.isCollapsed()) panel.expand();
-    else panel.collapse();
-  }, [rightPanelRef]);
-
-  useEffect(() => {
-    if (!showRightPanel) setRightCollapsed(false);
-  }, [showRightPanel]);
-
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.ctrlKey && e.key === "b") {
-        e.preventDefault();
-        toggleLeftPanel();
-      }
-      if (e.ctrlKey && e.key === "j" && showRightPanel) {
-        e.preventDefault();
-        toggleRightPanel();
-      }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [toggleLeftPanel, toggleRightPanel, showRightPanel]);
 
   if (!authUser) {
     return showRegister ? (
@@ -160,8 +128,7 @@ export default function App() {
                     Select or create a project
                   </h2>
                   <p className="text-fluid-sm text-surface-400 dark:text-surface-500 max-w-sm">
-                    Use the left panel to create a new project or select an
-                    existing one to get started
+                    Use the left panel to create a new project or select an existing one to get started
                   </p>
                 </div>
               </div>
@@ -223,7 +190,6 @@ export default function App() {
       </Group>
 
       <StatusBar />
-
       <HighlightPopover />
     </div>
   );

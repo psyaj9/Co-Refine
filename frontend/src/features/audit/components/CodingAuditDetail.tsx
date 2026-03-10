@@ -4,11 +4,11 @@ import {
   ChevronRight as ChevronRightIcon,
   ShieldCheck,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { METRIC_EXPLANATIONS } from "@/lib/constants";
+import { cn } from "@/shared/lib/utils";
+import { METRIC_EXPLANATIONS } from "@/shared/lib/constants";
 import MetricTooltip from "@/features/audit/components/MetricTooltip";
-import { useStore } from "@/stores/store";
-import type { AlertPayload, CodeOut } from "@/types";
+import { useStore } from "@/shared/store";
+import type { AlertPayload, CodeOut } from "@/shared/types";
 
 interface CodingAuditDetailProps {
   alert: AlertPayload;

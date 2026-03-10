@@ -1,4 +1,4 @@
-import { useStore } from "@/stores/store";
+import { useStore } from "@/shared/store";
 import { Plus, X, FolderOpen } from "lucide-react";
 import { useProjectActions } from "./hooks/useProjectActions";
 import ProjectListItem from "./ProjectListItem";

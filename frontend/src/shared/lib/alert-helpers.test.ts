@@ -3,8 +3,8 @@ import {
   alertStyle,
   alertTitle,
   alertBody,
-} from "@/lib/alert-helpers";
-import type { AlertPayload } from "@/types";
+} from "@/shared/lib/alert-helpers";
+import type { AlertPayload } from "@/shared/types";
 
 const base: AlertPayload = {
   type: "coding_audit",

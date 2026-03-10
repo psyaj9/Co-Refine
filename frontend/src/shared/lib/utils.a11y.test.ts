@@ -2,7 +2,7 @@
  * Accessibility tests for utility functions.
  */
 import { describe, it, expect } from "vitest";
-import { getContrastColor } from "@/lib/utils";
+import { getContrastColor } from "@/shared/lib/utils";
 
 describe("getContrastColor", () => {
   it("returns black for white background", () => {

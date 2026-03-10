@@ -3,8 +3,8 @@ import {
   fetchICRDisagreements,
   analyzeICRDisagreement,
   createICRResolution,
-} from "@/api/client";
-import type { ICRDisagreement, ICRDisagreementList } from "@/types";
+} from "@/shared/api/client";
+import type { ICRDisagreement, ICRDisagreementList } from "@/shared/types";
 
 interface DisagreementFilters {
   document_id?: string;

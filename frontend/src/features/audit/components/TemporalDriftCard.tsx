@@ -1,5 +1,5 @@
-import type { AlertPayload } from "@/types";
-import { METRIC_EXPLANATIONS } from "@/lib/constants";
+import type { AlertPayload } from "@/shared/types";
+import { METRIC_EXPLANATIONS } from "@/shared/lib/constants";
 
 interface TemporalDriftCardProps {
   alert: AlertPayload;

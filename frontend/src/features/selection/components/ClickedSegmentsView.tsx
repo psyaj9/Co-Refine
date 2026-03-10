@@ -1,6 +1,6 @@
 import { Trash2, X } from "lucide-react";
-import { useStore } from "@/stores/store";
-import type { SegmentOut } from "@/types";
+import { useStore } from "@/shared/store";
+import type { SegmentOut } from "@/shared/types";
 
 interface ClickedSegmentsViewProps {
   clickedSegments: SegmentOut[];

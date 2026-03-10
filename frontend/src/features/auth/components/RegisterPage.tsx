@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useStore } from "@/stores/store";
+import { useStore } from "@/shared/store";
 
 interface RegisterPageProps {
   onShowLogin: () => void;

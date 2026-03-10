@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { COLOUR_PALETTE, getNextColour, AGENT_LABELS } from "@/lib/constants";
+import { COLOUR_PALETTE, getNextColour, AGENT_LABELS } from "@/shared/lib/constants";
 
 describe("COLOUR_PALETTE", () => {
   it("contains 20 colours", () => {

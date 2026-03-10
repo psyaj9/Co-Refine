@@ -6,12 +6,12 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { axe, toHaveNoViolations } from "jest-axe";
-import Toolbar from "@/components/Toolbar";
+import Toolbar from "./Toolbar";
 
 expect.extend(toHaveNoViolations);
 
 /* Mock the store selectors used by Toolbar */
-vi.mock("@/stores/store", () => ({
+vi.mock("@/shared/store", () => ({
   useStore: (sel: (s: Record<string, unknown>) => unknown) =>
     sel({
       viewMode: "document",
@@ -25,7 +25,7 @@ vi.mock("@/stores/store", () => ({
     }),
 }));
 
-vi.mock("@/api/client", () => ({
+vi.mock("@/shared/api/client", () => ({
   default: { triggerBatchAudit: vi.fn() },
 }));
 

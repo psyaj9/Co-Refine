@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
-import { useStore } from "@/stores/store";
-import { fetchVisFacets } from "@/api/client";
-import type { CodeOut, FacetData } from "@/types";
+import { useStore } from "@/shared/store";
+import { fetchVisFacets } from "@/shared/api/client";
+import type { CodeOut, FacetData } from "@/shared/types";
 
 type LoadState = "idle" | "loading" | "error" | "success";
 

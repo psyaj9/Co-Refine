@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { useStore } from "@/stores/store";
+import { useStore } from "@/shared/store";
 
 const RECONNECT_DELAY = 3000;
 

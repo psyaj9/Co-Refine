@@ -1,5 +1,5 @@
-import type { ICRAgreementMatrix as ICRAgreementMatrixType } from "@/types";
-import { cn } from "@/lib/utils";
+import type { ICRAgreementMatrix as ICRAgreementMatrixType } from "@/shared/types";
+import { cn } from "@/shared/lib/utils";
 
 interface ICRAgreementMatrixProps {
   matrix: ICRAgreementMatrixType;

@@ -1,20 +1,20 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { axe, toHaveNoViolations } from "jest-axe";
-import CodesTabContent from "@/components/CodesTabContent";
+import CodesTabContent from "./CodesTabContent";
 import { defaultStoreState, mockCode } from "@/shared/__tests__/test-helpers";
 
 expect.extend(toHaveNoViolations);
 
-vi.mock("@/stores/store", () => ({
+vi.mock("@/shared/store", () => ({
   useStore: vi.fn(),
 }));
 
-vi.mock("@/api/client", () => ({
+vi.mock("@/shared/api/client", () => ({
   triggerAnalysis: vi.fn().mockResolvedValue({ status: "ok" }),
 }));
 
-import { useStore } from "@/stores/store";
+import { useStore } from "@/shared/store";
 const mockedUseStore = vi.mocked(useStore);
 
 function setup(overrides: Record<string, unknown> = {}) {

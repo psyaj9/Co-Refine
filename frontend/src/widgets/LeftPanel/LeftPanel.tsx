@@ -1,8 +1,8 @@
 import { useState } from "react";
 import * as Collapsible from "@radix-ui/react-collapsible";
-import { useStore } from "@/stores/store";
+import { useStore } from "@/shared/store";
 import { ChevronDown, FileText, Hash } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/lib/utils";
 import { DocumentsTabContent } from "@/features/documents";
 import { CodesTabContent } from "@/features/codes";
 import ProjectHeader from "./ProjectHeader";

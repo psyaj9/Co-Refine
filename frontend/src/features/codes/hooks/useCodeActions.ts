@@ -1,7 +1,7 @@
 import { useCallback } from "react";
-import { useStore } from "@/stores/store";
-import * as api from "@/api/client";
-import { getNextColour } from "@/lib/constants";
+import { useStore } from "@/shared/store";
+import * as api from "@/shared/api/client";
+import { getNextColour } from "@/shared/lib/constants";
 
 /**
  * Business logic for creating, deleting, and analysing codes.

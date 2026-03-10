@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { X, ChevronDown, ChevronRight as ChevronRightIcon } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { alertStyle, alertIcon, alertTitle, alertBody } from "@/lib/alert-helpers";
+import { cn } from "@/shared/lib/utils";
+import { alertStyle, alertIcon, alertTitle, alertBody } from "@/shared/lib/alert-helpers";
 import CodingAuditCard from "@/features/audit/components/CodingAuditCard";
 import GhostPartnerActions from "@/features/audit/components/GhostPartnerActions";
 import ConsistencyActions from "@/features/audit/components/ConsistencyActions";
 import TemporalDriftCard from "@/features/audit/components/TemporalDriftCard";
-import type { AlertPayload, CodeOut } from "@/types";
+import type { AlertPayload, CodeOut } from "@/shared/types";
 
 interface AlertCardProps {
   alert: AlertPayload;

@@ -1,7 +1,7 @@
 /**
  * Shared test helpers for creating mock store state.
  */
-import type { ProjectOut, DocumentOut, CodeOut, SegmentOut, AlertPayload, AnalysisOut, ChatMessageOut, EditEventOut } from "@/types";
+import type { ProjectOut, DocumentOut, CodeOut, SegmentOut, AlertPayload, AnalysisOut, ChatMessageOut, EditEventOut } from "@/shared/types";
 
 export function mockProject(overrides: Partial<ProjectOut> = {}): ProjectOut {
   return {

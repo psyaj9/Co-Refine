@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { renderHook, act } from "@testing-library/react";
-import { useDraggable } from "@/hooks/useDraggable";
+import { useDraggable } from "@/shared/hooks/useDraggable";
 
 function pointerEvent(overrides: Partial<React.PointerEvent> = {}) {
   return {

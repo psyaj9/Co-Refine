@@ -1,7 +1,7 @@
-import { useStore } from "@/stores/store";
+import { useStore } from "@/shared/store";
 import AuditStageProgress from "@/features/audit/components/AuditStageProgress";
 import AlertCard from "@/features/audit/components/AlertCard";
-import type { AlertPayload } from "@/types";
+import type { AlertPayload } from "@/shared/types";
 
 /** Alert types that are internal pipeline signals — never rendered as cards. */
 export const HIDDEN_ALERT_TYPES = new Set(["agents_started", "agents_done", "deterministic_scores"]);

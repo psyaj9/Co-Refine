@@ -4,9 +4,9 @@
  */
 import { useState } from "react";
 import { Pencil, Check, X, Sparkles, ChevronDown, ChevronUp } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { renameFacet, explainFacet } from "@/api/client";
-import type { FacetData } from "@/types";
+import { cn } from "@/shared/lib/utils";
+import { renameFacet, explainFacet } from "@/shared/api/client";
+import type { FacetData } from "@/shared/types";
 
 export interface FacetCardProps {
   facet: FacetData;

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Plus, Search } from "lucide-react";
-import { useStore } from "@/stores/store";
+import { useStore } from "@/shared/store";
 import { useCodeActions } from "@/features/codes/hooks/useCodeActions";
 import CodeListItem from "@/features/codes/components/CodeListItem";
 

@@ -1,6 +1,6 @@
 import { Tag } from "lucide-react";
 import { eventSummary } from "@/features/history/lib/history-helpers";
-import type { EditEventOut } from "@/types";
+import type { EditEventOut } from "@/shared/types";
 
 export default function CodeChangeBanner({
   event,

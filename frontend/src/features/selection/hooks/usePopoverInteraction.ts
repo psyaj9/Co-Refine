@@ -1,5 +1,5 @@
 import { useEffect, useCallback, useRef, useState } from "react";
-import { useStore } from "@/stores/store";
+import { useStore } from "@/shared/store";
 
 /**
  * Shared interaction logic for both popover views:

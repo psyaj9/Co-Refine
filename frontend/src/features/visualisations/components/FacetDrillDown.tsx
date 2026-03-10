@@ -8,7 +8,7 @@ import { useState, useRef, useEffect, useMemo } from "react";
 import { ArrowLeft } from "lucide-react";
 import FacetScatterPlot from "./FacetScatterPlot";
 import FacetCard from "./FacetCard";
-import type { FacetData } from "@/types";
+import type { FacetData } from "@/shared/types";
 
 const FACET_PALETTE = ["#ef4444", "#3b82f6", "#22c55e", "#eab308"];
 

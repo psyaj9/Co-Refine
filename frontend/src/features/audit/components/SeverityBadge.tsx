@@ -1,5 +1,5 @@
-import { cn } from "@/lib/utils";
-import { METRIC_EXPLANATIONS } from "@/lib/constants";
+import { cn } from "@/shared/lib/utils";
+import { METRIC_EXPLANATIONS } from "@/shared/lib/constants";
 import MetricTooltip from "@/features/audit/components/MetricTooltip";
 
 const SEVERITY_COLORS: Record<string, string> = {

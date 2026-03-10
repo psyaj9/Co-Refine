@@ -1,4 +1,4 @@
-import type { ICROverview } from "@/types";
+import type { ICROverview } from "@/shared/types";
 import ICRMetricCard from "./ICRMetricCard";
 import { Users } from "lucide-react";
 

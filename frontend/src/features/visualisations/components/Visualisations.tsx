@@ -4,7 +4,7 @@ import FacetExplorerTab from "@/features/visualisations/components/FacetExplorer
 import ConsistencyTab from "@/features/visualisations/components/ConsistencyTab";
 import CodeOverlapTab from "@/features/visualisations/components/CodeOverlapTab";
 import CooccurrenceTab from "@/features/visualisations/components/CooccurrenceTab";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/lib/utils";
 
 type Tab = "overview" | "facets" | "consistency" | "overlap" | "cooccurrence";
 

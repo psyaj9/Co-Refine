@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef } from "react";
-import { useStore } from "@/stores/store";
+import { useStore } from "@/shared/store";
 import { ChevronLeft } from "lucide-react";
-import { escapeHtml } from "@/lib/utils";
+import { escapeHtml } from "@/shared/lib/utils";
 import { buildHistoryAnnotatedText } from "@/features/history/lib/history-helpers";
 import HistoryTimeline from "@/features/history/components/HistoryTimeline";
 import CodeChangeBanner from "@/features/history/components/CodeChangeBanner";

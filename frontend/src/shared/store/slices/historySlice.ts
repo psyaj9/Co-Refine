@@ -1,5 +1,5 @@
-import type { EditEventOut, HistoryScope } from "@/types";
-import * as api from "@/api/client";
+import type { EditEventOut, HistoryScope } from "@/shared/types";
+import * as api from "@/shared/api/client";
 
 export interface HistorySlice {
   editHistory: EditEventOut[];

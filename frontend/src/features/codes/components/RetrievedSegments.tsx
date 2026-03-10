@@ -1,6 +1,6 @@
-import { useStore } from "@/stores/store";
+import { useStore } from "@/shared/store";
 import { FileText, X, ArrowRight } from "lucide-react";
-import { hexToRgba } from "@/lib/utils";
+import { hexToRgba } from "@/shared/lib/utils";
 
 export default function RetrievedSegments() {
   const retrievedSegments = useStore((s) => s.retrievedSegments);

@@ -1,6 +1,6 @@
-import { useStore } from "@/stores/store";
+import { useStore } from "@/shared/store";
 import { Check, X, Trash2 } from "lucide-react";
-import { getContrastColor } from "@/lib/utils";
+import { getContrastColor } from "@/shared/lib/utils";
 
 export default function PendingApplicationsBar() {
   const pending = useStore((s) => s.pendingApplications);

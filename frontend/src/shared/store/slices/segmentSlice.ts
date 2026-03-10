@@ -1,5 +1,5 @@
-import type { SegmentOut, TextSelection, PendingApplication } from "@/types";
-import * as api from "@/api/client";
+import type { SegmentOut, TextSelection, PendingApplication } from "@/shared/types";
+import * as api from "@/shared/api/client";
 
 
 

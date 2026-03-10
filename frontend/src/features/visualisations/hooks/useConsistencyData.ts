@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { useStore } from "@/stores/store";
-import { fetchVisConsistency } from "@/api/client";
-import type { ConsistencyData } from "@/types";
+import { useStore } from "@/shared/store";
+import { fetchVisConsistency } from "@/shared/api/client";
+import type { ConsistencyData } from "@/shared/types";
 
 type LoadState = "idle" | "loading" | "error" | "success";
 

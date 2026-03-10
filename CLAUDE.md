@@ -479,6 +479,11 @@ features/X/router.py  →  features/X/service.py  →  features/X/repository.py
 
 EXCEPTION: features/audit/ may import from features/scoring/ —
   audit is the single consumer of scoring. This is a deliberate "shared kernel" relationship.
+
+EXCEPTION: features/audit/ may import from features/facets/ —
+  facet clustering is triggered as part of the audit pipeline (orchestrator.py calls
+  run_facet_analysis after each segment audit). Deliberate design — facets are a downstream
+  side-effect of audit, not a peer dependency.
 ```
 
 ### Backend Conventions

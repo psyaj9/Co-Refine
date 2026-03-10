@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react";
 import { Info, RotateCcw } from "lucide-react";
-import type { ThresholdDefinition } from "@/types";
+import type { ThresholdDefinition } from "@/shared/types";
 
 interface ThresholdsTabProps {
   thresholdDefs: ThresholdDefinition[];

@@ -1,5 +1,5 @@
 import { useCooccurrence } from "@/features/visualisations/hooks/useCooccurrence";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/lib/utils";
 
 /** Map a raw co-occurrence count to a background colour.
  *  Diagonal cells (self-usage) get a neutral tint.

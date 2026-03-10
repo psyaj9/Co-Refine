@@ -1,5 +1,5 @@
-import type { ChatMessageOut, ConversationPreview } from "@/types";
-import * as api from "@/api/client";
+import type { ChatMessageOut, ConversationPreview } from "@/shared/types";
+import * as api from "@/shared/api/client";
 
 export interface ChatSlice {
   chatMessages: ChatMessageOut[];

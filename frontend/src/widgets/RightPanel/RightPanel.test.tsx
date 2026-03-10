@@ -1,16 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { axe, toHaveNoViolations } from "jest-axe";
-import RightPanel from "@/components/RightPanel";
+import RightPanel from "./RightPanel";
 import { defaultStoreState, mockAlert } from "@/shared/__tests__/test-helpers";
 
 expect.extend(toHaveNoViolations);
 
-vi.mock("@/stores/store", () => ({
+vi.mock("@/shared/store", () => ({
   useStore: vi.fn(),
 }));
 
-import { useStore } from "@/stores/store";
+import { useStore } from "@/shared/store";
 const mockedUseStore = vi.mocked(useStore);
 
 function setup(overrides: Record<string, unknown> = {}, props: { onCollapse?: () => void } = {}) {

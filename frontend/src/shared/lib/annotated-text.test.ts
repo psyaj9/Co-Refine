@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { buildAnnotatedText } from "@/lib/annotated-text";
-import type { SegmentOut } from "@/types";
+import { buildAnnotatedText } from "@/shared/lib/annotated-text";
+import type { SegmentOut } from "@/shared/types";
 
 function seg(overrides: Partial<SegmentOut> = {}): SegmentOut {
   return {

@@ -1,9 +1,9 @@
 import { useState, useCallback } from "react";
 import { useDropzone } from "react-dropzone";
 import { Upload } from "lucide-react";
-import { useStore } from "@/stores/store";
-import { cn } from "@/lib/utils";
-import * as api from "@/api/client";
+import { useStore } from "@/shared/store";
+import { cn } from "@/shared/lib/utils";
+import * as api from "@/shared/api/client";
 
 export default function DocumentUpload() {
   const activeProjectId = useStore((s) => s.activeProjectId);

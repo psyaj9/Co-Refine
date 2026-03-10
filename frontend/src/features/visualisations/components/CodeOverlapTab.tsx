@@ -1,6 +1,6 @@
 import { useCodeOverlap } from "@/features/visualisations/hooks/useCodeOverlap";
 import { FlaggedPairs } from "@/features/visualisations/components/FlaggedPairs";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/lib/utils";
 
 /** Map a similarity value [0, 1] to a background colour.
  *  Values below threshold → blue intensity scale; at/above threshold → amber warning. */

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
-import { useStore } from "@/stores/store";
+import { useStore } from "@/shared/store";
 
 interface LoginPageProps {
   onShowRegister: () => void;

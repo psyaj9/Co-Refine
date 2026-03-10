@@ -1,5 +1,5 @@
-import { escapeHtml } from "@/lib/utils";
-import type { EditEventOut } from "@/types";
+import { escapeHtml } from "@/shared/lib/utils";
+import type { EditEventOut } from "@/shared/types";
 
 export function ordinal(n: number): string {
   const s = ["th", "st", "nd", "rd"];

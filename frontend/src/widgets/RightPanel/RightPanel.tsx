@@ -1,10 +1,10 @@
 import * as Tabs from "@radix-ui/react-tabs";
-import { useStore } from "@/stores/store";
+import { useStore } from "@/shared/store";
 import { AlertTriangle, MessageCircle, PanelRightClose } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/lib/utils";
 import { AlertsTab, HIDDEN_ALERT_TYPES } from "@/features/audit";
 import { ChatTab } from "@/features/chat";
-import type { RightPanelTab } from "@/types";
+import type { RightPanelTab } from "@/shared/types";
 
 const TAB_META: {
   id: RightPanelTab;

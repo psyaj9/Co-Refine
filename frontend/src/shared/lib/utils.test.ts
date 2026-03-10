@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { cn, hexToRgba, escapeHtml, getContrastColor } from "@/lib/utils";
+import { cn, hexToRgba, escapeHtml, getContrastColor } from "@/shared/lib/utils";
 
 describe("cn", () => {
   it("merges class names", () => {

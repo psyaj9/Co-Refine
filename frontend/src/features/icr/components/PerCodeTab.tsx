@@ -1,5 +1,5 @@
-import type { ICRPerCodeMetric } from "@/types";
-import { cn } from "@/lib/utils";
+import type { ICRPerCodeMetric } from "@/shared/types";
+import { cn } from "@/shared/lib/utils";
 
 function alphaColor(score: number | null): string {
   if (score === null) return "bg-surface-300 dark:bg-surface-600";

@@ -5,7 +5,7 @@ import ICRAgreementMatrix from "./ICRAgreementMatrix";
 import PerCodeTab from "./PerCodeTab";
 import DisagreementsTab from "./DisagreementsTab";
 import ResolutionTab from "./ResolutionTab";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/lib/utils";
 import { RefreshCw } from "lucide-react";
 
 type ICRTab = "overview" | "matrix" | "per-code" | "disagreements" | "resolutions";

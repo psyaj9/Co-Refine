@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
-import { fetchICRResolutions, updateICRResolution } from "@/api/client";
-import type { ICRResolution } from "@/types";
+import { fetchICRResolutions, updateICRResolution } from "@/shared/api/client";
+import type { ICRResolution } from "@/shared/types";
 
 export function useICRResolutions(projectId: string | null) {
   const [resolutions, setResolutions] = useState<ICRResolution[]>([]);

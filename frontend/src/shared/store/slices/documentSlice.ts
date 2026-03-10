@@ -1,5 +1,5 @@
-import type { DocumentOut } from "@/types";
-import * as api from "@/api/client";
+import type { DocumentOut } from "@/shared/types";
+import * as api from "@/shared/api/client";
 import { DOCUMENT_KEY } from "./authSlice";
 
 export interface DocumentSlice {

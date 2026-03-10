@@ -9,7 +9,7 @@ import {
   ReferenceLine,
   Legend,
 } from "recharts";
-import type { TimelineEntry } from "@/types";
+import type { TimelineEntry } from "@/shared/types";
 
 function pct(v: number | undefined) {
   return v != null ? `${(v * 100).toFixed(1)}%` : "—";

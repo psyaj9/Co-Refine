@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
-import { useStore } from "@/stores/store";
-import type { ThresholdDefinition } from "@/types";
-import * as api from "@/api/client";
+import { useStore } from "@/shared/store";
+import type { ThresholdDefinition } from "@/shared/types";
+import * as api from "@/shared/api/client";
 
 /**
  * Encapsulates the load/save/dirty logic for project settings.

@@ -1,6 +1,6 @@
 import { TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { LineChart, Line, ResponsiveContainer } from "recharts";
-import type { MetricPoint } from "@/types";
+import type { MetricPoint } from "@/shared/types";
 
 export interface KPICardProps {
   label: string;

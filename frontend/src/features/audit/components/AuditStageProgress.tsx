@@ -5,8 +5,8 @@ import {
   Brain,
   TrendingUp,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { AGENT_LABELS, METRIC_EXPLANATIONS } from "@/lib/constants";
+import { cn } from "@/shared/lib/utils";
+import { AGENT_LABELS, METRIC_EXPLANATIONS } from "@/shared/lib/constants";
 import MetricTooltip from "@/features/audit/components/MetricTooltip";
 import SeverityBadge from "@/features/audit/components/SeverityBadge";
 import type { AuditStage } from "@/shared/store/slices/auditSlice";

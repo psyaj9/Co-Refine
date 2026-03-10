@@ -1,16 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { axe, toHaveNoViolations } from "jest-axe";
-import StatusBar from "@/components/StatusBar";
+import StatusBar from "./StatusBar";
 import { defaultStoreState } from "@/shared/__tests__/test-helpers";
 
 expect.extend(toHaveNoViolations);
 
-vi.mock("@/stores/store", () => ({
+vi.mock("@/shared/store", () => ({
   useStore: vi.fn(),
 }));
 
-import { useStore } from "@/stores/store";
+import { useStore } from "@/shared/store";
 const mockedUseStore = vi.mocked(useStore);
 
 function setup(overrides: Record<string, unknown> = {}) {

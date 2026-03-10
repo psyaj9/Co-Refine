@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/lib/utils";
 
 interface MetricTooltipProps {
   /** The content to wrap (typically a metric label + value) */

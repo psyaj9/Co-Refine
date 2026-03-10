@@ -1,7 +1,7 @@
 import { useRef, useEffect, useMemo, useCallback } from "react";
-import { useStore } from "@/stores/store";
-import { useTextSelection } from "@/hooks/useTextSelection";
-import { buildAnnotatedText } from "@/lib/annotated-text";
+import { useStore } from "@/shared/store";
+import { useTextSelection } from "@/shared/hooks/useTextSelection";
+import { buildAnnotatedText } from "@/shared/lib/annotated-text";
 import MarginPills from "./MarginPills";
 
 export default function DocumentViewer() {

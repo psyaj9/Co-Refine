@@ -91,49 +91,6 @@ export interface AlertPayload {
 }
 
 
-export interface ScoreDelta {
-  consistency_score: number;
-  intent_alignment_score: number;
-  overall_severity_score: number;
-}
-
-export interface ReflectionMeta {
-  was_reflected: boolean;
-  initial_scores: {
-    consistency_score: number;
-    intent_alignment_score: number;
-    overall_severity_score: number;
-  };
-  reflected_scores: {
-    consistency_score: number;
-    intent_alignment_score: number;
-    overall_severity_score: number;
-  };
-  score_delta: ScoreDelta;
-}
-
-export interface ChallengeMeta {
-  was_challenged: boolean;
-  researcher_feedback: string;
-  pre_challenge_scores: {
-    consistency_score: number;
-    intent_alignment_score: number;
-    overall_severity_score: number;
-  };
-  post_challenge_scores: {
-    consistency_score: number;
-    intent_alignment_score: number;
-    overall_severity_score: number;
-  };
-  score_delta: ScoreDelta;
-}
-
-export interface ChallengeReflectionResponse {
-  audit_result: Record<string, unknown>;
-  challenge: ChallengeMeta;
-  human_feedback_id: string;
-}
-
 export interface AlertOut {
   id: string;
   alert_type: string;

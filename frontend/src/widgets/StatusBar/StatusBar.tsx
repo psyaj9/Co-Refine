@@ -1,6 +1,6 @@
-import { useStore } from "@/stores/store";
+import { useStore } from "@/shared/store";
 import { FileText, Hash, FolderOpen, Loader2, Eye, Users } from "lucide-react";
-import { AGENT_LABELS, AUDIT_STAGE_LABELS } from "@/lib/constants";
+import { AGENT_LABELS, AUDIT_STAGE_LABELS } from "@/shared/lib/constants";
 
 const PERSPECTIVE_LABELS: Record<string, { short: string; icon: typeof Eye }> = {
   self_consistency: { short: "Self-Consistency", icon: Eye },

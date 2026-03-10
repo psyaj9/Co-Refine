@@ -4,8 +4,8 @@ import {
   formatDateTime,
   eventSummary,
   buildHistoryAnnotatedText,
-} from "@/components/history/history-helpers";
-import type { EditEventOut } from "@/types";
+} from "../lib/history-helpers";
+import type { EditEventOut } from "@/shared/types";
 
 function ev(overrides: Partial<EditEventOut> = {}): EditEventOut {
   return {

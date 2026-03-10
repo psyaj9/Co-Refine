@@ -5,11 +5,11 @@
 import { describe, it, expect, vi } from "vitest";
 import { render } from "@testing-library/react";
 import { axe, toHaveNoViolations } from "jest-axe";
-import StatusBar from "@/components/StatusBar";
+import StatusBar from "./StatusBar";
 
 expect.extend(toHaveNoViolations);
 
-vi.mock("@/stores/store", () => ({
+vi.mock("@/shared/store", () => ({
   useStore: (sel: (s: Record<string, unknown>) => unknown) =>
     sel({
       activeProjectId: "proj-1",
