@@ -74,7 +74,8 @@ export function useWebSocket() {
           ) {
             triggerVisRefresh();
           }
-        } catch {
+        } catch (e) {
+          console.warn("[useWebSocket] Failed to parse WS message", e);
         }
       };
 

@@ -11,8 +11,7 @@ function deriveAnalysisStatus(alerts: AlertPayload[]): "pending" | "running" | "
     alerts.some(
       (a) =>
         a.type === "analysis_updated" ||
-        (a.type === "agent_error" &&
-          (a as unknown as Record<string, unknown>).agent === "analysis"),
+        (a.type === "agent_error" && a.agent === "analysis"),
     )
   )
     return "done";

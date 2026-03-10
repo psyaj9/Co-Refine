@@ -1,4 +1,5 @@
 import type { ViewMode, RightPanelTab } from "@/types";
+import { VIEW_KEY } from "./authSlice";
 
 export interface UiSlice {
   currentUser: string;
@@ -34,7 +35,7 @@ export const createUiSlice = (set: (partial: any) => void): UiSlice => ({
 
   viewMode: "document",
   setViewMode: (v) => {
-    sessionStorage.setItem("co_refine_view", v);
+    sessionStorage.setItem(VIEW_KEY, v);
     set({ viewMode: v });
   },
 

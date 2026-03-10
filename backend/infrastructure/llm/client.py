@@ -1,7 +1,10 @@
 from openai import AzureOpenAI
 
 from core.config import settings
+from core.logging import get_logger
 from infrastructure.llm.json_parser import parse_json_response, PARSE_FAILED_SENTINEL
+
+logger = get_logger(__name__)
 
 _client: AzureOpenAI | None = None
 
@@ -44,6 +47,6 @@ def call_llm(
         if result.get("definition") != PARSE_FAILED_SENTINEL:
             return result
 
-        print(f"[LLM] Parse failure (attempt {attempt + 1}) — raw: {raw[:500]}")
+        logger.warning("LLM parse failure", extra={"attempt": attempt + 1, "raw": raw[:500]})
 
     return result

@@ -1,5 +1,6 @@
 import type { ProjectOut, ProjectSettings } from "@/types";
 import * as api from "@/api/client";
+import { PROJECT_KEY, DOCUMENT_KEY } from "./authSlice";
 
 export interface ProjectSlice {
   projects: ProjectOut[];
@@ -28,8 +29,8 @@ export const createProjectSlice = (
 
   setActiveProject: (id) => {
     if (!id) {
-      sessionStorage.removeItem("co_refine_project");
-      sessionStorage.removeItem("co_refine_document");
+      sessionStorage.removeItem(PROJECT_KEY);
+      sessionStorage.removeItem(DOCUMENT_KEY);
       set({
         activeProjectId: null,
         activeDocumentId: null,
@@ -41,8 +42,8 @@ export const createProjectSlice = (
       });
       return;
     }
-    sessionStorage.setItem("co_refine_project", id);
-    sessionStorage.removeItem("co_refine_document");
+    sessionStorage.setItem(PROJECT_KEY, id);
+    sessionStorage.removeItem(DOCUMENT_KEY);
     set({
       activeProjectId: id,
       activeDocumentId: null,

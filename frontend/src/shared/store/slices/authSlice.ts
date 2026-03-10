@@ -3,6 +3,9 @@ import * as api from "@/api/client";
 
 export const TOKEN_KEY = "co_refine_token";
 export const USER_KEY = "co_refine_user";
+export const PROJECT_KEY = "co_refine_project";
+export const DOCUMENT_KEY = "co_refine_document";
+export const VIEW_KEY = "co_refine_view";
 
 export interface AuthSlice {
   authUser: AuthUser | null;
@@ -31,9 +34,9 @@ export const createAuthSlice = (
     if (token && userRaw) {
       try {
         const authUser: AuthUser = JSON.parse(userRaw);
-        const activeProjectId = sessionStorage.getItem("co_refine_project") || null;
-        const activeDocumentId = sessionStorage.getItem("co_refine_document") || null;
-        const viewMode = sessionStorage.getItem("co_refine_view") || "document";
+        const activeProjectId = sessionStorage.getItem(PROJECT_KEY) || null;
+        const activeDocumentId = sessionStorage.getItem(DOCUMENT_KEY) || null;
+        const viewMode = sessionStorage.getItem(VIEW_KEY) || "document";
         set({ token, authUser, activeProjectId, activeDocumentId, viewMode });
       } catch {
         sessionStorage.removeItem(TOKEN_KEY);
@@ -73,9 +76,9 @@ export const createAuthSlice = (
   logout: () => {
     sessionStorage.removeItem(TOKEN_KEY);
     sessionStorage.removeItem(USER_KEY);
-    sessionStorage.removeItem("co_refine_project");
-    sessionStorage.removeItem("co_refine_document");
-    sessionStorage.removeItem("co_refine_view");
+    sessionStorage.removeItem(PROJECT_KEY);
+    sessionStorage.removeItem(DOCUMENT_KEY);
+    sessionStorage.removeItem(VIEW_KEY);
     set({
       authUser: null,
       token: null,

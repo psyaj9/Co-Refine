@@ -1,5 +1,6 @@
 import type { DocumentOut } from "@/types";
 import * as api from "@/api/client";
+import { DOCUMENT_KEY } from "./authSlice";
 
 export interface DocumentSlice {
   documents: DocumentOut[];
@@ -23,7 +24,7 @@ export const createDocumentSlice = (
   },
 
   setActiveDocument: (id) => {
-    sessionStorage.setItem("co_refine_document", id);
+    sessionStorage.setItem(DOCUMENT_KEY, id);
     set({ activeDocumentId: id });
   },
 

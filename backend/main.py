@@ -63,7 +63,6 @@ async def external_service_handler(request: Request, exc: ExternalServiceError) 
     return JSONResponse(status_code=502, content={"detail": exc.message or "External service error"})
 
 app.include_router(auth_router)
-app.include_router(auth_router)
 app.include_router(projects_router)
 app.include_router(documents_router)
 app.include_router(codes_router)
