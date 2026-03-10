@@ -132,18 +132,10 @@ export function alertBody(alert: AlertPayload): string {
         : "Your coding is consistent with your past decisions — no issues found.";
     }
 
-    const selfText =
-      (self?.suggestion as string) || (self?.reasoning as string) || "";
-    const interText = inter?.is_conflict
-      ? (inter?.conflict_explanation as string) || ""
-      : "";
-    const parts = [openingLine, selfText, interText].filter(Boolean);
-
-    // Add score grounding note if available
-    const groundingNote = data.score_grounding_note as string | undefined;
-    if (groundingNote) parts.push(groundingNote);
-
-    return parts.join(" \u2022 ") || "See details below.";
+    return self?.headline as string
+      || (isConsistent
+        ? "Your coding is consistent with your past decisions."
+        : "This coding decision is inconsistent with your past decisions.");
   }
   if (alert.type === "consistency")
     return (

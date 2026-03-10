@@ -56,6 +56,10 @@ export default function CodingAuditDetail({
       )
     : [];
 
+  // Backwards-compat: new field names fall back to old ones for cached alerts
+  const evidenceNote = (selfLens.evidence_note as string) || (alert.data?.score_grounding_note as string) || "";
+  const definitionNote = (selfLens.definition_note as string) || (selfLens.definition_match as string) || "";
+
   return (
     <div className="mt-2 space-y-1.5">
       {/* ── Self-Consistency Section ─────────────────────────────── */}
@@ -68,7 +72,7 @@ export default function CodingAuditDetail({
         >
           <ShieldCheck size={9} aria-hidden="true" />
           <MetricTooltip explanation={METRIC_EXPLANATIONS.self_consistency_lens}>
-            <span className="text-2xs font-semibold flex-1 text-left">Self-Consistency</span>
+            <span className="text-2xs font-semibold flex-1 text-left">Details & Alternatives</span>
           </MetricTooltip>
           <MetricTooltip explanation={METRIC_EXPLANATIONS.consistency}>
             <span className={cn("text-2xs px-1 rounded", selfLens.is_consistent ? "text-green-600" : "text-amber-600")}>
@@ -79,34 +83,43 @@ export default function CodingAuditDetail({
         </button>
 
         {selfOpen && (
-          <div className="px-2 py-1.5 space-y-1 tab-content-enter">
-            <p className="text-[10px] text-surface-400 dark:text-surface-500 italic mb-1">
-              This checks if you&apos;re applying this code the same way you have before.
-            </p>
-            {!!selfLens.suggestion && (
-              <p className="text-2xs text-surface-600 dark:text-surface-300">{String(selfLens.suggestion)}</p>
+          <div className="px-2 py-1.5 space-y-2 tab-content-enter">
+            {definitionNote && (
+              <div>
+                <p className="text-[10px] font-semibold text-surface-500 dark:text-surface-400 mb-0.5">Definition match</p>
+                <p className="text-2xs text-surface-600 dark:text-surface-300">{definitionNote}</p>
+              </div>
             )}
-            {!!selfLens.drift_warning && (
-              <p className="text-2xs text-amber-600 dark:text-amber-400 italic">{String(selfLens.drift_warning)}</p>
+            {evidenceNote && (
+              <div>
+                <p className="text-[10px] font-semibold text-surface-500 dark:text-surface-400 mb-0.5">Evidence used</p>
+                <p className="text-2xs text-surface-500 dark:text-surface-400 italic">{evidenceNote}</p>
+              </div>
             )}
             {altCodes.length > 0 && (
-              <div className="flex flex-wrap gap-1 mt-1">
-                {altCodes.map((ac) => (
+              <div>
+                <p className="text-[10px] font-semibold text-surface-500 dark:text-surface-400 mb-0.5">Suggested alternatives</p>
+                <div className="flex flex-wrap gap-1">
+                  {altCodes.map((ac) => (
+                    <button
+                      key={ac}
+                      onClick={() => applySuggestedCode(alert.segment_id!, ac, alertIdx)}
+                      className="rounded px-1.5 py-0.5 text-2xs font-medium bg-amber-100 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 hover:bg-amber-200 transition-colors"
+                    >
+                      Apply &ldquo;{ac}&rdquo;
+                    </button>
+                  ))}
                   <button
-                    key={ac}
-                    onClick={() => applySuggestedCode(alert.segment_id!, ac, alertIdx)}
-                    className="rounded px-1.5 py-0.5 text-2xs font-medium bg-amber-100 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 hover:bg-amber-200 transition-colors"
+                    onClick={() => keepMyCode(alertIdx)}
+                    className="rounded px-1.5 py-0.5 text-2xs font-medium bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-400 hover:bg-green-200 transition-colors"
                   >
-                    Apply &ldquo;{ac}&rdquo;
+                    Keep current
                   </button>
-                ))}
-                <button
-                  onClick={() => keepMyCode(alertIdx)}
-                  className="rounded px-1.5 py-0.5 text-2xs font-medium bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-400 hover:bg-green-200 transition-colors"
-                >
-                  Keep current
-                </button>
+                </div>
               </div>
+            )}
+            {!definitionNote && !evidenceNote && altCodes.length === 0 && (
+              <p className="text-[10px] text-surface-400 dark:text-surface-500 italic">No additional details to show.</p>
             )}
           </div>
         )}

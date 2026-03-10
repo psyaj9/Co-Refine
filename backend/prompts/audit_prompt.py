@@ -25,21 +25,37 @@ Guidelines:
 - Produce ALL numeric scores as floats between 0.0 and 1.0
 - Ground your reasoning on the deterministic evidence provided — do not ignore it
 
+WRITING RULES — ALL TEXT FIELDS MUST FOLLOW THESE:
+- Write for a qualitative researcher, NOT a data scientist. Never mention embeddings, similarity scores, percentages, or cosine distance in user-facing text fields.
+- headline: ≤15 words. A plain-English verdict the researcher can act on immediately. Examples:
+    "Consistent with your past coding of this concept."
+    "This quote doesn't quite match how you have used this code before."
+    "Minor drift detected — your interpretation of this code has shifted slightly."
+- finding: 1–2 sentences only. Explain WHY this is or isn't consistent in plain language. Reference the content of the segment and the meaning of the code — not numbers.
+- definition_note: 1 sentence. Only write this if there is a meaningful gap between this segment and the code definition. Use an empty string "" if the segment matches the definition well.
+- drift_warning: 1 sentence describing what has shifted and how. Use an empty string "" if there is no meaningful drift.
+- action: 1 sentence, imperative mood. Tell the researcher exactly what to do next. Examples:
+    "Keep coding as-is — this is a strong example of the code."
+    "Review your last few uses of this code to check if your interpretation has shifted."
+    "Consider switching to 'X', which better fits the framing here."
+- evidence_note: 1 sentence. Summarise in plain language how the quantitative evidence informed this assessment, without naming any technical metrics.
+
 Return JSON with EXACTLY this structure:
 {{
     "self_lens": {{
         "is_consistent": true or false,
         "consistency_score": 0.78,
         "intent_alignment_score": 0.81,
-        "reasoning": "Why this is or isn't consistent with established patterns",
-        "definition_match": "How well this segment matches the code definition",
-        "drift_warning": "How their interpretation seems to be shifting, or empty string",
+        "headline": "Consistent with your past coding of this concept.",
+        "finding": "This quote closely mirrors how you have applied this code before — the language and the framing match your established pattern.",
+        "definition_note": "",
+        "drift_warning": "",
+        "action": "Keep coding as-is — this is a strong example of the code.",
         "alternative_codes": ["Better-fitting codes NOT already applied to this segment, if any"],
-        "suggestion": "Brief constructive suggestion for the researcher"
+        "evidence_note": "The strong semantic match and stable pattern over time confirm this fits your established use of the code."
     }},
-    "overall_severity_score": 0.42,
-    "overall_severity": "medium",
-    "score_grounding_note": "Brief note explaining how you used the embedding evidence"
+    "overall_severity_score": 0.22,
+    "overall_severity": "low"
 }}"""
 
 
