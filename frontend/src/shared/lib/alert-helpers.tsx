@@ -1,4 +1,4 @@
-import React from "react";
+﻿import React from "react";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -107,30 +107,7 @@ export function alertBody(alert: AlertPayload): string {
   const data = alert.data || {};
   if (alert.type === "coding_audit") {
     const self = data.self_lens as Record<string, unknown> | undefined;
-    const inter = data.inter_rater_lens as Record<string, unknown> | undefined;
-
-    // Build a plain-language opening line explaining WHY this alert matters
-    const severity = data.overall_severity as string | undefined;
     const isConsistent = self?.is_consistent !== false;
-    const isConflict = inter?.is_conflict === true;
-    let openingLine = "";
-    if (severity === "high") {
-      openingLine = isConflict && !isConsistent
-        ? "This needs attention: your coding appears inconsistent and a second researcher would likely disagree."
-        : isConflict
-          ? "A second researcher would likely code this differently — consider reviewing."
-          : "Your coding pattern seems to have shifted — this decision may be inconsistent with your earlier ones.";
-    } else if (severity === "medium") {
-      openingLine = isConflict
-        ? "A second researcher might code this differently, but the disagreement is minor."
-        : !isConsistent
-          ? "There are small differences from how you’ve applied this code before."
-          : "The coding looks broadly fine, but a few things are worth noting.";
-    } else {
-      openingLine = isConflict
-        ? "A second researcher might choose a different code, but your decision is reasonable."
-        : "Your coding is consistent with your past decisions — no issues found.";
-    }
 
     return self?.headline as string
       || (isConsistent
