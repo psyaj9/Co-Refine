@@ -16,7 +16,7 @@ from features.audit.router import router as audit_router
 from features.chat.router import router as chat_router
 from features.edit_history.router import router as edit_history_router
 from features.visualisations.router import router as vis_router
-from features.auth.router import router as auth_router
+from features.icr.router import router as icr_router
 from infrastructure.websocket.manager import ws_manager
 from infrastructure.auth.jwt import decode_token
 from core.config import settings
@@ -72,6 +72,7 @@ app.include_router(audit_router)
 app.include_router(chat_router)
 app.include_router(edit_history_router)
 app.include_router(vis_router)
+app.include_router(icr_router)
 
 
 @app.websocket("/ws")

@@ -16,6 +16,12 @@
   CodeOverlapData,
   TokenResponse,
   CodeCooccurrenceData,
+  MemberOut,
+  ICROverview,
+  ICRDisagreementList,
+  ICRPerCodeMetric,
+  ICRAgreementMatrix,
+  ICRResolution,
 } from "@/types";
 
 const BASE = "/api";
@@ -416,5 +422,119 @@ export async function suggestFacetLabels(projectId: string, codeId: string) {
 export async function explainFacet(projectId: string, facetId: string) {
   return json<{ explanation: string; facet_label: string; code_name: string }>(
     await apiFetch(`${BASE}/projects/${projectId}/vis/facets/${facetId}/explain`, { method: "POST" })
+  );
+}
+
+// -- Project Members
+
+export async function fetchProjectMembers(projectId: string) {
+  return json<MemberOut[]>(await apiFetch(`${BASE}/projects/${projectId}/members`));
+}
+
+export async function inviteProjectMember(projectId: string, email: string) {
+  return json<MemberOut>(
+    await apiFetch(`${BASE}/projects/${projectId}/members`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    })
+  );
+}
+
+export async function removeProjectMember(projectId: string, userId: string) {
+  await apiFetch(`${BASE}/projects/${projectId}/members/${userId}`, { method: "DELETE" });
+}
+
+// -- ICR
+
+export async function fetchICROverview(projectId: string) {
+  return json<ICROverview>(await apiFetch(`${BASE}/projects/${projectId}/icr/overview`));
+}
+
+export async function fetchICRDisagreements(
+  projectId: string,
+  params?: { document_id?: string; code_id?: string; disagreement_type?: string; offset?: number; limit?: number }
+) {
+  const qs = new URLSearchParams();
+  if (params?.document_id) qs.set("document_id", params.document_id);
+  if (params?.code_id) qs.set("code_id", params.code_id);
+  if (params?.disagreement_type) qs.set("disagreement_type", params.disagreement_type);
+  if (params?.offset != null) qs.set("offset", String(params.offset));
+  if (params?.limit != null) qs.set("limit", String(params.limit));
+  return json<ICRDisagreementList>(
+    await apiFetch(`${BASE}/projects/${projectId}/icr/disagreements?${qs.toString()}`)
+  );
+}
+
+export async function fetchICRPerCode(projectId: string) {
+  return json<ICRPerCodeMetric[]>(await apiFetch(`${BASE}/projects/${projectId}/icr/per-code`));
+}
+
+export async function fetchICRAgreementMatrix(projectId: string) {
+  return json<ICRAgreementMatrix>(await apiFetch(`${BASE}/projects/${projectId}/icr/agreement-matrix`));
+}
+
+export async function analyzeICRDisagreement(projectId: string, unitId: string, documentId: string) {
+  return json<{ analysis: string; unit_id: string }>(
+    await apiFetch(`${BASE}/projects/${projectId}/icr/analyze-disagreement`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ unit_id: unitId, document_id: documentId }),
+    })
+  );
+}
+
+export async function fetchICRResolutions(
+  projectId: string,
+  params?: { document_id?: string; status?: string }
+) {
+  const qs = new URLSearchParams();
+  if (params?.document_id) qs.set("document_id", params.document_id);
+  if (params?.status) qs.set("status", params.status);
+  return json<ICRResolution[]>(
+    await apiFetch(`${BASE}/projects/${projectId}/icr/resolutions?${qs.toString()}`)
+  );
+}
+
+export async function createICRResolution(
+  projectId: string,
+  data: {
+    unit_id: string;
+    document_id: string;
+    span_start: number;
+    span_end: number;
+    disagreement_type: string;
+    chosen_segment_id?: string | null;
+    resolution_note?: string | null;
+  }
+) {
+  return json<ICRResolution>(
+    await apiFetch(`${BASE}/projects/${projectId}/icr/resolutions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    })
+  );
+}
+
+export async function updateICRResolution(
+  projectId: string,
+  resolutionId: string,
+  data: { status?: string; chosen_segment_id?: string | null; resolution_note?: string | null }
+) {
+  return json<ICRResolution>(
+    await apiFetch(`${BASE}/projects/${projectId}/icr/resolutions/${resolutionId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    })
+  );
+}
+
+// -- All-coders segments (overlay mode)
+
+export async function fetchAllCoderSegments(documentId: string) {
+  return json<SegmentOut[]>(
+    await apiFetch(`${BASE}/segments/?document_id=${documentId}&all_coders=true`)
   );
 }

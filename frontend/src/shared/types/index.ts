@@ -150,7 +150,7 @@ export interface TextSelection {
   rect?: { top: number; left: number; bottom: number; right: number; width: number; height: number };
 }
 
-export type ViewMode = "document" | "dashboard" | "history";
+export type ViewMode = "document" | "dashboard" | "history" | "icr";
 export type RightPanelTab = "alerts" | "chat";
 export type HistoryScope = "project" | "document";
 
@@ -312,4 +312,124 @@ export interface PendingApplication {
   codeId: string;
   codeLabel: string;
   codeColour: string;
+}
+
+// ── ICR / Membership ──────────────────────────────────────────────────────────
+
+export interface MemberOut {
+  user_id: string;
+  email: string;
+  display_name: string;
+  role: "owner" | "coder";
+  joined_at: string;
+}
+
+export interface ICRCoderInfo {
+  user_id: string;
+  display_name: string;
+  email: string;
+}
+
+export interface ICRMetric {
+  score: number | null;
+  interpretation: string;
+  n_units: number;
+}
+
+export interface ICRPairwiseKappa {
+  coder_a_id: string;
+  coder_b_id: string;
+  coder_a_name: string;
+  coder_b_name: string;
+  score: number | null;
+  interpretation: string;
+  n_units: number;
+}
+
+export interface ICRMetrics {
+  percent_agreement: ICRMetric;
+  fleiss_kappa: ICRMetric;
+  krippendorffs_alpha: ICRMetric;
+  gwets_ac1: ICRMetric;
+  pairwise_cohens_kappa: ICRPairwiseKappa[];
+}
+
+export interface ICRDisagreementBreakdown {
+  code_mismatch: number;
+  boundary: number;
+  coverage_gap: number;
+  split_merge: number;
+}
+
+export interface ICROverview {
+  n_coders: number;
+  n_units: number;
+  n_agreements: number;
+  n_disagreements: number;
+  disagreement_breakdown: ICRDisagreementBreakdown;
+  metrics: ICRMetrics;
+  coders: ICRCoderInfo[];
+}
+
+export interface ICRAssignment {
+  coder_id: string;
+  coder_name: string;
+  code_id: string;
+  code_label: string;
+  code_colour: string;
+  segment_id: string;
+  start_index: number;
+  end_index: number;
+}
+
+export interface ICRDisagreement {
+  unit_id: string;
+  document_id: string;
+  document_title: string | null;
+  span_start: number;
+  span_end: number;
+  span_text: string | null;
+  disagreement_type: "code_mismatch" | "boundary" | "coverage_gap" | "split_merge";
+  assignments: ICRAssignment[];
+  missing_coder_ids: string[];
+  resolution_id: string | null;
+  resolution_status: string | null;
+}
+
+export interface ICRDisagreementList {
+  items: ICRDisagreement[];
+  total: number;
+  offset: number;
+  limit: number;
+}
+
+export interface ICRPerCodeMetric {
+  code_id: string;
+  code_label: string;
+  code_colour: string;
+  alpha: number | null;
+  interpretation: string;
+  n_units: number;
+}
+
+export interface ICRAgreementMatrix {
+  code_labels: string[];
+  code_ids: string[];
+  matrix: number[][];
+}
+
+export interface ICRResolution {
+  id: string;
+  project_id: string;
+  document_id: string | null;
+  span_start: number;
+  span_end: number;
+  disagreement_type: string;
+  status: "unresolved" | "resolved" | "deferred";
+  chosen_segment_id: string | null;
+  resolved_by: string | null;
+  resolution_note: string | null;
+  llm_analysis: string | null;
+  created_at: string;
+  resolved_at: string | null;
 }

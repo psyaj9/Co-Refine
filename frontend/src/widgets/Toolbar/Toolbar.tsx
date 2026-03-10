@@ -9,6 +9,7 @@ import {
   Sparkles,
   Settings2,
   LogOut,
+  Users2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import SettingsModal from "@/features/project/components/SettingsModal";
@@ -71,6 +72,12 @@ export default function Toolbar() {
               label="Visualisations"
               active={viewMode === "dashboard"}
               onClick={() => setViewMode("dashboard")}
+            />
+            <ToolbarButton
+              icon={Users2}
+              label="ICR"
+              active={viewMode === "icr"}
+              onClick={() => setViewMode("icr")}
             />
           </>
         )}

@@ -1,12 +1,13 @@
 import { useState } from "react";
-import { X, SlidersHorizontal, RefreshCw } from "lucide-react";
+import { X, SlidersHorizontal, RefreshCw, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useProjectSettings } from "@/features/project/hooks/useProjectSettings";
 import { useStore } from "@/stores/store";
 import { triggerBatchAudit } from "@/api/client";
 import ThresholdsTab from "./ThresholdsTab";
+import MembersTab from "./MembersTab";
 
-type SettingsTab = "thresholds";
+type SettingsTab = "thresholds" | "members";
 
 interface Props {
   open: boolean;
@@ -71,6 +72,18 @@ export default function SettingsModal({ open, onClose }: Props) {
             <SlidersHorizontal size={13} className="inline-block mr-1.5 -mt-0.5" />
             Thresholds
           </button>
+          <button
+            onClick={() => setTab("members")}
+            className={cn(
+              "px-3 py-2 text-xs font-medium border-b-2 transition-colors",
+              tab === "members"
+                ? "border-brand-500 text-brand-600 dark:text-brand-400"
+                : "border-transparent text-surface-500 hover:text-surface-700 dark:hover:text-surface-300",
+            )}
+          >
+            <Users size={13} className="inline-block mr-1.5 -mt-0.5" />
+            Members
+          </button>
         </div>
 
         {/* Body */}
@@ -82,6 +95,9 @@ export default function SettingsModal({ open, onClose }: Props) {
               onSetThreshold={settings.setThreshold}
               onResetThreshold={settings.resetThreshold}
             />
+          )}
+          {tab === "members" && activeProjectId && (
+            <MembersTab projectId={activeProjectId} />
           )}
         </div>
 

@@ -19,6 +19,7 @@ import { Visualisations } from "@/features/visualisations";
 import { EditHistoryView } from "@/features/history";
 import { HighlightPopover } from "@/features/selection";
 import { LoginPage, RegisterPage } from "@/features/auth";
+import { ICRView } from "@/features/icr";
 
 const PANEL_IDS = ["left-panel", "center-panel", "right-panel"];
 
@@ -171,6 +172,10 @@ export default function App() {
             ) : viewMode === "history" ? (
               <div className="h-full view-enter">
                 <EditHistoryView />
+              </div>
+            ) : viewMode === "icr" ? (
+              <div className="h-full view-enter">
+                <ICRView projectId={activeProjectId} />
               </div>
             ) : showUpload ? (
               <div className="h-full view-enter">

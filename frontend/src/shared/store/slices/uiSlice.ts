@@ -25,6 +25,11 @@ export interface UiSlice {
 
   docSearchQuery: string;
   setDocSearchQuery: (q: string) => void;
+
+  /** Overlay coders — user IDs whose segments are shown in the document viewer */
+  overlayCoderIds: string[];
+  toggleOverlayCoder: (userId: string) => void;
+  clearOverlayCoders: () => void;
 }
 
 export const createUiSlice = (set: (partial: any) => void): UiSlice => ({
@@ -51,4 +56,13 @@ export const createUiSlice = (set: (partial: any) => void): UiSlice => ({
 
   docSearchQuery: "",
   setDocSearchQuery: (q) => set({ docSearchQuery: q }),
+
+  overlayCoderIds: [],
+  toggleOverlayCoder: (userId) =>
+    set((s: UiSlice) => ({
+      overlayCoderIds: s.overlayCoderIds.includes(userId)
+        ? s.overlayCoderIds.filter((id) => id !== userId)
+        : [...s.overlayCoderIds, userId],
+    })),
+  clearOverlayCoders: () => set({ overlayCoderIds: [] }),
 });
