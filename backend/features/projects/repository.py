@@ -58,6 +58,22 @@ def update_project(db: Session) -> None:
     db.commit()
 
 
+def list_project_members(db: Session, project_id: str) -> list[ProjectMember]:
+    return (
+        db.query(ProjectMember)
+        .filter(ProjectMember.project_id == project_id)
+        .order_by(ProjectMember.joined_at)
+        .all()
+    )
+
+
+def remove_project_member(db: Session, project_id: str, user_id: str) -> None:
+    member = get_membership(db, project_id, user_id)
+    if member:
+        db.delete(member)
+        db.commit()
+
+
 def batch_project_counts(db: Session, project_ids: list[str]) -> dict[str, dict]:
     doc_rows = (
         db.query(Document.project_id, func.count(Document.id))

@@ -8,6 +8,18 @@ class ProjectCreate(BaseModel):
     name: str
 
 
+class MemberInvite(BaseModel):
+    email: str
+
+
+class MemberOut(BaseModel):
+    user_id: str
+    email: str
+    display_name: str
+    role: str
+    joined_at: datetime
+
+
 class ProjectOut(BaseModel):
     id: str
     name: str

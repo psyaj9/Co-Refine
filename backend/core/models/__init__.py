@@ -10,6 +10,7 @@ from core.models.chat import ChatMessage
 from core.models.edit_event import EditEvent
 from core.models.consistency_score import ConsistencyScore
 from core.models.facet import Facet, FacetAssignment
+from core.models.icr_resolution import IcrResolution
 
 __all__ = [
     "User",
@@ -25,4 +26,5 @@ __all__ = [
     "ConsistencyScore",
     "Facet",
     "FacetAssignment",
+    "IcrResolution",
 ]

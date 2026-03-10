@@ -4,7 +4,10 @@ from sqlalchemy.orm import Session
 from core.database import get_db
 from core.logging import get_logger
 from core.models import User
-from features.projects.schemas import ProjectCreate, ProjectOut, ProjectSettingsOut, ProjectSettingsUpdate
+from features.projects.schemas import (
+    ProjectCreate, ProjectOut, ProjectSettingsOut, ProjectSettingsUpdate,
+    MemberInvite, MemberOut,
+)
 from features.projects.constants import AVAILABLE_PERSPECTIVES, THRESHOLD_DEFINITIONS
 from features.projects.repository import (
     get_project_by_id,
@@ -14,6 +17,8 @@ from features.projects.repository import (
     batch_project_counts,
     get_membership,
     add_project_member,
+    list_project_members,
+    remove_project_member,
 )
 from features.projects.service import (
     create_new_project,
@@ -22,11 +27,25 @@ from features.projects.service import (
     build_settings_out,
     cleanup_project_vectors,
 )
+from features.auth.repository import get_user_by_email
 from infrastructure.auth.dependencies import get_current_user
 
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
+
+
+def _require_member(db: Session, project_id: str, user_id: str) -> None:
+    """Raise 403 if the user is not a project member."""
+    if not get_membership(db, project_id, user_id):
+        raise HTTPException(status_code=403, detail="Access denied")
+
+
+def _require_owner(db: Session, project_id: str, user_id: str) -> None:
+    """Raise 403 if the user is not the project owner."""
+    m = get_membership(db, project_id, user_id)
+    if not m or m.role != "owner":
+        raise HTTPException(status_code=403, detail="Owner permission required")
 
 
 @router.post("/", response_model=ProjectOut)
@@ -58,10 +77,15 @@ def get_threshold_definitions():
 
 
 @router.get("/{project_id}", response_model=ProjectOut)
-def get_project(project_id: str, db: Session = Depends(get_db)):
+def get_project(
+    project_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     project = get_project_by_id(db, project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
+    _require_member(db, project_id, current_user.id)
     counts = batch_project_counts(db, [project_id])
     return project_to_out(project, counts[project_id]["doc_count"], counts[project_id]["code_count"])
 
@@ -76,6 +100,7 @@ def delete_project_endpoint(
     project = get_project_by_id(db, project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
+    _require_owner(db, project_id, current_user.id)
 
     cleanup_project_vectors(db, project_id, current_user.id)
     delete_project(db, project)
@@ -91,6 +116,7 @@ def get_project_settings(
     project = get_project_by_id(db, project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
+    _require_member(db, project_id, current_user.id)
     return build_settings_out(project)
 
 
@@ -104,6 +130,7 @@ def update_project_settings(
     project = get_project_by_id(db, project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
+    _require_owner(db, project_id, current_user.id)
 
     if body.enabled_perspectives is not None:
         valid_ids = {p["id"] for p in AVAILABLE_PERSPECTIVES}
@@ -122,3 +149,84 @@ def update_project_settings(
 
     update_project(db)
     return build_settings_out(project)
+
+
+# ── Member Management ─────────────────────────────────────────────────────────
+
+@router.get("/{project_id}/members", response_model=list[MemberOut])
+def list_members(
+    project_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    project = get_project_by_id(db, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    _require_member(db, project_id, current_user.id)
+    members = list_project_members(db, project_id)
+    return [
+        MemberOut(
+            user_id=m.user_id,
+            email=m.user.email,
+            display_name=m.user.display_name,
+            role=m.role,
+            joined_at=m.joined_at,
+        )
+        for m in members
+    ]
+
+
+@router.post("/{project_id}/members", response_model=MemberOut, status_code=201)
+def invite_member(
+    project_id: str,
+    body: MemberInvite,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Add a user to the project by their email address (owner only)."""
+    project = get_project_by_id(db, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    _require_owner(db, project_id, current_user.id)
+
+    target = get_user_by_email(db, body.email)
+    if not target:
+        raise HTTPException(status_code=404, detail="No user with that email address")
+    if target.id == current_user.id:
+        raise HTTPException(status_code=400, detail="You are already the project owner")
+
+    existing = get_membership(db, project_id, target.id)
+    if existing:
+        raise HTTPException(status_code=409, detail="User is already a member of this project")
+
+    member = add_project_member(db, project_id, target.id, role="coder")
+    return MemberOut(
+        user_id=member.user_id,
+        email=target.email,
+        display_name=target.display_name,
+        role=member.role,
+        joined_at=member.joined_at,
+    )
+
+
+@router.delete("/{project_id}/members/{member_user_id}", status_code=204)
+def remove_member(
+    project_id: str,
+    member_user_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Remove a coder from the project (owner only; owner cannot remove themselves)."""
+    project = get_project_by_id(db, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    _require_owner(db, project_id, current_user.id)
+
+    if member_user_id == current_user.id:
+        raise HTTPException(status_code=400, detail="Owner cannot remove themselves from the project")
+
+    target_membership = get_membership(db, project_id, member_user_id)
+    if not target_membership:
+        raise HTTPException(status_code=404, detail="Member not found")
+
+    remove_project_member(db, project_id, member_user_id)
