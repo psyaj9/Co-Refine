@@ -28,6 +28,8 @@ export const createProjectSlice = (
 
   setActiveProject: (id) => {
     if (!id) {
+      sessionStorage.removeItem("co_refine_project");
+      sessionStorage.removeItem("co_refine_document");
       set({
         activeProjectId: null,
         activeDocumentId: null,
@@ -39,6 +41,8 @@ export const createProjectSlice = (
       });
       return;
     }
+    sessionStorage.setItem("co_refine_project", id);
+    sessionStorage.removeItem("co_refine_document");
     set({
       activeProjectId: id,
       activeDocumentId: null,
@@ -48,7 +52,6 @@ export const createProjectSlice = (
       analyses: [],
       showUploadPage: false,
     });
-    // Defer to let synchronous state settle before async loads
     setTimeout(async () => {
       const { loadDocuments, loadCodes, loadAnalyses, loadProjectSettings } = get();
       await Promise.all([loadDocuments(), loadCodes(), loadAnalyses(), loadProjectSettings()]);

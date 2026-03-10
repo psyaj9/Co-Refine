@@ -22,7 +22,10 @@ export const createDocumentSlice = (
     set({ documents: docs });
   },
 
-  setActiveDocument: (id) => set({ activeDocumentId: id }),
+  setActiveDocument: (id) => {
+    sessionStorage.setItem("co_refine_document", id);
+    set({ activeDocumentId: id });
+  },
 
   deleteDocument: async (id) => {
     await api.deleteDocument(id);
@@ -31,7 +34,6 @@ export const createDocumentSlice = (
       set({ activeDocumentId: null, segments: [] });
     }
     await loadDocuments();
-    // Segment counts and analyses may have changed
     await get().loadCodes();
     await get().loadAnalyses();
   },

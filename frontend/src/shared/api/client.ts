@@ -32,7 +32,7 @@ const NGROK_HEADERS: Record<string, string> = import.meta.env.VITE_API_URL
   : {};
 
 function getToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY);
+  return sessionStorage.getItem(TOKEN_KEY);
 }
 
 function authHeaders(): Record<string, string> {

@@ -12,11 +12,9 @@ export interface UiSlice {
   showUploadPage: boolean;
   setShowUploadPage: (v: boolean) => void;
 
-  /** Cross-filter state shared between FacetExplorerTab and MarginPills */
   selectedVisCodeId: string | null;
   setSelectedVisCodeId: (id: string | null) => void;
 
-  /** Increment to trigger a vis data refetch across all three vis tabs */
   visRefreshCounter: number;
   triggerVisRefresh: () => void;
 
@@ -26,7 +24,6 @@ export interface UiSlice {
   docSearchQuery: string;
   setDocSearchQuery: (q: string) => void;
 
-  /** Overlay coders — user IDs whose segments are shown in the document viewer */
   overlayCoderIds: string[];
   toggleOverlayCoder: (userId: string) => void;
   clearOverlayCoders: () => void;
@@ -36,7 +33,10 @@ export const createUiSlice = (set: (partial: any) => void): UiSlice => ({
   currentUser: "default",
 
   viewMode: "document",
-  setViewMode: (v) => set({ viewMode: v }),
+  setViewMode: (v) => {
+    sessionStorage.setItem("co_refine_view", v);
+    set({ viewMode: v });
+  },
 
   rightPanelTab: "alerts",
   setRightPanelTab: (t) => set({ rightPanelTab: t }),

@@ -26,15 +26,18 @@ export const createAuthSlice = (
   authError: null,
 
   initAuth: () => {
-    const token = localStorage.getItem(TOKEN_KEY);
-    const userRaw = localStorage.getItem(USER_KEY);
+    const token = sessionStorage.getItem(TOKEN_KEY);
+    const userRaw = sessionStorage.getItem(USER_KEY);
     if (token && userRaw) {
       try {
         const authUser: AuthUser = JSON.parse(userRaw);
-        set({ token, authUser });
+        const activeProjectId = sessionStorage.getItem("co_refine_project") || null;
+        const activeDocumentId = sessionStorage.getItem("co_refine_document") || null;
+        const viewMode = sessionStorage.getItem("co_refine_view") || "document";
+        set({ token, authUser, activeProjectId, activeDocumentId, viewMode });
       } catch {
-        localStorage.removeItem(TOKEN_KEY);
-        localStorage.removeItem(USER_KEY);
+        sessionStorage.removeItem(TOKEN_KEY);
+        sessionStorage.removeItem(USER_KEY);
       }
     }
   },
@@ -43,8 +46,8 @@ export const createAuthSlice = (
     set({ authLoading: true, authError: null });
     try {
       const res = await api.loginUser(email, password);
-      localStorage.setItem(TOKEN_KEY, res.access_token);
-      localStorage.setItem(USER_KEY, JSON.stringify(res.user));
+      sessionStorage.setItem(TOKEN_KEY, res.access_token);
+      sessionStorage.setItem(USER_KEY, JSON.stringify(res.user));
       set({ token: res.access_token, authUser: res.user, authLoading: false });
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Login failed";
@@ -57,8 +60,8 @@ export const createAuthSlice = (
     set({ authLoading: true, authError: null });
     try {
       const res = await api.registerUser(email, displayName, password);
-      localStorage.setItem(TOKEN_KEY, res.access_token);
-      localStorage.setItem(USER_KEY, JSON.stringify(res.user));
+      sessionStorage.setItem(TOKEN_KEY, res.access_token);
+      sessionStorage.setItem(USER_KEY, JSON.stringify(res.user));
       set({ token: res.access_token, authUser: res.user, authLoading: false });
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Registration failed";
@@ -68,13 +71,15 @@ export const createAuthSlice = (
   },
 
   logout: () => {
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(USER_KEY);
+    sessionStorage.removeItem(TOKEN_KEY);
+    sessionStorage.removeItem(USER_KEY);
+    sessionStorage.removeItem("co_refine_project");
+    sessionStorage.removeItem("co_refine_document");
+    sessionStorage.removeItem("co_refine_view");
     set({
       authUser: null,
       token: null,
       authError: null,
-      // Reset project/document/code/segment state
       projects: [],
       activeProjectId: null,
       documents: [],
