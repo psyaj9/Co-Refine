@@ -24,8 +24,12 @@
   ICRResolution,
 } from "@/types";
 
-const BASE = "/api";
+const BASE = (import.meta.env.VITE_API_URL ?? "") + "/api";
 const TOKEN_KEY = "co_refine_token";
+
+const NGROK_HEADERS: Record<string, string> = import.meta.env.VITE_API_URL
+  ? { "ngrok-skip-browser-warning": "true" }
+  : {};
 
 function getToken(): string | null {
   return localStorage.getItem(TOKEN_KEY);
@@ -33,7 +37,7 @@ function getToken(): string | null {
 
 function authHeaders(): Record<string, string> {
   const t = getToken();
-  return t ? { Authorization: `Bearer ${t}` } : {};
+  return { ...NGROK_HEADERS, ...(t ? { Authorization: `Bearer ${t}` } : {}) };
 }
 
 async function apiFetch(input: string, init?: RequestInit): Promise<Response> {
@@ -64,7 +68,7 @@ export async function loginUser(email: string, password: string) {
   return json<TokenResponse>(
     await fetch(`${BASE}/auth/login`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...NGROK_HEADERS },
       body: JSON.stringify({ email, password }),
     })
   );
@@ -74,7 +78,7 @@ export async function registerUser(email: string, display_name: string, password
   return json<TokenResponse>(
     await fetch(`${BASE}/auth/register`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...NGROK_HEADERS },
       body: JSON.stringify({ email, display_name, password }),
     })
   );

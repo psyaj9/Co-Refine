@@ -21,8 +21,15 @@ export function useWebSocket() {
 
     function connect() {
       if (disposed || !token) return;
-      const protocol = window.location.protocol === "https:" ? "wss" : "ws";
-      const url = `${protocol}://${window.location.host}/ws?token=${encodeURIComponent(token)}`;
+      let url: string;
+      const envApiUrl = import.meta.env.VITE_API_URL as string | undefined;
+      if (envApiUrl) {
+        const wsBase = envApiUrl.replace(/^http/, "ws");
+        url = `${wsBase}/ws?token=${encodeURIComponent(token)}`;
+      } else {
+        const protocol = window.location.protocol === "https:" ? "wss" : "ws";
+        url = `${protocol}://${window.location.host}/ws?token=${encodeURIComponent(token)}`;
+      }
       const ws = new WebSocket(url);
       wsRef.current = ws;
 
