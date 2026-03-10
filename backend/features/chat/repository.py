@@ -14,6 +14,14 @@ def get_conversation_messages(db: Session, conversation_id: str) -> list[ChatMes
     )
 
 
+def get_conversation_project_id(db: Session, conversation_id: str) -> str | None:
+    """Return the project_id for a conversation, or None if not found."""
+    msg = db.query(ChatMessage).filter(
+        ChatMessage.conversation_id == conversation_id
+    ).first()
+    return msg.project_id if msg else None
+
+
 def create_message(db: Session, message: ChatMessage) -> None:
     db.add(message)
     db.commit()

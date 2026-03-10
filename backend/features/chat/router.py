@@ -10,6 +10,7 @@ from features.chat.schemas import ChatRequest, ChatMessageOut
 from features.chat.repository import (
     create_message,
     get_conversation_messages,
+    get_conversation_project_id,
     delete_conversation_messages,
     list_conversation_stubs,
     get_first_user_message,
@@ -20,9 +21,15 @@ from features.chat.service import (
     get_conversation_history_dicts,
     stream_response_background,
 )
+from features.projects.repository import get_membership
 from infrastructure.auth.dependencies import get_current_user
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
+
+
+def _require_member(db: Session, project_id: str, user_id: str) -> None:
+    if not get_membership(db, project_id, user_id):
+        raise HTTPException(status_code=403, detail="Access denied")
 
 
 @router.post("/")
@@ -67,7 +74,15 @@ async def send_chat_message(
 
 
 @router.get("/history/{conversation_id}", response_model=list[ChatMessageOut])
-def get_history(conversation_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def get_history(
+    conversation_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    project_id = get_conversation_project_id(db, conversation_id)
+    if not project_id:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    _require_member(db, project_id, current_user.id)
     messages = get_conversation_messages(db, conversation_id)
     return [
         ChatMessageOut(id=m.id, conversation_id=m.conversation_id, role=m.role,
@@ -98,6 +113,14 @@ def list_conversations(
 
 
 @router.delete("/conversations/{conversation_id}")
-def delete_conversation(conversation_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def delete_conversation(
+    conversation_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    project_id = get_conversation_project_id(db, conversation_id)
+    if not project_id:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    _require_member(db, project_id, current_user.id)
     delete_conversation_messages(db, conversation_id)
     return {"status": "deleted"}

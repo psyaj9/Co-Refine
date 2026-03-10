@@ -1,13 +1,19 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from core.database import get_db
 from core.models import User
 from features.edit_history.schemas import EditEventOut
 from features.edit_history.repository import get_edit_history
+from features.projects.repository import get_membership
 from infrastructure.auth.dependencies import get_current_user
 
 router = APIRouter(prefix="/api/projects", tags=["edit_history"])
+
+
+def _require_member(db: Session, project_id: str, user_id: str) -> None:
+    if not get_membership(db, project_id, user_id):
+        raise HTTPException(status_code=403, detail="Access denied")
 
 
 @router.get("/{project_id}/edit-history", response_model=list[EditEventOut])
@@ -20,6 +26,7 @@ def get_edit_history_endpoint(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    _require_member(db, project_id, current_user.id)
     events = get_edit_history(
         db, project_id, document_id=document_id,
         entity_type=entity_type, limit=limit, offset=offset,
