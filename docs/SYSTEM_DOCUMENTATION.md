@@ -2597,7 +2597,55 @@ Co-Refine targets **WCAG 2.1 Level AA** compliance:
 
 **Test isolation:** Each test uses an in-memory SQLite database and mocked LLM/ChromaDB clients. No external API calls are made in tests.
 
+
+
+# Metric descriptions 
+
+These are Inter-Coder Reliability (ICR) metrics — statistical measures that tell you how consistently multiple human researchers are applying codes to the same text passages. Here's what each one means in Co-Refine's context:
+
+The Core Idea
+In qualitative research, multiple coders independently label the same text segments with codes. ICR metrics answer: "How much do the coders actually agree, beyond pure chance?"
+
+The Three Metrics
+Fleiss' κ (Kappa)
+What it solves: Extends Cohen's κ (which only works for 2 coders) to handle N coders simultaneously
+What it measures: Agreement across all coders, corrected for how likely they would agree by random chance alone
+Limitation here: Only counts units where all coders coded that passage — any unit where a coder skipped is excluded
+In Co-Refine: Used when you have 3+ project members all coding the same document
+
+Krippendorff's α (Alpha)
+What it solves: The most flexible metric — handles missing data (coders don't all have to code every passage)
+What it measures: Observed disagreement vs. expected disagreement if coders were random
+Thresholds: α ≥ 0.8 = reliable, α ≥ 0.667 = acceptable for exploratory work, below that = unreliable
+In Co-Refine: The primary headline metric because real projects rarely have perfect coverage — some researchers code more passages than others
+
+Gwet's AC₁
+What it solves: A well-known flaw called the "kappa paradox" — kappa artificially drops when most coders agree (high prevalence of one code). This can make good agreement look like bad agreement
+What it measures: Same concept as kappa (chance-corrected agreement), but uses a different formula for expected chance that is stable regardless of how skewed the code distribution is
+In Co-Refine: Acts as a sanity check alongside Fleiss' κ — if both are high, you're in good shape; if they diverge, the paradox may be distorting kappa
+
+Interpretation Scale (all three use the same)
+Score	Meaning
+< 0	Worse than chance
+0.00–0.20	Slight agreement
+0.20–0.40	Fair
+0.40–0.60	Moderate
+0.60–0.80	Substantial
+0.80–1.00	Near-perfect
+
+Why All Three Are Shown
+No single metric is universally correct. The ICR view shows all three so you can:
+
+Use Krippendorff's α as your primary reliability measure (most appropriate for qualitative coding with partial coverage)
+Use Fleiss' κ for the academic standard many reviewers expect
+Use Gwet's AC₁ to detect if kappa is being deceptive due to a dominant code
+The per-code breakdown (PerCodeTab.tsx) also runs a binary α per code ("did coder apply this code or not?") — useful for spotting which specific codes have inconsistent application across researchers.
+
+
+
+
 ---
+
 
 *End of Co-Refine System Documentation*
 *Generated for dissertation purposes — 2026-03-10*

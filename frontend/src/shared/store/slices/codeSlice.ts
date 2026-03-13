@@ -38,7 +38,6 @@ export const createCodeSlice = (
     const { activeProjectId } = get();
     if (!activeProjectId) return;
     await api.createCode(label, colour, activeProjectId, definition);
-    await api.createCode(label, colour, activeProjectId, definition);
     await get().loadCodes();
   },
 

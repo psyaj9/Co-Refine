@@ -32,6 +32,10 @@ export default function App() {
   const showUploadPage = useStore((s) => s.showUploadPage);
   const viewMode = useStore((s) => s.viewMode);
   const loadProjects = useStore((s) => s.loadProjects);
+  const loadDocuments = useStore((s) => s.loadDocuments);
+  const loadCodes = useStore((s) => s.loadCodes);
+  const loadAnalyses = useStore((s) => s.loadAnalyses);
+  const loadProjectSettings = useStore((s) => s.loadProjectSettings);
   const logout = useStore((s) => s.logout);
 
   const [showRegister, setShowRegister] = useState(false);
@@ -61,6 +65,11 @@ export default function App() {
 
   useEffect(() => { initAuth(); }, []);
   useEffect(() => { if (authUser) loadProjects(); }, [authUser]);
+  useEffect(() => {
+    if (activeProjectId && authUser) {
+      Promise.all([loadDocuments(), loadCodes(), loadAnalyses(), loadProjectSettings()]);
+    }
+  }, [activeProjectId, authUser]);
   useEffect(() => {
     const handler = () => logout();
     window.addEventListener("co_refine:unauthorized", handler);
