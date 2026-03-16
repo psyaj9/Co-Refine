@@ -52,6 +52,8 @@ def build_disagreement_analysis_prompt(
         "3. If you recommend a specific code, state it clearly.",
         "",
         "Be concise (under 200 words). Write in plain paragraphs, no bullet points.",
+        "",
+        'Respond with a JSON object: {"analysis": "<your response here>"}',
     ]
 
     return "\n".join(lines)

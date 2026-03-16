@@ -94,7 +94,7 @@ def get_disagreements(
 
 
 @router.post("/analyze-disagreement")
-async def analyze_disagreement(
+def analyze_disagreement(
     project_id: str,
     body: AnalyzeDisagreementRequest,
     db: Session = Depends(get_db),
@@ -103,14 +103,8 @@ async def analyze_disagreement(
     _get_project_or_404(db, project_id)
     _require_member(db, project_id, current_user.id)
 
-    try:
-        from infrastructure.llm.client import get_llm_client
-        llm_client = get_llm_client()
-    except Exception:
-        raise HTTPException(status_code=503, detail="LLM client unavailable")
-
-    result = await service.analyze_disagreement_llm(
-        db, project_id, body.unit_id, body.document_id, llm_client
+    result = service.analyze_disagreement_llm(
+        db, project_id, body.unit_id, body.document_id
     )
     if "error" in result:
         raise HTTPException(status_code=404, detail=result["error"])

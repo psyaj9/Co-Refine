@@ -19,9 +19,11 @@ from features.icr.metrics import (
     gwets_ac1,
     build_agreement_matrix,
     per_code_alpha,
+    _interpret_alpha,
 )
 from features.icr.disagreements import classify_units, filter_disagreements
 from features.icr import repository as repo
+from infrastructure.llm.client import call_llm
 from features.icr.schemas import (
     CoderInfo,
     MetricOut,
@@ -210,7 +212,9 @@ def get_per_code_metrics(db: Session, project_id: str) -> list[PerCodeMetricOut]
 
     code_map = {c.id: c for c in codes}
     result = []
-    for code_id, metric in alphas.items():
+    for item in alphas:
+        code_id = item["code_id"]
+        alpha_score = item["alpha"]
         code = code_map.get(code_id)
         if not code:
             continue
@@ -218,9 +222,9 @@ def get_per_code_metrics(db: Session, project_id: str) -> list[PerCodeMetricOut]
             code_id=code_id,
             code_label=code.label,
             code_colour=code.colour,
-            alpha=round(metric.score, 4) if metric.score is not None else None,
-            interpretation=metric.interpretation,
-            n_units=metric.n_units,
+            alpha=round(alpha_score, 4) if alpha_score is not None else None,
+            interpretation=_interpret_alpha(alpha_score),
+            n_units=item["n_units"],
         ))
 
     result.sort(key=lambda x: (x.alpha is None, -(x.alpha or 0)))
@@ -337,12 +341,11 @@ def get_disagreements(
     return DisagreementListOut(items=items, total=total, offset=offset, limit=limit)
 
 
-async def analyze_disagreement_llm(
+def analyze_disagreement_llm(
     db: Session,
     project_id: str,
     unit_id: str,
     document_id: str,
-    llm_client,
 ) -> dict:
     """Ask the LLM to explain a disagreement and suggest a resolution."""
     members = repo.list_members_for_project(db, project_id)
@@ -370,17 +373,17 @@ async def analyze_disagreement_llm(
     code_map = {c.id: c for c in codes}
 
     from prompts.icr_prompt import build_disagreement_analysis_prompt
-    prompt = build_disagreement_analysis_prompt(
-        target_d, users, code_map
-    )
+    system_msg = "You are an expert qualitative research methodologist helping to resolve intercoder disagreements."
+    user_msg = build_disagreement_analysis_prompt(target_d, users, code_map)
+    messages = [
+        {"role": "system", "content": system_msg},
+        {"role": "user", "content": user_msg},
+    ]
 
     try:
-        response = await llm_client.complete(
-            system="You are an expert qualitative research methodologist helping to resolve intercoder disagreements.",
-            user=prompt,
-            json_mode=False,
-        )
-        return {"analysis": response, "unit_id": unit_id}
+        result = call_llm(messages)
+        analysis = result.get("analysis") or result.get("explanation") or json.dumps(result)
+        return {"analysis": analysis, "unit_id": unit_id}
     except Exception as exc:
         logger.error("LLM disagreement analysis failed", extra={"error": str(exc)})
         return {"error": str(exc)}
