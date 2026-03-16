@@ -65,7 +65,7 @@ def relabel_facet(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    facet = db.query(Facet).filter(Facet.id == facet_id, Facet.project_id == project_id).first()
+    facet = db.query(Facet).filter(Facet.id == facet_id, Facet.project_id == project_id, Facet.user_id == current_user.id).first()
     if not facet:
         raise HTTPException(status_code=404, detail="Facet not found")
     facet.label = body.label
@@ -84,7 +84,7 @@ def suggest_labels(
     """Re-run AI label suggestion for all active facets of a code."""
     facets = (
         db.query(Facet)
-        .filter(Facet.project_id == project_id, Facet.code_id == code_id, Facet.is_active == True)
+        .filter(Facet.project_id == project_id, Facet.code_id == code_id, Facet.user_id == current_user.id, Facet.is_active == True)
         .all()
     )
     if not facets:
@@ -101,7 +101,7 @@ def explain_facet_endpoint(
     current_user: User = Depends(get_current_user),
 ):
     """Return an AI-generated plain-English explanation of a facet sub-theme."""
-    facet = db.query(Facet).filter(Facet.id == facet_id, Facet.project_id == project_id).first()
+    facet = db.query(Facet).filter(Facet.id == facet_id, Facet.project_id == project_id, Facet.user_id == current_user.id).first()
     if not facet:
         raise HTTPException(status_code=404, detail="Facet not found")
     code = db.query(Code).filter(Code.id == facet.code_id).first()

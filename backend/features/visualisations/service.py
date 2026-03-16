@@ -119,7 +119,7 @@ def get_overview(db: Session, project_id: str, user_id: str) -> dict:
 
 def get_facets(db: Session, project_id: str, user_id: str, code_id: str | None = None) -> dict:
     """Tab 2: Facet explorer — scatter data per facet with similarity stats (user-scoped)."""
-    query = db.query(Facet).filter(Facet.project_id == project_id, Facet.is_active == True)
+    query = db.query(Facet).filter(Facet.project_id == project_id, Facet.user_id == user_id, Facet.is_active == True)
     if code_id:
         query = query.filter(Facet.code_id == code_id)
     facets = query.all()

@@ -11,12 +11,11 @@ def get_segments_for_code(db: Session, code_id: str, user_id: str) -> list[Coded
     )
 
 
-def get_active_facets_for_code(db: Session, code_id: str) -> list[Facet]:
-    return (
-        db.query(Facet)
-        .filter(Facet.code_id == code_id, Facet.is_active == True)  # noqa: E712
-        .all()
-    )
+def get_active_facets_for_code(db: Session, code_id: str, user_id: str | None = None) -> list[Facet]:
+    q = db.query(Facet).filter(Facet.code_id == code_id, Facet.is_active == True)  # noqa: E712
+    if user_id is not None:
+        q = q.filter(Facet.user_id == user_id)
+    return q.all()
 
 
 def get_code(db: Session, code_id: str) -> Code | None:

@@ -91,7 +91,7 @@ def run_facet_analysis(
     centroids = km.cluster_centers_
     coords_2d = _compute_tsne(emb_matrix)
 
-    existing_facets = get_active_facets_for_code(db, code_id)
+    existing_facets = get_active_facets_for_code(db, code_id, user_id)
     for f in existing_facets:
         f.is_active = False
 
@@ -101,6 +101,7 @@ def run_facet_analysis(
             id=str(uuid.uuid4()),
             code_id=code_id,
             project_id=project_id,
+            user_id=user_id,
             label=f"Facet {cluster_idx + 1}",
             centroid_json=json.dumps(centroids[cluster_idx].tolist()),
             segment_count=int(np.sum(labels == cluster_idx)),

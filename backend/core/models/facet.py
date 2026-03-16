@@ -12,6 +12,7 @@ class Facet(Base):
     id = Column(String, primary_key=True)
     code_id = Column(String, ForeignKey("codes.id"), nullable=False)
     project_id = Column(String, ForeignKey("projects.id"), nullable=False)
+    user_id = Column(String, ForeignKey("users.id"), nullable=True)
     label = Column(String, nullable=False)
     suggested_label = Column(String, nullable=True)
     label_source = Column(String, default="auto")
