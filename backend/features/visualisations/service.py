@@ -67,12 +67,12 @@ def _compute_temporal_drift_by_code(scores: list, codes: list) -> list[dict]:
     return top_temporal_drift
 
 
-def get_overview(db: Session, project_id: str) -> dict:
-    """Tab 1: Project-level summary stats + multi-metric time-series."""
+def get_overview(db: Session, project_id: str, user_id: str) -> dict:
+    """Tab 1: User-level summary stats + multi-metric time-series."""
     total_segments = (
         db.query(func.count(CodedSegment.id))
         .join(Code, CodedSegment.code_id == Code.id)
-        .filter(Code.project_id == project_id)
+        .filter(Code.project_id == project_id, CodedSegment.user_id == user_id)
         .scalar()
     ) or 0
 
@@ -82,7 +82,7 @@ def get_overview(db: Session, project_id: str) -> dict:
 
     scores = (
         db.query(ConsistencyScore)
-        .filter(ConsistencyScore.project_id == project_id)
+        .filter(ConsistencyScore.project_id == project_id, ConsistencyScore.user_id == user_id)
         .order_by(ConsistencyScore.created_at)
         .all()
     )
@@ -117,8 +117,8 @@ def get_overview(db: Session, project_id: str) -> dict:
     }
 
 
-def get_facets(db: Session, project_id: str, code_id: str | None = None) -> dict:
-    """Tab 2: Facet explorer — scatter data per facet with similarity stats."""
+def get_facets(db: Session, project_id: str, user_id: str, code_id: str | None = None) -> dict:
+    """Tab 2: Facet explorer — scatter data per facet with similarity stats (user-scoped)."""
     query = db.query(Facet).filter(Facet.project_id == project_id, Facet.is_active == True)
     if code_id:
         query = query.filter(Facet.code_id == code_id)
@@ -131,7 +131,13 @@ def get_facets(db: Session, project_id: str, code_id: str | None = None) -> dict
     code_ids = list({f.code_id for f in facets})
 
     codes_map = {c.id: c for c in db.query(Code).filter(Code.id.in_(code_ids)).all()}
-    assignments = db.query(FacetAssignment).filter(FacetAssignment.facet_id.in_(facet_ids)).all()
+    # Only fetch assignments for segments belonging to the current user
+    assignments = (
+        db.query(FacetAssignment)
+        .join(CodedSegment, FacetAssignment.segment_id == CodedSegment.id)
+        .filter(FacetAssignment.facet_id.in_(facet_ids), CodedSegment.user_id == user_id)
+        .all()
+    )
     seg_ids = list({a.segment_id for a in assignments})
     segs_map = {s.id: s for s in db.query(CodedSegment).filter(CodedSegment.id.in_(seg_ids)).all()}
 
@@ -174,8 +180,8 @@ def get_facets(db: Session, project_id: str, code_id: str | None = None) -> dict
     return {"facets": result}
 
 
-def get_consistency(db: Session, project_id: str, code_id: str | None = None) -> dict:
-    """Tab 3: Box plots + timeline, enriched with Stage 1 metrics and reflection data."""
+def get_consistency(db: Session, project_id: str, user_id: str, code_id: str | None = None) -> dict:
+    """Tab 3: Box plots + timeline, enriched with Stage 1 metrics and reflection data (user-scoped)."""
     codes = db.query(Code).filter(Code.project_id == project_id).all()
     if code_id:
         codes = [c for c in codes if c.id == code_id]
@@ -186,6 +192,7 @@ def get_consistency(db: Session, project_id: str, code_id: str | None = None) ->
         .filter(
             ConsistencyScore.code_id.in_(code_ids),
             ConsistencyScore.project_id == project_id,
+            ConsistencyScore.user_id == user_id,
             ConsistencyScore.llm_consistency_score.isnot(None),
         )
         .order_by(ConsistencyScore.created_at)
@@ -237,9 +244,10 @@ def get_code_overlap(db: Session, project_id: str, user_id: str) -> dict:
     }
 
 
-def compute_cooccurrence(db: Session, project_id: str) -> dict:
+def compute_cooccurrence(db: Session, project_id: str, user_id: str) -> dict:
     """Tab 5: Code co-occurrence matrix — counts how often pairs of codes are
-    applied to the exact same text span (document_id + start_index + end_index).
+    applied to the exact same text span (document_id + start_index + end_index)
+    for the current user.
 
     Diagonal = total usage count of that code (segments coded with it, counting
     each span once even if the code appears multiple times on that span).
@@ -259,11 +267,11 @@ def compute_cooccurrence(db: Session, project_id: str) -> dict:
     label_to_idx = {label: i for i, label in enumerate(code_labels)}
     n = len(code_labels)
 
-    # Fetch all segments for this project (joined through Code.project_id)
+    # Fetch only the current user's segments for this project
     rows = (
         db.query(CodedSegment.document_id, CodedSegment.start_index, CodedSegment.end_index, CodedSegment.code_id)
         .join(Code, CodedSegment.code_id == Code.id)
-        .filter(Code.project_id == project_id)
+        .filter(Code.project_id == project_id, CodedSegment.user_id == user_id)
         .all()
     )
 

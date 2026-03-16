@@ -39,14 +39,15 @@ def delete_code_record(db: Session, code: Code) -> None:
     db.commit()
 
 
-def segment_counts(db: Session, code_ids: list[str]) -> dict[str, int]:
+def segment_counts(db: Session, code_ids: list[str], user_id: str | None = None) -> dict[str, int]:
     """Return a mapping of code_id -> segment count in a single query."""
-    rows = (
+    query = (
         db.query(CodedSegment.code_id, func.count(CodedSegment.id))
         .filter(CodedSegment.code_id.in_(code_ids))
-        .group_by(CodedSegment.code_id)
-        .all()
     )
+    if user_id:
+        query = query.filter(CodedSegment.user_id == user_id)
+    rows = query.group_by(CodedSegment.code_id).all()
     return {code_id: count for code_id, count in rows}
 
 

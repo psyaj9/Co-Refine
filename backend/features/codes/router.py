@@ -63,7 +63,7 @@ def create_code_endpoint(
         user_id=user_id, definition=body.definition,
     )
     db.commit()
-    counts = segment_counts(db, [code.id])
+    counts = segment_counts(db, [code.id], user_id=user_id)
     return _code_to_out(code, counts.get(code.id, 0))
 
 
@@ -76,7 +76,7 @@ def list_codes_endpoint(
     if project_id:
         _require_member(db, project_id, current_user.id)
     codes = list_codes(db, project_id)
-    counts = segment_counts(db, [c.id for c in codes])
+    counts = segment_counts(db, [c.id for c in codes], user_id=current_user.id)
     return [_code_to_out(c, counts.get(c.id, 0)) for c in codes]
 
 
@@ -116,7 +116,7 @@ def update_code_endpoint(
 
     update_code(db)
     db.refresh(code)
-    counts = segment_counts(db, [code.id])
+    counts = segment_counts(db, [code.id], user_id=current_user.id)
     return _code_to_out(code, counts.get(code.id, 0))
 
 
