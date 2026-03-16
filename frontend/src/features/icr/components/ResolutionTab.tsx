@@ -69,16 +69,19 @@ export default function ResolutionTab({ projectId }: ResolutionTabProps) {
             <div className="flex items-start justify-between gap-2">
               <div className="space-y-0.5 min-w-0">
                 <p className="text-xs font-medium text-surface-700 dark:text-surface-200">
-                  {r.disagreement_type.replace("_", " ")} — chars {r.span_start}–{r.span_end}
+                  {r.disagreement_type.replace("_", " ")}
+                  {r.span_text
+                    ? ` — "${r.span_text.slice(0, 60)}${r.span_text.length > 60 ? "…" : ""}"`
+                    : ` — chars ${r.span_start}–${r.span_end}`}
                 </p>
                 {r.resolution_note && (
                   <p className="text-[11px] text-surface-500 dark:text-surface-400 break-words">
                     {r.resolution_note}
                   </p>
                 )}
-                {r.resolved_by && (
+                {(r.resolved_by_name || r.resolved_by) && (
                   <p className="text-[10px] text-surface-400">
-                    Resolved by user {r.resolved_by}
+                    Resolved by {r.resolved_by_name ?? r.resolved_by}
                   </p>
                 )}
               </div>

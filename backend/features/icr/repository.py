@@ -31,6 +31,11 @@ def list_documents_for_project(db: Session, project_id: str) -> list[Document]:
     )
 
 
+def get_document_text(db: Session, document_id: str) -> str | None:
+    doc = db.query(Document).filter(Document.id == document_id).first()
+    return doc.full_text if doc else None
+
+
 def list_segments_for_document_all_coders(
     db: Session,
     document_id: str,

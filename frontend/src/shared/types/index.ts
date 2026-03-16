@@ -349,6 +349,7 @@ export interface ICRDisagreement {
   disagreement_type: "code_mismatch" | "boundary" | "coverage_gap" | "split_merge";
   assignments: ICRAssignment[];
   missing_coder_ids: string[];
+  missing_coder_names: string[];
   resolution_id: string | null;
   resolution_status: string | null;
 }
@@ -381,10 +382,12 @@ export interface ICRResolution {
   document_id: string | null;
   span_start: number;
   span_end: number;
+  span_text: string | null;
   disagreement_type: string;
   status: "unresolved" | "resolved" | "deferred";
   chosen_segment_id: string | null;
   resolved_by: string | null;
+  resolved_by_name: string | null;
   resolution_note: string | null;
   llm_analysis: string | null;
   created_at: string;

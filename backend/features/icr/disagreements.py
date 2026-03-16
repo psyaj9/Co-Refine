@@ -88,9 +88,10 @@ def _classify_type(
     missing_coders: list[str],
     jaccard_threshold: float,
 ) -> str:
-    if missing_coders:
-        return "coverage_gap"
-
+    # coverage_gap: fewer than 2 coders participated (one coder coded it, others didn't)
+    # If 2+ coders participated, classify by the nature of their disagreement even if
+    # additional coders are absent — those absent coders show up as coverage_gap units
+    # elsewhere (their own isolated segments become single-coder units).
     if len(assignments) < 2:
         return "coverage_gap"
 

@@ -99,6 +99,7 @@ class ICRDisagreementOut(BaseModel):
     disagreement_type: str       # code_mismatch | boundary | coverage_gap | split_merge | agreement
     assignments: list[AssignmentOut]
     missing_coder_ids: list[str]
+    missing_coder_names: list[str]
     resolution_id: Optional[str]
     resolution_status: Optional[str]
 
@@ -134,10 +135,12 @@ class ICRResolutionOut(BaseModel):
     document_id: Optional[str]
     span_start: int
     span_end: int
+    span_text: Optional[str]
     disagreement_type: str
     status: str
     chosen_segment_id: Optional[str]
     resolved_by: Optional[str]
+    resolved_by_name: Optional[str]
     resolution_note: Optional[str]
     llm_analysis: Optional[str]
     created_at: datetime

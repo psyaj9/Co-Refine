@@ -95,17 +95,31 @@ def _classify_disagreements_summary(all_units: list, coder_ids: list[str]) -> tu
     return disagreements, n_agreements, n_disagreements, breakdown
 
 
-def _resolution_to_out(r) -> ICRResolutionOut:
+def _resolution_to_out(r, db: Session = None) -> ICRResolutionOut:
+    span_text: Optional[str] = None
+    resolved_by_name: Optional[str] = None
+    if db is not None:
+        if r.document_id:
+            doc_text = repo.get_document_text(db, r.document_id)
+            if doc_text:
+                raw = doc_text[r.span_start:r.span_end]
+                span_text = raw[:200] + "…" if len(raw) > 200 else raw
+        if r.resolved_by:
+            users = repo.get_users_by_ids(db, [r.resolved_by])
+            u = users.get(r.resolved_by)
+            resolved_by_name = u.display_name if u else r.resolved_by[:8]
     return ICRResolutionOut(
         id=r.id,
         project_id=r.project_id,
         document_id=r.document_id,
         span_start=r.span_start,
         span_end=r.span_end,
+        span_text=span_text,
         disagreement_type=r.disagreement_type,
         status=r.status,
         chosen_segment_id=r.chosen_segment_id,
         resolved_by=r.resolved_by,
+        resolved_by_name=resolved_by_name,
         resolution_note=r.resolution_note,
         llm_analysis=r.llm_analysis,
         created_at=r.created_at,
@@ -115,13 +129,14 @@ def _resolution_to_out(r) -> ICRResolutionOut:
 
 def _build_all_units(
     db: Session, project_id: str, coder_ids: list[str]
-) -> tuple[list[AlignmentUnit], dict[str, str]]:
+) -> tuple[list[AlignmentUnit], dict[str, str], dict[str, str]]:
     """
-    Return (all_units, doc_title_map) by iterating all project documents.
+    Return (all_units, doc_title_map, doc_text_map) by iterating all project documents.
     Segments from all coders are fetched and computed per document.
     """
     documents = repo.list_documents_for_project(db, project_id)
     doc_title_map: dict[str, str] = {d.id: d.title for d in documents}
+    doc_text_map: dict[str, str] = {d.id: d.full_text for d in documents if d.full_text}
     all_units: list[AlignmentUnit] = []
 
     for doc in documents:
@@ -136,7 +151,7 @@ def _build_all_units(
         )
         all_units.extend(units)
 
-    return all_units, doc_title_map
+    return all_units, doc_title_map, doc_text_map
 
 
 # ── Public service functions ───────────────────────────────────────────────────
@@ -176,7 +191,7 @@ def get_icr_overview(db: Session, project_id: str) -> ICROverviewOut:
             coders=coders,
         )
 
-    all_units, _ = _build_all_units(db, project_id, coder_ids)
+    all_units, _, _ = _build_all_units(db, project_id, coder_ids)
     _, n_agreements, n_disagreements, breakdown = _classify_disagreements_summary(all_units, coder_ids)
     pa, fk, ka, ga = _compute_all_metrics(all_units, coder_ids)
     pairwise = _build_pairwise_kappa(all_units, coder_ids, users)
@@ -206,7 +221,7 @@ def get_per_code_metrics(db: Session, project_id: str) -> list[PerCodeMetricOut]
     if len(coder_ids) < 2 or not codes:
         return []
 
-    all_units, _ = _build_all_units(db, project_id, coder_ids)
+    all_units, _, _ = _build_all_units(db, project_id, coder_ids)
     code_ids = [c.id for c in codes]
     alphas = per_code_alpha(all_units, coder_ids, code_ids)
 
@@ -239,7 +254,7 @@ def get_agreement_matrix(db: Session, project_id: str) -> AgreementMatrixOut:
     if len(coder_ids) < 2 or not codes:
         return AgreementMatrixOut(code_labels=[], code_ids=[], matrix=[])
 
-    all_units, _ = _build_all_units(db, project_id, coder_ids)
+    all_units, _, _ = _build_all_units(db, project_id, coder_ids)
     code_labels = [c.label for c in codes]
     code_ids = [c.id for c in codes]
     matrix_dict = build_agreement_matrix(all_units, coder_ids, code_ids)
@@ -278,7 +293,7 @@ def get_disagreements(
     if len(coder_ids) < 2:
         return DisagreementListOut(items=[], total=0, offset=offset, limit=limit)
 
-    all_units, doc_title_map = _build_all_units(db, project_id, coder_ids)
+    all_units, doc_title_map, doc_text_map = _build_all_units(db, project_id, coder_ids)
     all_disagreements, _, _, _ = _classify_disagreements_summary(all_units, coder_ids)
 
     # Filter out pure agreements (unless type_filter explicitly asks for them)
@@ -294,12 +309,18 @@ def get_disagreements(
         document_id=document_id,
     )
 
-    # Look up resolutions for these units
+    # Look up resolutions for these units; filter out resolved ones
     all_resolutions = repo.list_resolutions(db, project_id, document_id=document_id)
-    res_map: dict[str, tuple[str, str]] = {}   # unit_id -> (resolution_id, status)
+    res_map: dict[str, tuple[str, str]] = {}   # key -> (resolution_id, status)
     for res in all_resolutions:
         key = f"{res.document_id}:{res.span_start}:{res.span_end}"
         res_map[key] = (res.id, res.status)
+
+    # Hide resolved disagreements from the list
+    filtered = [
+        d for d in filtered
+        if res_map.get(f"{d.document_id}:{d.span_start}:{d.span_end}", (None, None))[1] != "resolved"
+    ]
 
     # Paginate
     total = len(filtered)
@@ -324,16 +345,29 @@ def get_disagreements(
         lookup_key = f"{d.document_id}:{d.span_start}:{d.span_end}"
         res_entry = res_map.get(lookup_key)
 
+        # Extract span text from document content
+        doc_text = doc_text_map.get(d.document_id, "")
+        span_text: Optional[str] = None
+        if doc_text:
+            raw = doc_text[d.span_start:d.span_end]
+            span_text = raw[:200] + "…" if len(raw) > 200 else raw
+
+        missing_names = [
+            users[uid].display_name if uid in users else uid[:8]
+            for uid in d.missing_coder_ids
+        ]
+
         items.append(ICRDisagreementOut(
             unit_id=d.unit_id,
             document_id=d.document_id,
             document_title=doc_title_map.get(d.document_id),
             span_start=d.span_start,
             span_end=d.span_end,
-            span_text=None,   # filled by router from document text
+            span_text=span_text,
             disagreement_type=d.disagreement_type,
             assignments=assignments,
             missing_coder_ids=d.missing_coder_ids,
+            missing_coder_names=missing_names,
             resolution_id=res_entry[0] if res_entry else None,
             resolution_status=res_entry[1] if res_entry else None,
         ))
@@ -406,7 +440,7 @@ def create_resolution(
         resolution_note=data.resolution_note,
         user_id=user_id,
     )
-    return _resolution_to_out(res)
+    return _resolution_to_out(res, db)
 
 
 def update_resolution(
@@ -429,7 +463,7 @@ def update_resolution(
         resolution_note=data.resolution_note,
         user_id=user_id,
     )
-    return _resolution_to_out(updated)
+    return _resolution_to_out(updated, db)
 
 
 def list_resolutions(
@@ -439,4 +473,4 @@ def list_resolutions(
     status: Optional[str] = None,
 ) -> list[ICRResolutionOut]:
     results = repo.list_resolutions(db, project_id, document_id=document_id, status=status)
-    return [_resolution_to_out(r) for r in results]
+    return [_resolution_to_out(r, db) for r in results]

@@ -58,8 +58,10 @@ export default function DisagreementCard({
         >
           {disagreement.disagreement_type.replace("_", " ")}
         </span>
-        <span className="text-[11px] text-surface-400 tabular-nums ml-auto">
-          chars {disagreement.span_start}–{disagreement.span_end}
+        <span className="text-[11px] text-surface-400 ml-auto truncate max-w-[160px]" title={disagreement.span_text ?? undefined}>
+          {disagreement.span_text
+            ? `"${disagreement.span_text.slice(0, 60)}${disagreement.span_text.length > 60 ? "…" : ""}"`
+            : `chars ${disagreement.span_start}–${disagreement.span_end}`}
         </span>
         {disagreement.resolution_status && (
           <span className={cn("text-[10px] font-medium", STATUS_COLORS[disagreement.resolution_status] ?? STATUS_COLORS.unresolved)}>
@@ -92,9 +94,9 @@ export default function DisagreementCard({
             )}
           </div>
         ))}
-        {disagreement.missing_coder_ids.length > 0 && (
+        {disagreement.missing_coder_names.length > 0 && (
           <p className="text-[10px] text-surface-400 pt-0.5">
-            Not coded by: {disagreement.missing_coder_ids.join(", ")}
+            Not coded by: {disagreement.missing_coder_names.join(", ")}
           </p>
         )}
       </div>
