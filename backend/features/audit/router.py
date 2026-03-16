@@ -1,6 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
-
 from core.database import get_db
 from core.config import settings
 from core.models import User
@@ -18,7 +17,7 @@ from infrastructure.auth.dependencies import get_current_user
 router = APIRouter(prefix="/api/segments", tags=["audit"])
 
 
-@router.post("/analysе")
+@router.post("/analyse")
 async def trigger_analysis(
     body: AnalysisTrigger,
     background_tasks: BackgroundTasks,

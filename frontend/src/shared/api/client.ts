@@ -240,7 +240,7 @@ export async function deleteSegment(id: string) {
 
 export async function triggerAnalysis(codeId: string) {
   return json<{ status: string; code_id: string }>(
-    await apiFetch(`${BASE}/segments/analyze`, {
+    await apiFetch(`${BASE}/segments/analyse`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ code_id: codeId }),
