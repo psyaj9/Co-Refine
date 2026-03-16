@@ -9,7 +9,7 @@ from infrastructure.websocket.manager import ws_manager
 from infrastructure.vector_store.store import add_segment_embedding, get_all_segments_for_code
 from features.audit.context_builder import build_code_definitions
 from features.audit.score_persister import persist_consistency_score, persist_agent_alert
-from backend.features.audit.auto_analyser import maybe_run_auto_analysis
+from features.audit.auto_analyser import maybe_run_auto_analysis
 
 logger = get_logger(__name__)
 

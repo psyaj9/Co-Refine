@@ -5,7 +5,7 @@ from core.database import get_db
 from core.config import settings
 from core.models import User
 from features.audit.schemas import AnalysisTrigger, BatchAuditRequest, AnalysisOut
-from backend.features.audit.auto_analyser import run_manual_analysis
+from features.audit.auto_analyser import run_manual_analysis
 from features.audit.service import run_batch_audit_background
 from features.audit.repository import (
     get_code_by_id,
