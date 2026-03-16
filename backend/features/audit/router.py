@@ -25,11 +25,13 @@ async def trigger_analysis(
     current_user: User = Depends(get_current_user),
 ):
     code = get_code_by_id(db, body.code_id)
+
     if not code:
         raise HTTPException(status_code=404, detail="Code not found")
 
     user_id = current_user.id
     segment_count = count_segments_for_code(db, body.code_id, user_id)
+    
     if segment_count < 2:
         raise HTTPException(status_code=400, detail="Need at least 2 segments to analyse")
 
