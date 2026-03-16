@@ -1,8 +1,6 @@
 import uuid
-
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
-
 from core.database import get_db
 from core.models import ChatMessage, User
 from core.config import settings
@@ -53,6 +51,7 @@ async def send_chat_message(
         role="user",
         content=body.message,
     )
+
     create_message(db, user_msg)
 
     codebook = build_codebook(db, body.project_id)
@@ -80,10 +79,13 @@ def get_history(
     current_user: User = Depends(get_current_user),
 ):
     project_id = get_conversation_project_id(db, conversation_id)
+
     if not project_id:
         raise HTTPException(status_code=404, detail="Conversation not found")
+    
     _require_member(db, project_id, current_user.id)
     messages = get_conversation_messages(db, conversation_id)
+
     return [
         ChatMessageOut(id=m.id, conversation_id=m.conversation_id, role=m.role,
                        content=m.content, created_at=m.created_at)
@@ -99,16 +101,20 @@ def list_conversations(
 ):
     stubs = list_conversation_stubs(db, project_id, current_user.id)
     results = []
+
     for conv_id, started_at in stubs:
         first_msg = get_first_user_message(db, conv_id)
         preview = ""
+
         if first_msg:
             preview = (first_msg.content[:80] + "...") if len(first_msg.content) > 80 else first_msg.content
+
         results.append({
             "conversation_id": conv_id,
             "preview": preview,
             "started_at": started_at.isoformat() if started_at else None,
         })
+
     return results
 
 
@@ -119,8 +125,11 @@ def delete_conversation(
     current_user: User = Depends(get_current_user),
 ):
     project_id = get_conversation_project_id(db, conversation_id)
+
     if not project_id:
         raise HTTPException(status_code=404, detail="Conversation not found")
+    
     _require_member(db, project_id, current_user.id)
     delete_conversation_messages(db, conversation_id)
+    
     return {"status": "deleted"}

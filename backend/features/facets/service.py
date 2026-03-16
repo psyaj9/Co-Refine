@@ -1,13 +1,11 @@
 import json
 import uuid
-
 import numpy as np
 from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score
 from sklearn.manifold import TSNE
 from sklearn.decomposition import PCA
 from sqlalchemy.orm import Session
-
 from core.models import Facet, FacetAssignment
 from core.logging import get_logger
 from infrastructure.vector_store.store import get_collection
@@ -34,34 +32,42 @@ def _compute_optimal_k(embeddings: np.ndarray) -> int:
     best_k = MIN_FACETS
     best_score = -1.0
     max_k = min(MAX_FACETS, n - 1)
+
     if max_k < MIN_FACETS:
         return MIN_FACETS
+    
     for k in range(MIN_FACETS, max_k + 1):
         km = KMeans(n_clusters=k, random_state=42, n_init="auto")
         labels = km.fit_predict(embeddings)
         score = silhouette_score(embeddings, labels)
+
         if score > best_score:
             best_score = score
             best_k = k
+
     return best_k
 
 
 def _compute_tsne(embeddings: np.ndarray) -> np.ndarray:
     n = len(embeddings)
     perplexity = min(30, max(2, n - 1))
+
     try:
         reducer = TSNE(n_components=2, perplexity=perplexity, random_state=42)
         return reducer.fit_transform(embeddings)
+    
     except Exception:
         reducer = PCA(n_components=2)
         return reducer.fit_transform(embeddings)
 
 
 def _get_embeddings_by_ids(user_id: str, ids: list[str]) -> dict[str, list[float]]:
+
     try:
         collection = get_collection(user_id)
         result = collection.get(ids=ids, include=["embeddings"])
         return {doc_id: emb for doc_id, emb in zip(result["ids"], result["embeddings"])}
+    
     except Exception as e:
         logger.warning("Failed to retrieve embeddings from vector store", extra={"error": str(e)})
         return {}
@@ -73,14 +79,15 @@ def run_facet_analysis(
     code_id: str,
     project_id: str,
 ) -> dict:
-    """Cluster segments into facets; upsert Facet/FacetAssignment rows."""
     segments = get_segments_for_code(db, code_id, user_id)
+
     if len(segments) < MIN_SEGMENTS_FOR_CLUSTERING:
         return {"status": "skipped", "reason": "not_enough_segments"}
 
     segment_ids = [s.id for s in segments]
     embeddings_map = _get_embeddings_by_ids(user_id, segment_ids)
     valid_segments = [s for s in segments if s.id in embeddings_map]
+
     if len(valid_segments) < MIN_SEGMENTS_FOR_CLUSTERING:
         return {"status": "skipped", "reason": "embeddings_not_found"}
 
@@ -92,10 +99,12 @@ def run_facet_analysis(
     coords_2d = _compute_tsne(emb_matrix)
 
     existing_facets = get_active_facets_for_code(db, code_id, user_id)
+
     for f in existing_facets:
         f.is_active = False
 
     new_facets = []
+
     for cluster_idx in range(k):
         facet = Facet(
             id=str(uuid.uuid4()),
@@ -143,15 +152,15 @@ def suggest_facet_labels(db: Session, code_id: str, facets: list[Facet]) -> None
         return
 
     code = get_code(db, code_id)
+
     if not code:
         return
 
-    # Prefer the most recent AnalysisResult definition as richer context
     analysis = get_latest_analysis_for_code(db, code_id)
     code_definition = (analysis.definition if analysis else None) or code.definition
 
-    # Build per-facet representative segment texts (top 5 by similarity)
     facet_inputs = []
+
     for idx, facet in enumerate(facets):
         top_assignments = get_top_assignments_for_facet(db, facet.id, limit=5)
         seg_ids = [a.segment_id for a in top_assignments]
@@ -175,6 +184,7 @@ def suggest_facet_labels(db: Session, code_id: str, facets: list[Facet]) -> None
 
         label_map: dict[int, str] = {
             s["facet_index"]: s["suggested_label"]
+
             for s in suggestions
             if isinstance(s.get("facet_index"), int) and s.get("suggested_label")
         }
@@ -182,6 +192,7 @@ def suggest_facet_labels(db: Session, code_id: str, facets: list[Facet]) -> None
         for item in facet_inputs:
             idx = item["facet_index"]
             facet = item["facet"]
+
             if idx in label_map:
                 suggested = label_map[idx]
                 facet.label = suggested
@@ -190,5 +201,6 @@ def suggest_facet_labels(db: Session, code_id: str, facets: list[Facet]) -> None
 
         db.commit()
         logger.info(f"Facet labels AI-suggested code_id={code_id} count={len(label_map)}")
+        
     except Exception as exc:
         logger.warning(f"Facet label suggestion failed — keeping generic labels code_id={code_id} error={exc}")

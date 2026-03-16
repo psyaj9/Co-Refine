@@ -1,4 +1,3 @@
-"""Codes repository: pure DB queries."""
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
@@ -19,8 +18,10 @@ def get_code_by_label_and_project(db: Session, label: str, project_id: str) -> C
 
 def list_codes(db: Session, project_id: str = "") -> list[Code]:
     query = db.query(Code)
+
     if project_id:
         query = query.filter(Code.project_id == project_id)
+
     return query.order_by(Code.label).all()
 
 
@@ -40,14 +41,16 @@ def delete_code_record(db: Session, code: Code) -> None:
 
 
 def segment_counts(db: Session, code_ids: list[str], user_id: str | None = None) -> dict[str, int]:
-    """Return a mapping of code_id -> segment count in a single query."""
     query = (
         db.query(CodedSegment.code_id, func.count(CodedSegment.id))
         .filter(CodedSegment.code_id.in_(code_ids))
     )
+
     if user_id:
         query = query.filter(CodedSegment.user_id == user_id)
+
     rows = query.group_by(CodedSegment.code_id).all()
+    
     return {code_id: count for code_id, count in rows}
 
 

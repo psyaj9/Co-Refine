@@ -1,5 +1,4 @@
 from sqlalchemy.orm import Session
-
 from core.models import Facet, FacetAssignment, CodedSegment, Code, AnalysisResult
 
 
@@ -12,9 +11,11 @@ def get_segments_for_code(db: Session, code_id: str, user_id: str) -> list[Coded
 
 
 def get_active_facets_for_code(db: Session, code_id: str, user_id: str | None = None) -> list[Facet]:
-    q = db.query(Facet).filter(Facet.code_id == code_id, Facet.is_active == True)  # noqa: E712
+    q = db.query(Facet).filter(Facet.code_id == code_id, Facet.is_active == True)
+
     if user_id is not None:
         q = q.filter(Facet.user_id == user_id)
+        
     return q.all()
 
 

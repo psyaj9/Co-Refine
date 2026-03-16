@@ -1,8 +1,6 @@
 import uuid
-
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-
 from core.database import get_db
 from core.models import Code, User
 from features.codes.schemas import CodeCreate, CodeOut, CodeUpdate, SegmentOut
@@ -43,6 +41,7 @@ def create_code_endpoint(
     current_user: User = Depends(get_current_user),
 ):
     existing = get_code_by_label_and_project(db, body.label, body.project_id)
+
     if existing:
         raise HTTPException(status_code=409, detail="Code label already exists in this project")
 
@@ -55,6 +54,7 @@ def create_code_endpoint(
         created_by=user_id,
         project_id=body.project_id,
     )
+
     create_code(db, code)
     record_code_event(
         db, project_id=body.project_id, action="created",
@@ -62,8 +62,10 @@ def create_code_endpoint(
         code_colour=body.colour or "#FFEB3B",
         user_id=user_id, definition=body.definition,
     )
+
     db.commit()
     counts = segment_counts(db, [code.id], user_id=user_id)
+
     return _code_to_out(code, counts.get(code.id, 0))
 
 
@@ -75,8 +77,10 @@ def list_codes_endpoint(
 ):
     if project_id:
         _require_member(db, project_id, current_user.id)
+
     codes = list_codes(db, project_id)
     counts = segment_counts(db, [c.id for c in codes], user_id=current_user.id)
+
     return [_code_to_out(c, counts.get(c.id, 0)) for c in codes]
 
 
@@ -88,21 +92,27 @@ def update_code_endpoint(
     current_user: User = Depends(get_current_user),
 ):
     code = get_code_by_id(db, code_id)
+
     if not code:
         raise HTTPException(status_code=404, detail="Code not found")
 
     changes: list[tuple[str, str | None, str | None]] = []
+
     if body.label is not None and body.label != code.label:
         changes.append(("label", code.label, body.label))
+
     if body.definition is not None and body.definition != code.definition:
         changes.append(("definition", code.definition, body.definition))
+
     if body.colour is not None and body.colour != code.colour:
         changes.append(("colour", code.colour, body.colour))
 
     if body.label is not None:
         code.label = body.label
+
     if body.definition is not None:
         code.definition = body.definition
+
     if body.colour is not None:
         code.colour = body.colour
 
@@ -117,6 +127,7 @@ def update_code_endpoint(
     update_code(db)
     db.refresh(code)
     counts = segment_counts(db, [code.id], user_id=current_user.id)
+
     return _code_to_out(code, counts.get(code.id, 0))
 
 
@@ -127,6 +138,7 @@ def delete_code_endpoint(
     current_user: User = Depends(get_current_user),
 ):
     code = get_code_by_id(db, code_id)
+
     if not code:
         raise HTTPException(status_code=404, detail="Code not found")
 
@@ -135,8 +147,10 @@ def delete_code_endpoint(
         code_id=code_id, code_label=code.label, code_colour=code.colour,
         user_id=current_user.id, definition=code.definition,
     )
+
     cascade_delete_code(db, code, current_user.id)
     delete_code_record(db, code)
+
     return {"status": "deleted"}
 
 
@@ -147,10 +161,12 @@ def get_code_segments(
     current_user: User = Depends(get_current_user),
 ):
     code = get_code_by_id(db, code_id)
+
     if not code:
         raise HTTPException(status_code=404, detail="Code not found")
 
     rows = get_segments_for_code(db, code_id, current_user.id)
+    
     return [
         SegmentOut(
             id=s.id, document_id=s.document_id, text=s.text,

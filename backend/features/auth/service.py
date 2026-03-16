@@ -19,24 +19,31 @@ def verify_password(plain: str, hashed: str) -> bool:
 
 
 def register_user(db: Session, email: str, display_name: str, password: str) -> User:
+
     if get_user_by_email(db, email):
         raise ConflictError("An account with that email already exists")
+    
     user = User(
         email=email.lower(),
         display_name=display_name,
         password_hash=hash_password(password),
     )
+
     created = create_user(db, user)
     logger.info("User registered", extra={"user_id": created.id, "email": created.email})
+
     return created
 
 
 def authenticate_user(db: Session, email: str, password: str) -> User:
     user = get_user_by_email(db, email)
+
     if not user or not verify_password(password, user.password_hash):
         raise ValidationError("Incorrect email or password")
+    
     if not user.is_active:
         raise ValidationError("Account is disabled")
+    
     return user
 
 

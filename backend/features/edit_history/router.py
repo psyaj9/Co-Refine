@@ -1,6 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-
 from core.database import get_db
 from core.models import User
 from features.edit_history.schemas import EditEventOut
@@ -31,6 +30,7 @@ def get_edit_history_endpoint(
         db, project_id, document_id=document_id,
         entity_type=entity_type, limit=limit, offset=offset,
     )
+    
     return [
         EditEventOut(
             id=e.id,

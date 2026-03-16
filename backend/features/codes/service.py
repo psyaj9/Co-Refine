@@ -1,4 +1,3 @@
-"""Codes service: cascade delete, edit event recording."""
 import uuid
 from sqlalchemy.orm import Session
 
@@ -23,8 +22,10 @@ def record_code_event(
     new_value: str | None = None,
 ) -> None:
     meta: dict = {"code_label": code_label, "code_colour": code_colour}
+
     if definition is not None:
         meta["definition"] = definition
+
     db.add(EditEvent(
         id=str(uuid.uuid4()),
         project_id=project_id,
@@ -41,7 +42,6 @@ def record_code_event(
 
 
 def cascade_delete_code(db: Session, code: Code, user_id: str) -> None:
-    """Delete all segments, analyses, alerts associated with a code."""
     segments = db.query(CodedSegment).filter(CodedSegment.code_id == code.id).all()
     seg_ids = [s.id for s in segments]
 
@@ -49,8 +49,10 @@ def cascade_delete_code(db: Session, code: Code, user_id: str) -> None:
         try:
             from infrastructure.vector_store.store import get_collection
             get_collection(user_id).delete(ids=seg_ids)
+            
         except Exception as e:
             logger.warning("Vector store cleanup failed on code delete", extra={"code_id": code.id, "error": str(e)})
+            
         db.query(AgentAlert).filter(AgentAlert.segment_id.in_(seg_ids)).delete(synchronize_session=False)
 
     db.query(CodedSegment).filter(CodedSegment.code_id == code.id).delete()

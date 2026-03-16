@@ -1,4 +1,3 @@
-"""Edit history repository: pure DB queries."""
 from sqlalchemy.orm import Session
 
 from core.models import EditEvent

@@ -1,4 +1,3 @@
-"""Chat repository: pure DB queries for messages and conversations."""
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
@@ -15,7 +14,6 @@ def get_conversation_messages(db: Session, conversation_id: str) -> list[ChatMes
 
 
 def get_conversation_project_id(db: Session, conversation_id: str) -> str | None:
-    """Return the project_id for a conversation, or None if not found."""
     msg = db.query(ChatMessage).filter(
         ChatMessage.conversation_id == conversation_id
     ).first()
@@ -37,7 +35,6 @@ def delete_conversation_messages(db: Session, conversation_id: str) -> None:
 def list_conversation_stubs(
     db: Session, project_id: str, user_id: str, limit: int = 20
 ) -> list[tuple]:
-    """Return (conversation_id, started_at) tuples ordered newest first."""
     return (
         db.query(
             ChatMessage.conversation_id,
