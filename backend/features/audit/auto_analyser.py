@@ -1,4 +1,3 @@
-"""Auto-analysis and manual analysis triggers."""
 from __future__ import annotations
 import uuid
 
@@ -26,8 +25,8 @@ def run_manual_analysis(
     user_id: str,
     user_definition: str | None,
 ) -> None:
-    """Background task for manual analysis trigger."""
-    from features.audit.llm_auditor import analyze_quotes
+    
+    from features.audit.llm_auditor import analyse_quotes
 
     db = SessionLocal()
     _ws_send(user_id, {"type": ev.AGENTS_STARTED, "data": {"source": "manual_analysis"}})
@@ -40,7 +39,8 @@ def run_manual_analysis(
             .filter(CodedSegment.code_id == code_id, CodedSegment.user_id == user_id)
             .all()
         ]
-        analysis_result = analyze_quotes(code_label, all_quotes, user_definition=user_definition)
+
+        analysis_result = analyse_quotes(code_label, all_quotes, user_definition=user_definition)
 
         if analysis_result.get("definition") == PARSE_FAILED_SENTINEL:
             logger.warning("Analysis parse failure", extra={"code_label": code_label})
@@ -49,6 +49,7 @@ def run_manual_analysis(
                 "agent": "analysis",
                 "data": {"message": "AI could not generate a definition — please try again."},
             })
+
         else:
             existing = db.query(AnalysisResult).filter(AnalysisResult.code_id == code_id).first()
             raw_reasoning = analysis_result.get("reasoning")
@@ -61,17 +62,21 @@ def run_manual_analysis(
                 reasoning=reasoning_str,
                 segment_count_at_analysis=len(all_quotes),
             )
+
             db.merge(analysis)
             db.commit()
+
             _ws_send(user_id, {
                 "type": ev.ANALYSIS_UPDATED,
                 "code_id": code_id,
                 "code_label": code_label,
                 "data": analysis_result,
             })
+
     except Exception as e:
         logger.error("Manual analysis error", extra={"error": str(e), "code_label": code_label})
         _ws_send(user_id, {"type": ev.AGENT_ERROR, "agent": "analysis", "data": {"message": str(e)}})
+
     finally:
         _ws_send(user_id, {"type": ev.AGENTS_DONE, "data": {}})
         db.close()
@@ -85,19 +90,21 @@ def maybe_run_auto_analysis(
     user_id: str,
     segment_id: str,
 ) -> None:
-    """Trigger auto-analysis if segment count threshold is met."""
-    from features.audit.llm_auditor import analyze_quotes
+    
+    from features.audit.llm_auditor import analyse_quotes
 
     code_segment_count = (
         db.query(CodedSegment)
         .filter(CodedSegment.code_id == code_id, CodedSegment.user_id == user_id)
         .count()
     )
+
     existing_analysis = db.query(AnalysisResult).filter(AnalysisResult.code_id == code_id).first()
     last_count = existing_analysis.segment_count_at_analysis if existing_analysis else 0
 
     if code_segment_count < settings.auto_analysis_threshold:
         return
+    
     if not (code_segment_count - last_count >= settings.auto_analysis_threshold or last_count == 0):
         return
 
@@ -109,10 +116,12 @@ def maybe_run_auto_analysis(
             .filter(CodedSegment.code_id == code_id, CodedSegment.user_id == user_id)
             .all()
         ]
+
         from core.models import Code
+        
         current_code = db.query(Code).filter(Code.id == code_id).first()
         current_code_def = current_code.definition if current_code else None
-        analysis_result = analyze_quotes(code_label, all_quotes, user_definition=current_code_def)
+        analysis_result = analyse_quotes(code_label, all_quotes, user_definition=current_code_def)
 
         if analysis_result.get("definition") == PARSE_FAILED_SENTINEL:
             logger.warning("Auto-analysis parse failure", extra={"code_label": code_label})
@@ -122,6 +131,7 @@ def maybe_run_auto_analysis(
                 "segment_id": segment_id,
                 "data": {"message": "AI could not generate a definition — will retry next time."},
             })
+
         else:
             raw_reasoning = analysis_result.get("reasoning")
             reasoning_str = "\n".join(raw_reasoning) if isinstance(raw_reasoning, list) else raw_reasoning
@@ -133,14 +143,17 @@ def maybe_run_auto_analysis(
                 reasoning=reasoning_str,
                 segment_count_at_analysis=code_segment_count,
             )
+
             db.merge(analysis)
             db.commit()
+
             _ws_send(user_id, {
                 "type": ev.ANALYSIS_UPDATED,
                 "code_id": code_id,
                 "code_label": code_label,
                 "data": analysis_result,
             })
+
     except Exception as e:
         logger.error("Auto-analysis error", extra={"error": str(e), "code_label": code_label})
         _ws_send(user_id, {"type": ev.AGENT_ERROR, "agent": "analysis", "segment_id": segment_id, "data": {"message": str(e)}})

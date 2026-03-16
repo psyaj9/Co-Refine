@@ -5,7 +5,7 @@ from core.database import get_db
 from core.config import settings
 from core.models import User
 from features.audit.schemas import AnalysisTrigger, BatchAuditRequest, AnalysisOut
-from features.audit.auto_analyzer import run_manual_analysis
+from backend.features.audit.auto_analyser import run_manual_analysis
 from features.audit.service import run_batch_audit_background
 from features.audit.repository import (
     get_code_by_id,
@@ -18,7 +18,7 @@ from infrastructure.auth.dependencies import get_current_user
 router = APIRouter(prefix="/api/segments", tags=["audit"])
 
 
-@router.post("/analyze")
+@router.post("/analysе")
 async def trigger_analysis(
     body: AnalysisTrigger,
     background_tasks: BackgroundTasks,
@@ -79,4 +79,5 @@ async def batch_audit(
         project_id=body.project_id,
         user_id=current_user.id,
     )
+    
     return {"status": "batch_audit_started", "code_count": len(codes)}

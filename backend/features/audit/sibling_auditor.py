@@ -1,4 +1,3 @@
-"""Sibling re-audit: re-run audit for overlapping segments after create/delete."""
 from __future__ import annotations
 
 from sqlalchemy.orm import Session
@@ -28,7 +27,7 @@ def reaudit_siblings(
     exclude_segment_id: str,
     user_id: str,
 ) -> None:
-    """Re-run audit for every sibling segment on the same text span."""
+    
     from features.audit.llm_auditor import run_coding_audit
 
     siblings = (
@@ -42,6 +41,7 @@ def reaudit_siblings(
         )
         .all()
     )
+
     if not siblings:
         return
 
@@ -62,6 +62,7 @@ def reaudit_siblings(
                 )
                 .all()
             )
+
             existing_codes_on_span: list[str] = list({c.label for _s, c in overlapping})
 
             existing_score = (
@@ -80,11 +81,13 @@ def reaudit_siblings(
             diverse = get_all_segments_for_code(
                 user_id=user_id, code_label=sib_code.label, exclude_id=sib_seg.id,
             )
+
             user_history = [(s["code"], s["text"]) for s in diverse]
 
             code_definitions = build_code_definitions(db, project_id) if project_id else {}
 
             doc = db.query(Document).filter(Document.id == document_id).first()
+
             document_context = ""
             if doc and doc.full_text:
                 document_context = extract_window(doc.full_text, sib_seg.start_index, sib_seg.end_index)
@@ -105,6 +108,7 @@ def reaudit_siblings(
             all_codes_on_span = set(existing_codes_on_span) | {sib_code.label}
             self_lens = audit_result.get("self_lens", {})
             alt_codes = self_lens.get("alternative_codes", [])
+
             if alt_codes:
                 self_lens["alternative_codes"] = [c for c in alt_codes if c not in all_codes_on_span]
 
@@ -121,6 +125,7 @@ def reaudit_siblings(
                 user_id=user_id, project_id=project_id or "",
                 stage1=sibling_stage1, audit_result=audit_result, delete_existing=True,
             )
+
             db.commit()
 
             is_consistent = self_lens.get("is_consistent", True)
@@ -139,7 +144,9 @@ def reaudit_siblings(
                 } if stage1_centroid is not None else None,
                 "data": audit_result,
             })
+
             logger.info("Re-audited sibling segment", extra={"segment_id": sib_seg.id, "code": sib_code.label})
+
         except Exception as e:
             logger.error("Sibling re-audit error", extra={"segment_id": sib_seg.id, "error": str(e)})
 
@@ -152,7 +159,7 @@ def reaudit_siblings_background(
     exclude_segment_id: str,
     user_id: str,
 ) -> None:
-    """Background-task wrapper for reaudit_siblings."""
+
     db = SessionLocal()
     try:
         reaudit_siblings(
@@ -163,7 +170,9 @@ def reaudit_siblings_background(
             exclude_segment_id=exclude_segment_id,
             user_id=user_id,
         )
+
     except Exception as e:
         logger.error("Background sibling re-audit error", extra={"error": str(e)})
+        
     finally:
         db.close()

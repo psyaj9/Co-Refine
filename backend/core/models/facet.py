@@ -6,7 +6,6 @@ from core.database import Base
 
 
 class Facet(Base):
-    """A latent sub-meaning cluster discovered within a code via KMeans embedding clustering."""
     __tablename__ = "facets"
 
     id = Column(String, primary_key=True)

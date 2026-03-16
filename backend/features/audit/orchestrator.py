@@ -1,4 +1,3 @@
-"""Main audit orchestrator: run_background_agents pipeline."""
 from __future__ import annotations
 
 from core import events as ev
@@ -10,7 +9,7 @@ from infrastructure.websocket.manager import ws_manager
 from infrastructure.vector_store.store import add_segment_embedding, get_all_segments_for_code
 from features.audit.context_builder import build_code_definitions
 from features.audit.score_persister import persist_consistency_score, persist_agent_alert
-from features.audit.auto_analyzer import maybe_run_auto_analysis
+from backend.features.audit.auto_analyser import maybe_run_auto_analysis
 
 logger = get_logger(__name__)
 
@@ -32,7 +31,7 @@ def run_background_agents(
     end_index: int = 0,
     created_at: str | None = None,
 ) -> None:
-    """Full audit pipeline for a newly created segment."""
+    
     from features.audit.llm_auditor import run_coding_audit
     from features.scoring.pipeline import compute_stage1_scores
 
@@ -40,7 +39,6 @@ def run_background_agents(
     _ws_send(user_id, {"type": ev.AGENTS_STARTED, "segment_id": segment_id, "data": {}})
 
     try:
-        # 1. Embed segment
         try:
             add_segment_embedding(
                 user_id=user_id,
@@ -50,6 +48,7 @@ def run_background_agents(
                 document_id=document_id,
                 created_at=created_at,
             )
+
         except Exception:
             logger.exception(f"Embedding failed [segment_id={segment_id}]")
 
@@ -72,8 +71,8 @@ def run_background_agents(
         )
         existing_codes_on_span: list[str] = list({c.label for _seg, c in overlapping_segments})
 
-        # 2. Stage 1 — deterministic scores
         stage1 = None
+
         try:
             all_code_labels = [c.label for c in all_codes]
             current_definition = current_code.definition if current_code and current_code.definition else None
@@ -90,10 +89,10 @@ def run_background_agents(
                 "code_id": code_id,
                 "data": stage1,
             })
+
         except Exception:
             logger.exception(f"Stage 1 scoring failed [segment_id={segment_id}]")
 
-        # 3. Coding Audit
         _ws_send(user_id, {"type": ev.AGENT_THINKING, "agent": "coding_audit", "segment_id": segment_id, "data": {}})
         try:
             diverse = get_all_segments_for_code(
@@ -120,21 +119,23 @@ def run_background_agents(
             all_codes_on_span = set(existing_codes_on_span) | {code_label}
             self_lens = audit_result.get("self_lens", {})
             alt_codes = self_lens.get("alternative_codes", [])
+
             if alt_codes:
                 self_lens["alternative_codes"] = [c for c in alt_codes if c not in all_codes_on_span]
 
             is_consistent = self_lens.get("is_consistent", True)
 
             persist_agent_alert(db=db, user_id=user_id, segment_id=segment_id, audit_result=audit_result)
+
             persist_consistency_score(
                 db=db, segment_id=segment_id, code_id=code_id,
                 user_id=user_id, project_id=project_id or "",
                 stage1=stage1, audit_result=audit_result,
             )
+
             db.commit()
 
 
-            # Temporal drift warning
             try:
                 if stage1 and stage1.get("temporal_drift") is not None:
                     drift = stage1["temporal_drift"]
@@ -156,10 +157,10 @@ def run_background_agents(
                                 ),
                             },
                         })
+
             except Exception as e:
                 logger.error("Temporal drift warning error", extra={"segment_id": segment_id, "error": str(e)})
 
-            # Facet analysis
             try:
                 from features.facets.service import run_facet_analysis
                 facet_result = run_facet_analysis(db=db, user_id=user_id, code_id=code_id, project_id=project_id or "")
@@ -170,6 +171,7 @@ def run_background_agents(
                         "facet_count": facet_result["facet_count"],
                         "segment_count": facet_result["segment_count"],
                     })
+
             except Exception as e:
                 logger.error("Facet analysis error", extra={"code_id": code_id, "error": str(e)})
 
@@ -183,11 +185,11 @@ def run_background_agents(
                 "deterministic_scores": stage1,
                 "data": audit_result,
             })
+
         except Exception as e:
             logger.error("Coding audit error", extra={"segment_id": segment_id, "error": str(e)})
             _ws_send(user_id, {"type": ev.AGENT_ERROR, "agent": "coding_audit", "segment_id": segment_id, "data": {"message": str(e)}})
 
-        # 4. Auto-analysis
         maybe_run_auto_analysis(
             db=db, code_id=code_id, code_label=code_label, user_id=user_id, segment_id=segment_id,
         )

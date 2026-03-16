@@ -1,4 +1,3 @@
-"""Batch auditor: run coding audit across all codes in a project."""
 from __future__ import annotations
 
 import uuid
@@ -22,7 +21,6 @@ def _ws_send(user_id: str, payload: dict) -> None:
 
 
 def _get_existing_codes_on_span(db, rep_seg) -> list[str]:
-    """Return code labels for all segments overlapping with rep_seg on the same document."""
     if not rep_seg:
         return []
     overlapping = (
@@ -49,7 +47,7 @@ def _apply_audit_to_code(
     project_id: str,
     user_id: str,
 ) -> None:
-    """Run stage1 + LLM audit for one code and persist results + send WS event."""
+    
     from features.audit.llm_auditor import run_coding_audit
     from features.scoring.pipeline import compute_stage1_scores
 
@@ -57,6 +55,7 @@ def _apply_audit_to_code(
     history = [(s["code"], s["text"]) for s in diverse[:-1]]
 
     stage1 = None
+
     try:
         stage1 = compute_stage1_scores(
             user_id=user_id,
@@ -65,6 +64,7 @@ def _apply_audit_to_code(
             all_code_labels=all_code_labels,
             code_definition=code.definition or None,
         )
+
     except Exception as e:
         logger.warning("Batch stage1 error", extra={"code": code.label, "error": str(e)})
 
@@ -87,6 +87,7 @@ def _apply_audit_to_code(
     all_codes_on_span = set(existing_codes_on_span) | {code.label}
     self_lens = audit_result.get("self_lens", {})
     alt_codes = self_lens.get("alternative_codes", [])
+
     if alt_codes:
         self_lens["alternative_codes"] = [
             c for c in alt_codes
@@ -98,10 +99,12 @@ def _apply_audit_to_code(
     audit_result["batch"] = True
 
     persist_agent_alert(db=db, user_id=user_id, segment_id=representative["id"], audit_result=audit_result)
+
     persist_consistency_score(
         db=db, segment_id=representative["id"], code_id=code.id,
         user_id=user_id, project_id=project_id, stage1=stage1, audit_result=audit_result,
     )
+
     db.commit()
 
     _ws_send(user_id, {
@@ -117,7 +120,7 @@ def _apply_audit_to_code(
 
 
 def _compute_and_send_overlap(user_id: str, project_id: str, all_code_labels: list[str]) -> None:
-    """Compute code overlap matrix and emit WS event."""
+
     try:
         overlap_matrix = compute_code_overlap_matrix(user_id, all_code_labels)
         _ws_send(user_id, {
@@ -130,7 +133,7 @@ def _compute_and_send_overlap(user_id: str, project_id: str, all_code_labels: li
 
 
 def _send_temporal_drift_warnings(db, project_id: str, user_id: str, all_codes: list[Code]) -> None:
-    """Emit per-code temporal drift warnings when avg drift exceeds threshold."""
+
     try:
         threshold = settings.drift_warning_threshold
         for code in all_codes:
@@ -163,12 +166,13 @@ def _send_temporal_drift_warnings(db, project_id: str, user_id: str, all_codes: 
                             ),
                         },
                     })
+
     except Exception as e:
         logger.error("Temporal drift warning check error", extra={"error": str(e)})
 
 
 def run_batch_audit_background(*, project_id: str, user_id: str) -> None:
-    """Background task: run audit for every code in a project using MMR sampling."""
+
     db = SessionLocal()
     try:
         all_codes = db.query(Code).filter(Code.project_id == project_id).all()
@@ -210,8 +214,10 @@ def run_batch_audit_background(*, project_id: str, user_id: str) -> None:
         _send_temporal_drift_warnings(db=db, project_id=project_id, user_id=user_id, all_codes=all_codes)
 
         _ws_send(user_id, {"type": ev.BATCH_AUDIT_DONE, "data": {"total_codes": total}})
+
     except Exception as e:
         logger.error("Batch audit fatal error", extra={"error": str(e)})
         _ws_send(user_id, {"type": ev.BATCH_AUDIT_DONE, "data": {"error": str(e)}})
+        
     finally:
         db.close()

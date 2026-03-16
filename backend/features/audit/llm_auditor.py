@@ -1,8 +1,3 @@
-"""LLM-based audit functions: coding audit and auto-analysis.
-
-Moved here from services/ai_analyzer.py to eliminate the cross-layer
-dependency (features/ must not depend on services/).
-"""
 from __future__ import annotations
 
 from core.config import settings
@@ -14,28 +9,29 @@ _ORDINAL_SCORE_MAP = {"high": 0.9, "medium": 0.6, "low": 0.3}
 
 
 def _to_float(val: object, default: float = 0.5) -> float:
-    """Coerce an LLM-returned value to a float, handling ordinal strings and None."""
+
     if val is None:
         return default
+    
     if isinstance(val, (int, float)):
         return float(val)
+    
     if isinstance(val, str) and val.lower() in _ORDINAL_SCORE_MAP:
         return _ORDINAL_SCORE_MAP[val.lower()]
+    
     try:
-        return float(val)  # type: ignore[arg-type]
+        return float(val)
+    
     except (ValueError, TypeError):
         return default
 
 
-def analyze_quotes(
+def analyse_quotes(
     code_label: str,
     quotes: list[str],
     user_definition: str | None = None,
 ) -> dict:
-    """Call reasoning model to synthesise an operational definition for a code.
 
-    Returns a dict with keys: definition, lens, reasoning.
-    """
     prompt = build_analysis_prompt(code_label, quotes, user_definition=user_definition)
     return call_llm(prompt, model=settings.azure_deployment_reasoning)
 
@@ -53,18 +49,7 @@ def run_coding_audit(
     is_pseudo_centroid: bool = False,
     segment_count: int | None = None,
 ) -> dict:
-    """Run Stage 2 LLM self-consistency audit on a single coded segment.
 
-    Uses the reasoning model for every audit call.
-
-    Returns:
-        dict with keys:
-          self_lens: {is_consistent, consistency_score, intent_alignment_score,
-                      reasoning, definition_match, drift_warning, alternative_codes, suggestion}
-          overall_severity_score: float [0.0–1.0]
-          overall_severity: 'high' | 'medium' | 'low'
-          score_grounding_note: str
-    """
     messages = build_coding_audit_prompt(
         user_history=user_history,
         code_definitions=code_definitions,
@@ -80,4 +65,5 @@ def run_coding_audit(
     )
 
     result = call_llm(messages, model=settings.azure_deployment_reasoning)
+    
     return result

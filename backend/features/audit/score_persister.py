@@ -1,4 +1,3 @@
-"""Score persisters: write ConsistencyScore and AgentAlert rows."""
 from __future__ import annotations
 import uuid
 
@@ -42,6 +41,7 @@ def persist_consistency_score(
     audit_result: dict,
     delete_existing: bool = False,
 ) -> ConsistencyScore:
+    
     if delete_existing:
         db.query(ConsistencyScore).filter(
             ConsistencyScore.segment_id == segment_id,
@@ -63,5 +63,7 @@ def persist_consistency_score(
         llm_intent_score=self_lens.get("intent_alignment_score"),
         llm_overall_severity=audit_result.get("overall_severity_score"),
     )
+
     db.add(score_row)
+    
     return score_row

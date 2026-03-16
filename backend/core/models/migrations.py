@@ -1,16 +1,9 @@
-"""Lightweight column migrations + init_db().
-
-Runs idempotent ALTERs for columns added after the initial schema.
-Called once at startup from main.py lifespan.
-"""
-
 from sqlalchemy import inspect, text
 
 from core.database import engine, Base
 
 
 def _migrate_add_columns() -> None:
-    """Add columns introduced after initial schema (idempotent)."""
     insp = inspect(engine)
     if "projects" in insp.get_table_names():
         cols = {c["name"] for c in insp.get_columns("projects")}
@@ -74,7 +67,7 @@ def _migrate_icr_resolutions() -> None:
 
 
 def init_db() -> None:
-    import core.models  # noqa: F401
+    import core.models
 
     Base.metadata.create_all(bind=engine)
     _migrate_add_columns()

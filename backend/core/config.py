@@ -21,8 +21,9 @@ class Settings(BaseSettings):
             )
             return generated
         return v
+    
     jwt_algorithm: str = "HS256"
-    access_token_expire_minutes: int = 60 * 24 * 7  # 7 days
+    access_token_expire_minutes: int = 60 * 24 * 7
 
     azure_api_key: str = ""
     azure_endpoint: str = ""

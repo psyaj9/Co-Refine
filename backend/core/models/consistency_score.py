@@ -6,11 +6,6 @@ from core.database import Base
 
 
 class ConsistencyScore(Base):
-    """Append-only scoring record — one per coded segment.
-
-    Contains both Stage 1 (deterministic) and Stage 2 (LLM) scores.
-    Used for evaluation: export and compute kappa, precision/recall, drift.
-    """
     __tablename__ = "consistency_scores"
 
     id = Column(String, primary_key=True)
