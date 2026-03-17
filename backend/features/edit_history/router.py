@@ -26,6 +26,7 @@ def get_edit_history_endpoint(
     current_user: User = Depends(get_current_user),
 ):
     _require_member(db, project_id, current_user.id)
+    
     events = get_edit_history(
         db, project_id, document_id=document_id,
         entity_type=entity_type, limit=limit, offset=offset,

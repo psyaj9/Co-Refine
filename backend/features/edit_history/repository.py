@@ -12,10 +12,13 @@ def get_edit_history(
     offset: int = 0,
 ) -> list[EditEvent]:
     query = db.query(EditEvent).filter(EditEvent.project_id == project_id)
+
     if document_id:
         query = query.filter(EditEvent.document_id == document_id)
+
     if entity_type:
         query = query.filter(EditEvent.entity_type == entity_type)
+        
     return (
         query.order_by(EditEvent.created_at.desc())
         .offset(offset)
