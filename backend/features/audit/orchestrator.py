@@ -14,10 +14,6 @@ from features.audit.auto_analyser import maybe_run_auto_analysis
 logger = get_logger(__name__)
 
 
-def _ws_send(user_id: str, payload: dict) -> None:
-    ws_manager.send_alert_threadsafe(user_id, payload)
-
-
 def run_background_agents(
     *,
     segment_id: str,
@@ -36,7 +32,7 @@ def run_background_agents(
     from features.scoring.pipeline import compute_stage1_scores
 
     db = SessionLocal()
-    _ws_send(user_id, {"type": ev.AGENTS_STARTED, "segment_id": segment_id, "data": {}})
+    ws_manager.send_alert_threadsafe(user_id, {"type": ev.AGENTS_STARTED, "segment_id": segment_id, "data": {}})
 
     try:
         try:
@@ -83,7 +79,7 @@ def run_background_agents(
                 all_code_labels=all_code_labels,
                 code_definition=current_definition,
             )
-            _ws_send(user_id, {
+            ws_manager.send_alert_threadsafe(user_id, {
                 "type": ev.DETERMINISTIC_SCORES,
                 "segment_id": segment_id,
                 "code_id": code_id,
@@ -93,7 +89,7 @@ def run_background_agents(
         except Exception:
             logger.exception(f"Stage 1 scoring failed [segment_id={segment_id}]")
 
-        _ws_send(user_id, {"type": ev.AGENT_THINKING, "agent": "coding_audit", "segment_id": segment_id, "data": {}})
+        ws_manager.send_alert_threadsafe(user_id, {"type": ev.AGENT_THINKING, "agent": "coding_audit", "segment_id": segment_id, "data": {}})
         try:
             diverse = get_all_segments_for_code(
                 user_id=user_id, code_label=code_label, exclude_id=segment_id,
@@ -141,7 +137,7 @@ def run_background_agents(
                     drift = stage1["temporal_drift"]
                     threshold = settings.drift_warning_threshold
                     if drift > threshold:
-                        _ws_send(user_id, {
+                        ws_manager.send_alert_threadsafe(user_id, {
                             "type": ev.TEMPORAL_DRIFT_WARNING,
                             "code_id": code_id,
                             "code_label": code_label,
@@ -165,7 +161,7 @@ def run_background_agents(
                 from features.facets.service import run_facet_analysis
                 facet_result = run_facet_analysis(db=db, user_id=user_id, code_id=code_id, project_id=project_id or "")
                 if facet_result["status"] == "success":
-                    _ws_send(user_id, {
+                    ws_manager.send_alert_threadsafe(user_id, {
                         "type": ev.FACET_UPDATED,
                         "code_id": code_id,
                         "facet_count": facet_result["facet_count"],
@@ -175,7 +171,7 @@ def run_background_agents(
             except Exception as e:
                 logger.error("Facet analysis error", extra={"code_id": code_id, "error": str(e)})
 
-            _ws_send(user_id, {
+            ws_manager.send_alert_threadsafe(user_id, {
                 "type": ev.CODING_AUDIT,
                 "segment_id": segment_id,
                 "segment_text": text,
@@ -188,12 +184,12 @@ def run_background_agents(
 
         except Exception as e:
             logger.error("Coding audit error", extra={"segment_id": segment_id, "error": str(e)})
-            _ws_send(user_id, {"type": ev.AGENT_ERROR, "agent": "coding_audit", "segment_id": segment_id, "data": {"message": str(e)}})
+            ws_manager.send_alert_threadsafe(user_id, {"type": ev.AGENT_ERROR, "agent": "coding_audit", "segment_id": segment_id, "data": {"message": str(e)}})
 
         maybe_run_auto_analysis(
             db=db, code_id=code_id, code_label=code_label, user_id=user_id, segment_id=segment_id,
         )
 
     finally:
-        _ws_send(user_id, {"type": ev.AGENTS_DONE, "segment_id": segment_id, "data": {}})
+        ws_manager.send_alert_threadsafe(user_id, {"type": ev.AGENTS_DONE, "segment_id": segment_id, "data": {}})
         db.close()

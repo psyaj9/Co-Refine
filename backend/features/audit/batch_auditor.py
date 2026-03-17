@@ -16,10 +16,6 @@ from features.scoring.code_overlap import compute_code_overlap_matrix
 logger = get_logger(__name__)
 
 
-def _ws_send(user_id: str, payload: dict) -> None:
-    ws_manager.send_alert_threadsafe(user_id, payload)
-
-
 def _get_existing_codes_on_span(db, rep_seg) -> list[str]:
     if not rep_seg:
         return []
@@ -62,7 +58,7 @@ def _apply_audit_to_code(
             segment_text=representative["text"],
             code_label=code.label,
             all_code_labels=all_code_labels,
-            code_definition=code.definition or None,
+            code_definition=code.definition,
         )
 
     except Exception as e:
@@ -107,7 +103,7 @@ def _apply_audit_to_code(
 
     db.commit()
 
-    _ws_send(user_id, {
+    ws_manager.send_alert_threadsafe(user_id, {
         "type": ev.CODING_AUDIT,
         "segment_id": representative["id"],
         "segment_text": representative["text"],
@@ -123,7 +119,7 @@ def _compute_and_send_overlap(user_id: str, project_id: str, all_code_labels: li
 
     try:
         overlap_matrix = compute_code_overlap_matrix(user_id, all_code_labels)
-        _ws_send(user_id, {
+        ws_manager.send_alert_threadsafe(user_id, {
             "type": ev.CODE_OVERLAP_MATRIX,
             "project_id": project_id,
             "data": overlap_matrix,
@@ -151,7 +147,7 @@ def _send_temporal_drift_warnings(db, project_id: str, user_id: str, all_codes: 
             if len(drift_vals) >= 2:
                 avg_drift = sum(drift_vals) / len(drift_vals)
                 if avg_drift > threshold:
-                    _ws_send(user_id, {
+                    ws_manager.send_alert_threadsafe(user_id, {
                         "type": ev.TEMPORAL_DRIFT_WARNING,
                         "code_id": code.id,
                         "code_label": code.label,
@@ -178,7 +174,7 @@ def run_batch_audit_background(*, project_id: str, user_id: str) -> None:
         all_codes = db.query(Code).filter(Code.project_id == project_id).all()
         total = len(all_codes)
 
-        _ws_send(user_id, {"type": ev.BATCH_AUDIT_STARTED, "data": {"total_codes": total}})
+        ws_manager.send_alert_threadsafe(user_id, {"type": ev.BATCH_AUDIT_STARTED, "data": {"total_codes": total}})
 
         user_code_definitions = build_user_code_definitions(db, project_id)
         code_definitions = build_code_definitions(db, project_id)
@@ -188,7 +184,7 @@ def run_batch_audit_background(*, project_id: str, user_id: str) -> None:
             diverse = get_all_segments_for_code(user_id=user_id, code_label=code.label)
 
             if not diverse:
-                _ws_send(user_id, {
+                ws_manager.send_alert_threadsafe(user_id, {
                     "type": ev.BATCH_AUDIT_PROGRESS,
                     "data": {"completed": i + 1, "total": total, "code_label": code.label, "skipped": True},
                 })
@@ -205,7 +201,7 @@ def run_batch_audit_background(*, project_id: str, user_id: str) -> None:
             except Exception as e:
                 logger.error("Batch audit error", extra={"code": code.label, "error": str(e)})
 
-            _ws_send(user_id, {
+            ws_manager.send_alert_threadsafe(user_id, {
                 "type": ev.BATCH_AUDIT_PROGRESS,
                 "data": {"completed": i + 1, "total": total, "code_label": code.label},
             })
@@ -213,11 +209,11 @@ def run_batch_audit_background(*, project_id: str, user_id: str) -> None:
         _compute_and_send_overlap(user_id=user_id, project_id=project_id, all_code_labels=all_code_labels)
         _send_temporal_drift_warnings(db=db, project_id=project_id, user_id=user_id, all_codes=all_codes)
 
-        _ws_send(user_id, {"type": ev.BATCH_AUDIT_DONE, "data": {"total_codes": total}})
+        ws_manager.send_alert_threadsafe(user_id, {"type": ev.BATCH_AUDIT_DONE, "data": {"total_codes": total}})
 
     except Exception as e:
         logger.error("Batch audit fatal error", extra={"error": str(e)})
-        _ws_send(user_id, {"type": ev.BATCH_AUDIT_DONE, "data": {"error": str(e)}})
+        ws_manager.send_alert_threadsafe(user_id, {"type": ev.BATCH_AUDIT_DONE, "data": {"error": str(e)}})
         
     finally:
         db.close()

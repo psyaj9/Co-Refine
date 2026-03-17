@@ -1,17 +1,3 @@
-"""
-Segment alignment algorithm for ICR.
-
-Given a set of coded segments from multiple researchers on the same document,
-this module groups overlapping segments into *alignment units* — the items
-on which coders are compared for inter-coder reliability statistics.
-
-Design decisions:
-- Two segments from DIFFERENT coders that share ANY characters (intersection > 0)
-  are considered to be "about the same passage" and grouped into one unit.
-- Segments from the SAME coder are never merged (a coder can apply two codes to
-  overlapping text independently).
-- A segment with no cross-coder partner becomes its own unit (coverage gap).
-"""
 from __future__ import annotations
 
 import hashlib
@@ -20,8 +6,6 @@ from dataclasses import dataclass, field
 
 @dataclass
 class Coding:
-    """One coder's code assignment within an alignment unit."""
-
     coder_id: str
     segment_id: str
     code_id: str
@@ -32,14 +16,9 @@ class Coding:
 
 @dataclass
 class AlignmentUnit:
-    """
-    A group of overlapping segments from multiple coders,
-    representing a passage of text being compared.
-    """
-
-    unit_id: str          # deterministic hash of project:document:span_start:span_end
-    span_start: int       # min start across all segments in this unit
-    span_end: int         # max end across all segments in this unit
+    unit_id: str
+    span_start: int
+    span_end: int
     document_id: str
     project_id: str
     codings: list[Coding] = field(default_factory=list)
@@ -50,22 +29,17 @@ class AlignmentUnit:
 
     @property
     def is_agreement(self) -> bool:
-        """True if every coder assigned the same code."""
         codes = {c.code_id for c in self.codings}
+
         return len(codes) == 1 and len(self.codings) > 0
 
     def code_for_coder(self, coder_id: str) -> str | None:
-        """Return the code_id assigned by this coder, or None."""
         for c in self.codings:
             if c.coder_id == coder_id:
                 return c.code_id
         return None
 
     def primary_coding_for_coder(self, coder_id: str) -> Coding | None:
-        """
-        When a coder has multiple segments in this unit, return the one with
-        the highest Jaccard overlap with the unit span.
-        """
         candidates = [c for c in self.codings if c.coder_id == coder_id]
         if not candidates:
             return None
@@ -89,24 +63,12 @@ def _has_overlap(a_start: int, a_end: int, b_start: int, b_end: int) -> bool:
 
 
 def compute_alignment_units(
-    segments: list[tuple],   # list of (CodedSegment, Code | None)
+    segments: list[tuple],
     coder_ids: list[str],
     project_id: str,
     document_id: str,
 ) -> list[AlignmentUnit]:
-    """
-    Group segments into alignment units.
 
-    Args:
-        segments: (CodedSegment, Code) pairs for a single document.
-        coder_ids: The user_ids of project members to include.
-        project_id: For unit ID hashing.
-        document_id: For unit ID hashing.
-
-    Returns:
-        Sorted list of AlignmentUnit (by span_start).
-    """
-    # Build Coding objects filtered to project coders
     codings: list[Coding] = []
     for seg, code in segments:
         if seg.user_id in coder_ids:
@@ -134,16 +96,14 @@ def compute_alignment_units(
     def union(x: int, y: int) -> None:
         parent[find(x)] = find(y)
 
-    # Connect cross-coder segments that share characters
     for i in range(n):
         for j in range(i + 1, n):
             ci, cj = codings[i], codings[j]
             if ci.coder_id == cj.coder_id:
-                continue  # never merge same-coder segments
+                continue
             if _has_overlap(ci.start_index, ci.end_index, cj.start_index, cj.end_index):
                 union(i, j)
 
-    # Group by root
     groups: dict[int, list[int]] = {}
     for i in range(n):
         root = find(i)

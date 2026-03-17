@@ -14,10 +14,6 @@ from features.audit.score_persister import persist_consistency_score, persist_ag
 logger = get_logger(__name__)
 
 
-def _ws_send(user_id: str, payload: dict) -> None:
-    ws_manager.send_alert_threadsafe(user_id, payload)
-
-
 def reaudit_siblings(
     *,
     db: Session,
@@ -129,7 +125,7 @@ def reaudit_siblings(
             db.commit()
 
             is_consistent = self_lens.get("is_consistent", True)
-            _ws_send(user_id, {
+            ws_manager.send_alert_threadsafe(user_id, {
                 "type": ev.CODING_AUDIT,
                 "segment_id": sib_seg.id,
                 "segment_text": sib_seg.text,

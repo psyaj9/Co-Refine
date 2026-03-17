@@ -4,7 +4,7 @@ import uuid
 from sqlalchemy.orm import Session
 
 from core.database import SessionLocal
-from core.models import CodedSegment, AnalysisResult
+from core.models import Code, CodedSegment, AnalysisResult
 from core.config import settings
 from core.logging import get_logger
 from infrastructure.websocket.manager import ws_manager
@@ -14,8 +14,36 @@ from infrastructure.llm.json_parser import PARSE_FAILED_SENTINEL
 logger = get_logger(__name__)
 
 
-def _ws_send(user_id: str, payload: dict) -> None:
-    ws_manager.send_alert_threadsafe(user_id, payload)
+def _persist_analysis_result(
+    *,
+    db: Session,
+    code_id: str,
+    code_label: str,
+    user_id: str,
+    segment_id: str | None,
+    analysis_result: dict,
+    segment_count: int,
+) -> None:
+    existing = db.query(AnalysisResult).filter(AnalysisResult.code_id == code_id).first()
+    raw_reasoning = analysis_result.get("reasoning")
+    reasoning_str = "\n".join(raw_reasoning) if isinstance(raw_reasoning, list) else raw_reasoning
+    analysis = AnalysisResult(
+        id=existing.id if existing else str(uuid.uuid4()),
+        code_id=code_id,
+        definition=analysis_result.get("definition"),
+        lens=analysis_result.get("lens"),
+        reasoning=reasoning_str,
+        segment_count_at_analysis=segment_count,
+    )
+    db.merge(analysis)
+    db.commit()
+    ws_manager.send_alert_threadsafe(user_id, {
+        "type": ev.ANALYSIS_UPDATED,
+        "code_id": code_id,
+        "code_label": code_label,
+        **({"segment_id": segment_id} if segment_id else {}),
+        "data": analysis_result,
+    })
 
 
 def run_manual_analysis(
@@ -25,12 +53,11 @@ def run_manual_analysis(
     user_id: str,
     user_definition: str | None,
 ) -> None:
-    
     from features.audit.llm_auditor import analyse_quotes
 
     db = SessionLocal()
-    _ws_send(user_id, {"type": ev.AGENTS_STARTED, "data": {"source": "manual_analysis"}})
-    _ws_send(user_id, {"type": ev.AGENT_THINKING, "agent": "analysis", "data": {}})
+    ws_manager.send_alert_threadsafe(user_id, {"type": ev.AGENTS_STARTED, "data": {"source": "manual_analysis"}})
+    ws_manager.send_alert_threadsafe(user_id, {"type": ev.AGENT_THINKING, "agent": "analysis", "data": {}})
 
     try:
         all_quotes = [
@@ -44,41 +71,24 @@ def run_manual_analysis(
 
         if analysis_result.get("definition") == PARSE_FAILED_SENTINEL:
             logger.warning("Analysis parse failure", extra={"code_label": code_label})
-            _ws_send(user_id, {
+            ws_manager.send_alert_threadsafe(user_id, {
                 "type": ev.AGENT_ERROR,
                 "agent": "analysis",
                 "data": {"message": "AI could not generate a definition — please try again."},
             })
-
         else:
-            existing = db.query(AnalysisResult).filter(AnalysisResult.code_id == code_id).first()
-            raw_reasoning = analysis_result.get("reasoning")
-            reasoning_str = "\n".join(raw_reasoning) if isinstance(raw_reasoning, list) else raw_reasoning
-            analysis = AnalysisResult(
-                id=existing.id if existing else str(uuid.uuid4()),
-                code_id=code_id,
-                definition=analysis_result.get("definition"),
-                lens=analysis_result.get("lens"),
-                reasoning=reasoning_str,
-                segment_count_at_analysis=len(all_quotes),
+            _persist_analysis_result(
+                db=db, code_id=code_id, code_label=code_label,
+                user_id=user_id, segment_id=None,
+                analysis_result=analysis_result, segment_count=len(all_quotes),
             )
-
-            db.merge(analysis)
-            db.commit()
-
-            _ws_send(user_id, {
-                "type": ev.ANALYSIS_UPDATED,
-                "code_id": code_id,
-                "code_label": code_label,
-                "data": analysis_result,
-            })
 
     except Exception as e:
         logger.error("Manual analysis error", extra={"error": str(e), "code_label": code_label})
-        _ws_send(user_id, {"type": ev.AGENT_ERROR, "agent": "analysis", "data": {"message": str(e)}})
+        ws_manager.send_alert_threadsafe(user_id, {"type": ev.AGENT_ERROR, "agent": "analysis", "data": {"message": str(e)}})
 
     finally:
-        _ws_send(user_id, {"type": ev.AGENTS_DONE, "data": {}})
+        ws_manager.send_alert_threadsafe(user_id, {"type": ev.AGENTS_DONE, "data": {}})
         db.close()
 
 
@@ -90,7 +100,6 @@ def maybe_run_auto_analysis(
     user_id: str,
     segment_id: str,
 ) -> None:
-    
     from features.audit.llm_auditor import analyse_quotes
 
     code_segment_count = (
@@ -104,11 +113,11 @@ def maybe_run_auto_analysis(
 
     if code_segment_count < settings.auto_analysis_threshold:
         return
-    
+
     if not (code_segment_count - last_count >= settings.auto_analysis_threshold or last_count == 0):
         return
 
-    _ws_send(user_id, {"type": ev.AGENT_THINKING, "agent": "analysis", "segment_id": segment_id, "data": {}})
+    ws_manager.send_alert_threadsafe(user_id, {"type": ev.AGENT_THINKING, "agent": "analysis", "segment_id": segment_id, "data": {}})
     try:
         all_quotes = [
             s.text
@@ -117,43 +126,24 @@ def maybe_run_auto_analysis(
             .all()
         ]
 
-        from core.models import Code
-        
         current_code = db.query(Code).filter(Code.id == code_id).first()
-        current_code_def = current_code.definition if current_code else None
-        analysis_result = analyse_quotes(code_label, all_quotes, user_definition=current_code_def)
+        analysis_result = analyse_quotes(code_label, all_quotes, user_definition=current_code.definition if current_code else None)
 
         if analysis_result.get("definition") == PARSE_FAILED_SENTINEL:
             logger.warning("Auto-analysis parse failure", extra={"code_label": code_label})
-            _ws_send(user_id, {
+            ws_manager.send_alert_threadsafe(user_id, {
                 "type": ev.AGENT_ERROR,
                 "agent": "analysis",
                 "segment_id": segment_id,
                 "data": {"message": "AI could not generate a definition — will retry next time."},
             })
-
         else:
-            raw_reasoning = analysis_result.get("reasoning")
-            reasoning_str = "\n".join(raw_reasoning) if isinstance(raw_reasoning, list) else raw_reasoning
-            analysis = AnalysisResult(
-                id=existing_analysis.id if existing_analysis else str(uuid.uuid4()),
-                code_id=code_id,
-                definition=analysis_result.get("definition"),
-                lens=analysis_result.get("lens"),
-                reasoning=reasoning_str,
-                segment_count_at_analysis=code_segment_count,
+            _persist_analysis_result(
+                db=db, code_id=code_id, code_label=code_label,
+                user_id=user_id, segment_id=segment_id,
+                analysis_result=analysis_result, segment_count=code_segment_count,
             )
-
-            db.merge(analysis)
-            db.commit()
-
-            _ws_send(user_id, {
-                "type": ev.ANALYSIS_UPDATED,
-                "code_id": code_id,
-                "code_label": code_label,
-                "data": analysis_result,
-            })
 
     except Exception as e:
         logger.error("Auto-analysis error", extra={"error": str(e), "code_label": code_label})
-        _ws_send(user_id, {"type": ev.AGENT_ERROR, "agent": "analysis", "segment_id": segment_id, "data": {"message": str(e)}})
+        ws_manager.send_alert_threadsafe(user_id, {"type": ev.AGENT_ERROR, "agent": "analysis", "segment_id": segment_id, "data": {"message": str(e)}})

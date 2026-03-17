@@ -1,9 +1,3 @@
-"""
-Disagreement detection and classification.
-
-Takes a list of AlignmentUnit objects and returns structured disagreement
-records suitable for display in the ICR UI.
-"""
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -41,10 +35,7 @@ def classify_units(
     all_coder_ids: list[str],
     jaccard_threshold: float = 0.5,
 ) -> list[Disagreement]:
-    """
-    Classify every alignment unit and return Disagreement records
-    (including agreements — filter by disagreement_type on the consumer side).
-    """
+
     result: list[Disagreement] = []
     coder_set = set(all_coder_ids)
 
@@ -52,7 +43,6 @@ def classify_units(
         participating_coders = unit.coder_ids & coder_set
         missing_coders = list(coder_set - participating_coders)
 
-        # Build assignments list (one per participating coder, primary coding)
         assignments: list[CoderAssignment] = []
         for coder_id in sorted(participating_coders):
             primary = unit.primary_coding_for_coder(coder_id)
@@ -88,14 +78,10 @@ def _classify_type(
     missing_coders: list[str],
     jaccard_threshold: float,
 ) -> str:
-    # coverage_gap: fewer than 2 coders participated (one coder coded it, others didn't)
-    # If 2+ coders participated, classify by the nature of their disagreement even if
-    # additional coders are absent — those absent coders show up as coverage_gap units
-    # elsewhere (their own isolated segments become single-coder units).
+
     if len(assignments) < 2:
         return "coverage_gap"
 
-    # Check for split/merge: any one coder has multiple segments in this unit
     codings_per_coder = {}
     for c in unit.codings:
         codings_per_coder.setdefault(c.coder_id, []).append(c)
@@ -103,8 +89,6 @@ def _classify_type(
     if has_split_merge:
         return "split_merge"
 
-    # All coders have exactly one segment — check boundary disagreement
-    # (low Jaccard between any two coders' spans)
     any_boundary_issue = False
     for i, a in enumerate(assignments):
         for b in assignments[i + 1:]:
@@ -113,7 +97,6 @@ def _classify_type(
                 any_boundary_issue = True
                 break
 
-    # Check code agreement
     code_ids = {a.code_id for a in assignments}
     all_agree = len(code_ids) == 1
 
@@ -122,7 +105,7 @@ def _classify_type(
     if all_agree and any_boundary_issue:
         return "boundary"
     if not all_agree and any_boundary_issue:
-        return "boundary"  # boundary is more fundamental
+        return "boundary"
     return "code_mismatch"
 
 

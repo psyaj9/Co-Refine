@@ -1,20 +1,3 @@
-"""
-ICR Statistical Metrics.
-
-Implements five inter-coder reliability measures:
-
-1. Percent Agreement (P₀) — simplest; ignores chance agreement.
-2. Cohen's Kappa (κ) — pairwise (exactly 2 coders), corrects for chance.
-3. Fleiss' Kappa (κ_F) — generalised to N coders, all units must be rated.
-4. Krippendorff's Alpha (α) — most general: handles missing data, N coders.
-5. Gwet's AC1 — paradox-resistant kappa; more stable when categories skewed.
-
-References:
-  Krippendorff (2011). Computing Krippendorff's alpha-reliability.
-  Fleiss (1971). Measuring nominal scale agreement among many raters.
-  Cohen (1960). A coefficient of agreement for nominal scales.
-  Gwet (2008). Computing inter-rater reliability and its variance.
-"""
 from __future__ import annotations
 
 import math
@@ -29,8 +12,8 @@ from features.icr.alignment import AlignmentUnit
 class MetricResult:
     score: Optional[float]
     interpretation: str
-    n_units: int           # total alignment units considered
-    n_rated_pairs: int     # units where ≥2 coders participated
+    n_units: int
+    n_rated_pairs: int
 
 
 def _interpret_kappa(score: Optional[float]) -> str:
@@ -59,19 +42,11 @@ def _interpret_alpha(score: Optional[float]) -> str:
     return "unreliable (below threshold)"
 
 
-# ── Rating matrix builder ──────────────────────────────────────────────────────
-
 def build_rating_matrix(
     units: list[AlignmentUnit],
     coder_ids: list[str],
 ) -> dict[str, dict[str, Optional[str]]]:
-    """
-    Build a unit × coder matrix of code assignments.
 
-    Returns:
-        {unit_id: {coder_id: code_id | None}}
-        None means the coder did not rate that unit.
-    """
     matrix: dict[str, dict[str, Optional[str]]] = {}
     for unit in units:
         row: dict[str, Optional[str]] = {cid: None for cid in coder_ids}
@@ -83,16 +58,10 @@ def build_rating_matrix(
     return matrix
 
 
-# ── Percent Agreement ─────────────────────────────────────────────────────────
-
 def percent_agreement(
     units: list[AlignmentUnit],
     coder_ids: list[str],
 ) -> MetricResult:
-    """
-    Proportion of units where ALL coders who participated agreed.
-    Only counts units where ≥2 coders participated.
-    """
     rated = [u for u in units if len(u.coder_ids & set(coder_ids)) >= 2]
     if not rated:
         return MetricResult(score=None, interpretation="insufficient data", n_units=len(units), n_rated_pairs=0)
@@ -108,18 +77,12 @@ def percent_agreement(
     )
 
 
-# ── Cohen's Kappa (2 coders only) ────────────────────────────────────────────
-
 def cohens_kappa(
     units: list[AlignmentUnit],
     coder_a: str,
     coder_b: str,
 ) -> MetricResult:
-    """
-    Cohen's κ for exactly two coders.
-    Units not coded by both raters are excluded.
-    """
-    # Collect pairwise ratings
+
     ratings_a: list[str] = []
     ratings_b: list[str] = []
     for unit in units:
@@ -136,10 +99,8 @@ def cohens_kappa(
 
     categories = list(set(ratings_a) | set(ratings_b))
 
-    # Observed agreement
     p_o = sum(1 for a, b in zip(ratings_a, ratings_b) if a == b) / n
 
-    # Expected agreement
     p_e = sum(
         (ratings_a.count(k) / n) * (ratings_b.count(k) / n)
         for k in categories
@@ -158,28 +119,22 @@ def cohens_kappa(
     )
 
 
-# ── Fleiss' Kappa (N coders) ─────────────────────────────────────────────────
 
 def fleiss_kappa(
     units: list[AlignmentUnit],
     coder_ids: list[str],
 ) -> MetricResult:
-    """
-    Fleiss' κ for N raters.
-    Only includes units where ALL specified coders participated.
-    """
+
     coder_set = set(coder_ids)
     N = len(coder_ids)
     if N < 2:
         return MetricResult(score=None, interpretation="insufficient data", n_units=len(units), n_rated_pairs=0)
 
-    # Units where all coders participated
     complete = [u for u in units if coder_set <= u.coder_ids]
     n = len(complete)
     if n == 0:
         return MetricResult(score=None, interpretation="insufficient data", n_units=len(units), n_rated_pairs=0)
 
-    # Collect all categories
     categories: set[str] = set()
     for unit in complete:
         for coder_id in coder_ids:
@@ -191,7 +146,6 @@ def fleiss_kappa(
     if k < 2:
         return MetricResult(score=1.0, interpretation="perfect agreement (single category)", n_units=len(units), n_rated_pairs=n)
 
-    # n_ij[i][j] = number of raters who assigned category j to unit i
     n_ij: list[dict[str, int]] = []
     for unit in complete:
         row: dict[str, int] = defaultdict(int)
@@ -201,14 +155,12 @@ def fleiss_kappa(
                 row[pc.code_id] += 1
         n_ij.append(row)
 
-    # P_i (proportion of agreement pairs for unit i)
     P_i = [
         sum(row[cat] * (row[cat] - 1) for cat in categories_list) / (N * (N - 1))
         for row in n_ij
     ]
     P_bar = sum(P_i) / n
 
-    # p_j (proportion of all assignments to category j)
     p_j = {
         cat: sum(row[cat] for row in n_ij) / (n * N)
         for cat in categories_list
@@ -228,18 +180,12 @@ def fleiss_kappa(
     )
 
 
-# ── Krippendorff's Alpha (nominal) ───────────────────────────────────────────
 
 def krippendorffs_alpha(
     units: list[AlignmentUnit],
     coder_ids: list[str],
 ) -> MetricResult:
-    """
-    Krippendorff's α for nominal data.
-    Handles missing data: includes any unit where ≥2 coders participated.
-    Uses the coincidence matrix method (Krippendorff 2011).
-    """
-    # Build coincidence matrix c[k][l] weighted by 1/(m_u - 1) per unit
+
     c: dict[tuple[str, str], float] = defaultdict(float)
     total_units = len(units)
     rated_pairs = 0
@@ -263,7 +209,6 @@ def krippendorffs_alpha(
     if rated_pairs < 2:
         return MetricResult(score=None, interpretation="insufficient data", n_units=total_units, n_rated_pairs=rated_pairs)
 
-    # Marginal sums n_k
     categories: set[str] = {cat for pair in c for cat in pair}
     n_k = {cat: sum(c[(cat, l)] for l in categories) for cat in categories}
     n_total = sum(n_k.values())
@@ -271,10 +216,8 @@ def krippendorffs_alpha(
     if n_total < 2:
         return MetricResult(score=None, interpretation="insufficient data", n_units=total_units, n_rated_pairs=rated_pairs)
 
-    # Observed disagreement
     D_o = sum(v for (k, l), v in c.items() if k != l) / n_total
 
-    # Expected disagreement
     D_e = sum(
         n_k[k] * n_k[l]
         for k in categories
@@ -295,16 +238,12 @@ def krippendorffs_alpha(
     )
 
 
-# ── Gwet's AC1 ────────────────────────────────────────────────────────────────
 
 def gwets_ac1(
     units: list[AlignmentUnit],
     coder_ids: list[str],
 ) -> MetricResult:
-    """
-    Gwet's AC1 — paradox-resistant inter-rater agreement.
-    Only uses units where ALL coders participated.
-    """
+
     coder_set = set(coder_ids)
     N = len(coder_ids)
     if N < 2:
@@ -316,7 +255,6 @@ def gwets_ac1(
     if n == 0:
         return MetricResult(score=None, interpretation="insufficient data", n_units=total_units, n_rated_pairs=0)
 
-    # Collect categories and their proportions
     all_ratings: list[str] = []
     for unit in complete:
         for coder_id in coder_ids:

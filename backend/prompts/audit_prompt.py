@@ -178,12 +178,10 @@ def build_coding_audit_prompt(
     is_pseudo_centroid: bool = False,
     segment_count: int | None = None,
 ) -> list[dict]:
-# Document context section
     document_context_section = (
         f'"""\n{document_context}\n"""' if document_context else "(No surrounding context)"
     )
 
-    # Deterministic evidence section
     deterministic_evidence_section = _build_deterministic_evidence_section(
         centroid_similarity=centroid_similarity,
         temporal_drift=temporal_drift,
@@ -192,7 +190,6 @@ def build_coding_audit_prompt(
         proposed_code=proposed_code,
     )
 
-    # Co-applied codes section
     all_applied = list({proposed_code} | set(existing_codes_on_span or []))
     if existing_codes_on_span:
         co_codes = ", ".join(f'"{c}"' for c in existing_codes_on_span)
@@ -208,19 +205,15 @@ def build_coding_audit_prompt(
 
     co_applied_label_list = ", ".join(f'"{c}"' for c in all_applied) if all_applied else "(none)"
 
-    # Researcher-supplied definitions
     if user_code_definitions:
-        user_def_lines = []
-        for code, defn in user_code_definitions.items():
-            if defn:
-                user_def_lines.append(f"**{code}**: {defn}")
-            else:
-                user_def_lines.append(f"**{code}**: (No definition provided)")
+        user_def_lines = [
+            f"**{code}**: {defn}" if defn else f"**{code}**: (No definition provided)"
+            for code, defn in user_code_definitions.items()
+        ]
         user_definitions_str = "\n".join(user_def_lines)
     else:
         user_definitions_str = "(No researcher-supplied definitions yet)"
 
-    # AI-inferred definitions
     if code_definitions:
         def_lines = []
         for code, analysis in code_definitions.items():
@@ -231,12 +224,11 @@ def build_coding_audit_prompt(
     else:
         ai_definitions_str = "(No AI-inferred definitions yet)"
 
-    # History section
     if user_history:
-        history_lines = []
-        for code, quote in user_history:
-            display = quote[:200] + "..." if len(quote) > 200 else quote
-            history_lines.append(f'  - Code: "{code}" → "{display}"')
+        history_lines = [
+            f'  - Code: "{code}" → "{quote[:200] + "..." if len(quote) > 200 else quote}"'
+            for code, quote in user_history
+        ]
         history_str = "\n".join(history_lines)
     else:
         history_str = "  (No coding history available yet)"
