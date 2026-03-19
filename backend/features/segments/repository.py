@@ -1,8 +1,4 @@
-"""Segments repository: pure DB queries.
-
-No business logic — just SQLAlchemy. Most queries here return (CodedSegment, Code)
-tuples so the router can build response payloads without additional lookups.
-"""
+"""Segments repository: DB queries."""
 
 from sqlalchemy.orm import Session
 

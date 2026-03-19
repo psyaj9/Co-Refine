@@ -1,7 +1,5 @@
 """Code centroid computation with cold-start fallback.
 
-Literature: Thematic-LM approach — code centroid = mean embedding.
-
 Code centroid = L2-normalised mean of all its segment embeddings.
 Acts as a reference point for measuring how well a new segment fits an
 existing code. 

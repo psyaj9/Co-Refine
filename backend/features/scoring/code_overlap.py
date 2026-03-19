@@ -16,9 +16,8 @@ def compute_code_overlap_matrix(
 ) -> dict[str, dict[str, float]]:
     """Compute pairwise cosine similarity between all code centroids.
 
-    Codes that have no segments in the vector store are silently skipped
-    (their centroids can't be computed). The resulting matrix only includes
-    codes that have at least one embedded segment.
+    Codes that have no segments in the vector store are silently skipped. 
+    The resulting matrix only includes codes that have at least one embedded segment.
 
     The matrix is symmetric, so we only compute each pair once and mirror
     the result (matrix[a][b] = matrix[b][a]) to avoid duplicate LLM calls.
@@ -33,7 +32,6 @@ def compute_code_overlap_matrix(
         Only contains entries for codes that have computed centroids.
         High values (>0.85) suggest potential code redundancy.
     """
-    # Fetch centroids upfront — skip any codes with no segments
     centroids: dict[str, list[float]] = {}
     for label in code_labels:
         c = get_code_centroid(user_id, label)
@@ -46,10 +44,8 @@ def compute_code_overlap_matrix(
         matrix[a] = {}
         for j, b in enumerate(labels):
             if i == j:
-                # A code is always identical to itself
                 matrix[a][b] = 1.0
             elif j < i:
-                # Already computed the symmetric pair — just mirror it
                 matrix[a][b] = matrix[b][a]
             else:
                 matrix[a][b] = cosine_similarity(centroids[a], centroids[b])

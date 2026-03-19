@@ -1,19 +1,15 @@
-"""Temporal drift detection, inspired by the LOGOS framework.
+"""Temporal drift detection
 
 "Temporal drift" measures whether a code's meaning has shifted over the
-course of a research session. We detect it by comparing the centroid of the
-researcher's oldest segments for a code against the centroid of their most
-recent ones. A large cosine distance (high drift) means early and late
-usages are semantically dissimilar — the code's meaning has wandered.
+course of a research session. 
 
-This can happen for legitimate reasons (a code genuinely evolved) or
-problematic ones (the researcher unconsciously started applying it differently).
-Either way, it's worth flagging so the researcher can make a conscious choice.
+Detected by comparing the centroid of the researcher's oldest segments for a code against the centroid of their most
+recent ones. 
 
-The window size (default 5+5) is a pragmatic balance — small enough to be
-sensitive to recent shifts, large enough to avoid noise from single outliers.
-A drift score of None means there weren't enough segments to make the
-comparison meaningful.
+A large cosine distance (high drift) means the code's meaning has wandered.
+
+
+The window size (default 5+5)
 """
 from __future__ import annotations
 
@@ -35,8 +31,6 @@ def compute_temporal_drift(
     1 - cosine_similarity, so 0.0 means no drift and 1.0 means maximum drift.
 
     Returns None if there aren't enough total segments to fill both windows
-    — you need at least (window_recent + window_old) segments for a meaningful
-    comparison, otherwise the two windows would overlap.
 
     Args:
         user_id: Used to look up the user's ChromaDB collection.
@@ -58,15 +52,11 @@ def compute_temporal_drift(
         embeddings = []
     metadatas = results.get("metadatas") or []
 
-    # Bail out early if we don't have enough segments to fill both windows
     if len(embeddings) == 0 or len(embeddings) < (window_recent + window_old):
         return None
 
-    # Sort by created_at so oldest are first, most recent are last.
-    # Missing created_at sorts to the front (empty string < any real timestamp).
     paired = sorted(zip(embeddings, metadatas), key=lambda x: x[1].get("created_at") or "")
     old_centroid = _compute_centroid([p[0] for p in paired[:window_old]])
     recent_centroid = _compute_centroid([p[0] for p in paired[-window_recent:]])
 
-    # Convert similarity to distance — high distance = high drift
     return 1.0 - cosine_similarity(old_centroid, recent_centroid)
