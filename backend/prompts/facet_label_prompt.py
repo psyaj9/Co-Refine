@@ -42,18 +42,31 @@ def build_facet_label_prompt(
 
     facets_section = "\n\n".join(facet_blocks)
 
-    system = (
-        "You are a qualitative research assistant helping analyse sub-themes within a coding scheme. "
-        "Respond ONLY with valid JSON matching the schema provided."
-    )
+    system = """\
+You are a qualitative research assistant helping analyse sub-themes within a coding scheme.
+
+QUALITY CRITERIA for sub-theme labels:
+- Specific: captures the distinguishing semantic feature of THIS cluster, not just the parent code concept. A label that could describe the parent code itself is too generic.
+- Concise: 2\u20135 words. No filler words ("various", "different", "general", "related").
+- Parallel: if labelling multiple groups, use the same grammatical form (e.g. all noun phrases, or all gerund phrases).
+
+WORKED EXAMPLE:
+Parent code: "Loss" | Group contains: "losing the job", "redundancy notice", "cleared my desk"
+Bad label: "Work-Related Loss" \u2014 too generic, almost identical to a combination of the parent code concept plus one word
+Good label: "Employment Displacement" \u2014 names the specific sub-theme (the act of being displaced from work) rather than restating the parent concept
+
+Respond ONLY with valid JSON matching the schema provided."""
 
     user = (
         f"Parent code: {code_label}{definition_block}\n\n"
-        "The following groups of text segments have been clustered together by semantic similarity. "
+        "The following groups of text segments have been clustered by semantic similarity. "
         "Each group represents a latent sub-theme within the parent code.\n\n"
         f"{facets_section}\n\n"
-        "For each group, suggest a concise 2–5 word descriptive label that captures the shared semantic "
-        "theme. Explain your reasoning briefly (1 sentence).\n\n"
+        "Before labelling each group:\n"
+        "1. Identify the ONE feature that distinguishes this group from the other groups.\n"
+        "2. Use that distinguishing feature as the anchor for your label.\n\n"
+        "For each group, suggest a concise 2\u20135 word descriptive label that captures the shared semantic "
+        "theme. Explain your reasoning briefly (1 sentence), focusing on the distinguishing feature.\n\n"
         "Respond with JSON:\n"
         '{"facets": [{"facet_index": 0, "suggested_label": "...", "reasoning": "..."}]}'
     )

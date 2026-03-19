@@ -61,8 +61,49 @@ Return JSON with EXACTLY this structure:
 }}"""
 
 
+_FEW_SHOT_EXAMPLES_SECTION = """\
+FEW-SHOT WORKED EXAMPLES — study these before scoring:
+
+--- EXAMPLE A: Strong consistency ---
+USER INPUT (abbreviated):
+  Segment: "The shock of losing him wiped out any sense of future."
+  Proposed code: "Anticipatory Grief"
+  Centroid similarity: 0.81  |  Temporal drift: 0.04
+  History: 12 segments, all capturing loss of imagined futures or feared bereavement.
+
+ASSISTANT REASONING (internal, not returned):
+  Step 1 (SCOPE): "Wiped out any sense of future" directly captures anticipatory grief — the loss of an imagined future, not just present pain. In scope.
+  Step 2 (EVIDENCE): Similarity 0.81 → scoring rules require consistency_score ≥ 0.65. Temporal drift 0.04 → stable application, no drift concern.
+  Step 3 (HISTORY): All 12 prior segments share the "anticipated future taken away" theme. This segment fits perfectly.
+  Step 4 (DRIFT): Drift 0.04 — negligible. No shift in the code's application.
+  Step 5 (ALTERNATIVES): No better-fitting code apparent. "Anticipatory Grief" is the correct frame.
+  Step 6 (VERDICT): Strong, consistent application. High consistency score, low severity.
+
+ASSISTANT OUTPUT:
+{"self_lens": {"is_consistent": true, "consistency_score": 0.87, "intent_alignment_score": 0.89, "headline": "Consistent with your past coding of this concept.", "finding": "This segment captures the loss of imagined futures — the defining feature of how you have applied Anticipatory Grief throughout your coding.", "definition_note": "", "drift_warning": "", "action": "Keep coding as-is — this is a strong example of the code.", "alternative_codes": [], "evidence_note": "The strong semantic match and stable pattern over time confirm this fits your established use of the code."}, "overall_severity_score": 0.13, "overall_severity": "low"}
+
+--- EXAMPLE B: Borderline drift ---
+USER INPUT (abbreviated):
+  Segment: "Her paperwork was a reminder of what she no longer had."
+  Proposed code: "Anticipatory Grief"
+  Centroid similarity: 0.43  |  Temporal drift: 0.34
+  History: 12 segments as above, plus 3 recent segments about material loss (possessions, paperwork, finances).
+
+ASSISTANT REASONING (internal, not returned):
+  Step 1 (SCOPE): "Reminder of what she no longer had" is about present absence, not anticipated future loss. Borderline — could fit, but is more retrospective than anticipatory.
+  Step 2 (EVIDENCE): Similarity 0.43 → scoring rules require consistency_score ≤ 0.45. Drift 0.34 → above the 0.3 threshold, meaningful drift present.
+  Step 3 (HISTORY): Original segments captured feared future loss. Recent 3 segments (incl. this one) are about tangible/material reminders of past loss. The code's application is widening.
+  Step 4 (DRIFT): Drift 0.34 — the researcher has been extending this code to retrospective/material loss, which differs from its original anticipatory framing.
+  Step 5 (ALTERNATIVES): "Grief Reminders" or "Bereavement Triggers" might better capture material-cue experiences. But no such code exists in the codebook.
+  Step 6 (VERDICT): Inconsistent application. Low similarity, meaningful drift. Medium severity. Recommend reviewing recent uses.
+
+ASSISTANT OUTPUT:
+{"self_lens": {"is_consistent": false, "consistency_score": 0.41, "intent_alignment_score": 0.38, "headline": "This quote doesn\u2019t quite match how you have used this code before.", "finding": "Your earlier uses of Anticipatory Grief captured the fear of losing a future; this segment is about a material object evoking a past loss, which is a different emotional register.", "definition_note": "Your application here edges toward retrospective grief rather than anticipatory grief — consider whether this aligns with your intended scope.", "drift_warning": "Your recent uses of this code have shifted toward material and retrospective loss cues, which differs from the anticipatory framing of earlier segments.", "action": "Review your last few uses of this code to check if your interpretation has shifted — you may want to create a separate code for grief reminders.", "alternative_codes": [], "evidence_note": "The lower semantic match and notable drift in recent coding patterns suggest the application of this code has broadened beyond its original scope."}, "overall_severity_score": 0.59, "overall_severity": "medium"}"""
+
+
 _SYSTEM_PROMPT = "\n\n".join([
     "You are an expert Qualitative Research Auditor reviewing a new coding decision for SELF-CONSISTENCY — did the researcher apply this code consistently with their own past decisions?",
+    _FEW_SHOT_EXAMPLES_SECTION,
     _SCORING_RULES_SECTION,
     _WRITING_RULES_SECTION,
     _OUTPUT_FORMAT_SECTION,
@@ -103,18 +144,17 @@ Researcher's Proposed Code: "{proposed_code}"
 
 ---
 
-Your Task:
-Perform a SELF-CONSISTENCY analysis and return the result as a single JSON response.
+Your Task — work through these steps internally before writing your JSON:
 
-**SELF-CONSISTENCY:**
-1. Does this segment match the researcher's own definition of "{proposed_code}" (or the AI-inferred definition if none)?
-2. Compare against the coding history — has this code been applied to similar material before?
-3. Is there any drift or inconsistency in how this code is being applied over time?
-4. Are there better-fitting codes from the codebook? (NEVER suggest codes already applied to this segment)
+Step 1 (SCOPE): Does the segment fall within the conceptual boundary of "{proposed_code}"? Refer to the researcher's definition if present, otherwise the AI-inferred definition.
+Step 2 (EVIDENCE): What do the deterministic scores tell you? Apply the scoring rules exactly — check whether similarity and drift values require specific score ranges.
+Step 3 (HISTORY): Does the coding history contain similar material coded the same way? Note any segments that clearly match or clearly diverge.
+Step 4 (DRIFT): Has the researcher's application of this code shifted over time? Compare early vs. recent history entries.
+Step 5 (ALTERNATIVES): Are there better-fitting codes from the codebook that are NOT already applied to this segment?
+Step 6 (VERDICT): Synthesise steps 1–5 into your final scores and produce the JSON response.
 
-Additional:
-- HARD CONSTRAINT: NEVER include any of these codes in alternative_codes: {co_applied_label_list}
-  These codes are already applied to this segment — suggesting them adds no value.
+HARD CONSTRAINT: NEVER include any of these codes in alternative_codes: {co_applied_label_list}
+These codes are already applied to this segment — suggesting them adds no value.
 """
 
 

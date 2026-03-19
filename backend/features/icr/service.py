@@ -542,17 +542,12 @@ def analyze_disagreement_llm(
     code_map = {c.id: c for c in codes}
 
     from prompts.icr_prompt import build_disagreement_analysis_prompt
-    system_msg = "You are an expert qualitative research methodologist helping to resolve intercoder disagreements."
-    user_msg = build_disagreement_analysis_prompt(target_d, users, code_map)
-    messages = [
-        {"role": "system", "content": system_msg},
-        {"role": "user", "content": user_msg},
-    ]
+    messages = build_disagreement_analysis_prompt(target_d, users, code_map)
 
     try:
         result = call_llm(messages)
-        # Try "analysis" key first, then "explanation", then fall back to JSON dump
-        analysis = result.get("analysis") or result.get("explanation") or json.dumps(result)
+        # Try "analysis" key first, then "recommendation", then "explanation", then fall back to JSON dump
+        analysis = result.get("analysis") or result.get("recommendation") or result.get("explanation") or json.dumps(result)
         return {"analysis": analysis, "unit_id": unit_id}
     except Exception as exc:
         logger.error("LLM disagreement analysis failed", extra={"error": str(exc)})
