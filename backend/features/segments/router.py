@@ -4,9 +4,9 @@ Prefix: /api/segments
 
 Endpoints:
   GET    /alerts           Retrieve recent audit alerts for the current user
-  POST   /                 Create a single coded segment (triggers background audit)
+  POST   /                 Create a single coded segment
   POST   /batch            Create multiple coded segments in one request
-  GET    /                 List segments (optionally filtered by document)
+  GET    /                 List segments
   DELETE /{segment_id}     Delete a segment + its vector embedding, re-audit siblings
   GET    /{segment_id}     Fetch a single segment
 """
@@ -38,7 +38,7 @@ logger = get_logger(__name__)
 router = APIRouter(prefix="/api/segments", tags=["segments"])
 
 
-# ── Helpers ────────────────────────────────────────────────────────────────────
+# Helper functions for permissions
 
 def _require_member(db: Session, project_id: str, user_id: str) -> None:
     """Raise 403 if the user isn't a project member."""
@@ -56,7 +56,7 @@ def _seg_out(seg: CodedSegment, code_label: str, code_colour: str) -> SegmentOut
     )
 
 
-# ── Endpoints ──────────────────────────────────────────────────────────────────
+# API endpoints
 
 @router.get("/alerts", response_model=list[AlertOut])
 def list_alerts_endpoint(
@@ -64,11 +64,7 @@ def list_alerts_endpoint(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Return recent audit alerts for the current user.
-
-    The frontend polls this on load and also receives real-time alerts via WebSocket.
-    This endpoint covers the case where the WS connection wasn't open when alerts fired.
-    """
+    """Return recent audit alerts for the current user."""
     alerts = list_alerts(db, current_user.id, unread_only)
     return [
         AlertOut(
@@ -89,7 +85,9 @@ async def create_segment_endpoint(
     code = get_code_for_segment(db, body.code_id)
     if not code:
         raise HTTPException(status_code=404, detail="Code not found")
+    
     doc = get_document(db, body.document_id)
+
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
 
@@ -102,7 +100,6 @@ async def create_segment_endpoint(
     )
     db.commit()
 
-    # Only trigger the audit pipeline when Azure is configured — no key, no LLM work
     if settings.azure_api_key:
         from features.audit.service import run_background_agents
         from features.audit.context_builder import extract_window
@@ -125,12 +122,7 @@ async def batch_create_segments(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Create multiple segments in a single transaction.
-
-    Invalid items (unknown code/document) are silently skipped rather than
-    aborting the whole batch — the response count tells the caller how many
-    actually succeeded.
-    """
+    """Create multiple segments in a single transaction."""
     if not body.items:
         return {"created": 0}
 
@@ -139,11 +131,14 @@ async def batch_create_segments(
 
     for item in body.items:
         code = get_code_for_segment(db, item.code_id)
+
         if not code:
-            continue    # skip unknown code rather than failing the whole batch
+            continue
+
         doc = get_document(db, item.document_id)
+
         if not doc:
-            continue    # skip unknown document
+            continue
 
         seg_id = str(uuid.uuid4())
         segment = create_segment_with_event(
@@ -167,7 +162,6 @@ async def batch_create_segments(
             "created_at": segment.created_at.isoformat() if segment.created_at else None,
         })
 
-    # Single commit for the whole batch — faster and atomic
     db.commit()
 
     if settings.azure_api_key:
@@ -187,14 +181,14 @@ def list_segments_endpoint(
 ):
     if document_id:
         doc = get_document(db, document_id)
+
         if doc:
             _require_member(db, doc.project_id, current_user.id)
 
-    # all_coders=True is used by the document viewer to show all coders' work in the margin
     user_filter = "" if all_coders else current_user.id
     rows = list_segments(db, document_id, user_filter)
+
     return [
-        # Guard against orphaned segments whose code was deleted
         _seg_out(s, code.label if code else "?", code.colour if code else "#ccc")
         for s, code in rows
     ]
@@ -208,18 +202,16 @@ def delete_segment_endpoint(
     current_user: User = Depends(get_current_user),
 ):
     row = get_segment_by_id(db, segment_id)
+
     if not row:
         raise HTTPException(status_code=404, detail="Segment not found")
     seg, code = row
 
-    # Coders can only delete their own work
     if seg.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="Cannot delete another user's segment")
 
     doc = get_document(db, seg.document_id)
-    # Try to get the project_id from the code first; fall back to the document
     project_id = code.project_id if code else (doc.project_id if doc else None)
-    # Capture span before deletion so sibling re-audit can use it
     seg_start, seg_end = seg.start_index, seg.end_index
 
     if project_id:
@@ -233,16 +225,15 @@ def delete_segment_endpoint(
             user_id=current_user.id,
         )
 
-    # Remove from vector store before deleting the DB row — best-effort, won't block deletion
     try:
         from infrastructure.vector_store.store import delete_segment_embedding
         delete_segment_embedding(current_user.id, segment_id)
+
     except Exception as e:
         logger.warning("Vector store cleanup failed for segment", extra={"segment_id": segment_id, "error": str(e)})
 
     delete_segment_record(db, seg)
 
-    # Re-run audit on segments that overlapped with the deleted one — their context has changed
     if settings.azure_api_key:
         from features.audit.service import reaudit_siblings_background
         background_tasks.add_task(
@@ -262,9 +253,13 @@ def get_segment(
     current_user: User = Depends(get_current_user),
 ):
     row = get_segment_by_id(db, segment_id)
+
     if not row:
         raise HTTPException(status_code=404, detail="Segment not found")
+    
     seg, code = row
+
     if code:
         _require_member(db, code.project_id, current_user.id)
+        
     return _seg_out(seg, code.label if code else "?", code.colour if code else "#ccc")

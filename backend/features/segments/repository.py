@@ -6,11 +6,7 @@ from core.models import CodedSegment, Code, Document, AgentAlert
 
 
 def get_segment_by_id(db: Session, segment_id: str) -> tuple | None:
-    """Fetch a (CodedSegment, Code) pair by segment UUID, or None if not found.
-
-    The outer join means this still returns the segment even if the code has been
-    deleted — callers should guard against code being None.
-    """
+    """Fetch a (CodedSegment, Code) pair by segment UUID, or None if not found."""
     return (
         db.query(CodedSegment, Code)
         .outerjoin(Code, CodedSegment.code_id == Code.id)
@@ -24,8 +20,8 @@ def list_segments(db: Session, document_id: str = "", user_id: str = "") -> list
 
     Args:
         db: Active DB session.
-        document_id: If provided, only return segments from this document.
-        user_id: If provided, only return segments created by this user.
+        document_id: Only return segments from this document.
+        user_id: Only return segments created by this user.
                  Pass empty string to get segments from all coders.
 
     Returns:
@@ -54,16 +50,12 @@ def delete_segment_record(db: Session, segment: CodedSegment) -> None:
 
 
 def get_code_for_segment(db: Session, code_id: str) -> Code | None:
-    """Fetch the Code being applied to a new segment.
-
-    Validates the code exists before we allow a segment to be created.
-    """
+    """Fetch the Code being applied to a new segment."""
     return db.query(Code).filter(Code.id == code_id).first()
 
 
 def get_document(db: Session, doc_id: str) -> Document | None:
-    """Fetch a Document by ID — used to validate the document exists and to
-    get the full text for context window extraction."""
+    """Fetch a Document by ID"""
     return db.query(Document).filter(Document.id == doc_id).first()
 
 
@@ -73,13 +65,12 @@ def list_alerts(db: Session, user_id: str, unread_only: bool = True) -> list[Age
     Args:
         db: Active DB session.
         user_id: Scopes alerts to this user's coding work.
-        unread_only: If True, only returns alerts the user hasn't dismissed.
+        unread_only: If True, returns alerts the user has not deleted.
 
     Returns:
-        Up to 50 AgentAlert rows — hard cap to keep the response reasonable.
+        Up to 50 AgentAlert rows.
     """
     query = db.query(AgentAlert).filter(AgentAlert.user_id == user_id)
     if unread_only:
-        # noqa: E712 — intentional == False comparison, SQLAlchemy needs it (not 'is not True')
-        query = query.filter(AgentAlert.is_read == False)  # noqa: E712
+        query = query.filter(AgentAlert.is_read == False)
     return query.order_by(AgentAlert.created_at.desc()).limit(50).all()
