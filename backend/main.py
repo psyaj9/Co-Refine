@@ -1,3 +1,8 @@
+"""
+Co-Refine backend
+
+Joins together all the features' routers, middleware, and the WebSocket endpoint.
+"""
 from contextlib import asynccontextmanager
 import asyncio
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
@@ -26,6 +31,14 @@ logger = get_logger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    """Startup/shutdown function.
+
+    DB migrations are run on startup so the app always has the right schema,
+    even on a fresh install. 
+    
+    Captures the event loop for the WS manager
+    so background threads can push messages into async queues.
+    """
     init_db()
     ws_manager.set_loop(asyncio.get_event_loop())
     yield
@@ -44,23 +57,24 @@ app.add_middleware(
 
 @app.exception_handler(NotFoundError)
 async def not_found_handler(request: Request, exc: NotFoundError) -> JSONResponse:
-    return JSONResponse(status_code=404, content={"detail": exc.message or "Not found"})
+    return JSONResponse(status_code=404, content={"detail": exc.message})
 
 
 @app.exception_handler(ValidationError)
 async def validation_handler(request: Request, exc: ValidationError) -> JSONResponse:
-    return JSONResponse(status_code=422, content={"detail": exc.message or "Validation error"})
+    return JSONResponse(status_code=422, content={"detail": exc.message})
 
 
 @app.exception_handler(ConflictError)
 async def conflict_handler(request: Request, exc: ConflictError) -> JSONResponse:
-    return JSONResponse(status_code=409, content={"detail": exc.message or "Conflict"})
+    return JSONResponse(status_code=409, content={"detail": exc.message})
 
 
 @app.exception_handler(ExternalServiceError)
 async def external_service_handler(request: Request, exc: ExternalServiceError) -> JSONResponse:
     logger.error("External service error", extra={"message": exc.message})
-    return JSONResponse(status_code=502, content={"detail": exc.message or "External service error"})
+    return JSONResponse(status_code=502, content={"detail": exc.message})
+
 
 app.include_router(auth_router)
 app.include_router(projects_router)
@@ -76,19 +90,23 @@ app.include_router(icr_router)
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket, token: str = ""):
+    #Single WebSocket connection per authenticated user.
     from jose import JWTError
     from infrastructure.auth.jwt import decode_token
     try:
         payload = decode_token(token)
         user_id = payload["sub"]
+
     except (JWTError, KeyError):
         await websocket.accept()
         await websocket.close(code=4001)
         return
+    
     await ws_manager.connect(websocket, user_id)
     try:
         while True:
             await websocket.receive_text()
+
     except WebSocketDisconnect:
         ws_manager.disconnect(websocket, user_id)
 

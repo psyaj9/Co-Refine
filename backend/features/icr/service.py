@@ -1,6 +1,16 @@
 """
 ICR service layer — orchestrates alignment, metric computation, and
 LLM-based disagreement analysis.
+
+The core pipeline:
+1. Load all members (coders) for the project.
+2. For each document, fetch all coders' segments and compute alignment units —
+   these are the canonical units of comparison (text spans where any coder coded anything).
+3. Classify each unit as agreement or one of four disagreement types.
+4. Compute reliability metrics over all units (kappa, alpha, etc.).
+
+The LLM analysis feature is separate — it's called on-demand for a specific
+disagreement unit to explain why coders might have differed.
 """
 from __future__ import annotations
 
@@ -45,6 +55,14 @@ logger = get_logger(__name__)
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _metric_result_to_out(r) -> MetricOut:
+    """Convert an internal metric result object to the Pydantic output schema.
+
+    Args:
+        r: Internal metric result with .score, .interpretation, .n_units.
+
+    Returns:
+        MetricOut with score rounded to 4 dp (or None if unavailable).
+    """
     return MetricOut(
         score=round(r.score, 4) if r.score is not None else None,
         interpretation=r.interpretation,
@@ -53,7 +71,15 @@ def _metric_result_to_out(r) -> MetricOut:
 
 
 def _compute_all_metrics(all_units: list, coder_ids: list[str]) -> tuple:
-    """Compute all project-level ICR metrics. Returns (pa, fk, ka, ga)."""
+    """Compute all project-level ICR metrics. Returns (pa, fk, ka, ga).
+
+    Args:
+        all_units: List of AlignmentUnit objects across all documents.
+        coder_ids: List of all coder user IDs in the project.
+
+    Returns:
+        Tuple of (percent_agreement, fleiss_kappa, krippendorffs_alpha, gwets_ac1) results.
+    """
     pa = percent_agreement(all_units, coder_ids)
     fk = fleiss_kappa(all_units, coder_ids)
     ka = krippendorffs_alpha(all_units, coder_ids)
@@ -62,11 +88,23 @@ def _compute_all_metrics(all_units: list, coder_ids: list[str]) -> tuple:
 
 
 def _build_pairwise_kappa(all_units: list, coder_ids: list[str], users: dict) -> list[PairwiseKappaOut]:
-    """Compute pairwise Cohen's kappa for every pair of coders."""
+    """Compute pairwise Cohen's kappa for every pair of coders.
+
+    Uses combinations (not permutations) so each pair appears once.
+
+    Args:
+        all_units: List of AlignmentUnit objects.
+        coder_ids: All coder IDs — we iterate pairs from this list.
+        users: Dict of user_id → User ORM object for name lookups.
+
+    Returns:
+        List of PairwiseKappaOut, one per unique coder pair.
+    """
     pairwise: list[PairwiseKappaOut] = []
     for i, a_id in enumerate(coder_ids):
         for b_id in coder_ids[i + 1:]:
             ck = cohens_kappa(all_units, a_id, b_id)
+            # Truncate to 8 chars as a fallback if the user record is missing
             a_name = users[a_id].display_name if a_id in users else a_id[:8]
             b_name = users[b_id].display_name if b_id in users else b_id[:8]
             pairwise.append(PairwiseKappaOut(
@@ -82,7 +120,18 @@ def _build_pairwise_kappa(all_units: list, coder_ids: list[str], users: dict) ->
 
 
 def _classify_disagreements_summary(all_units: list, coder_ids: list[str]) -> tuple:
-    """Return (disagreements_list, n_agreements, n_disagreements, breakdown)."""
+    """Return (disagreements_list, n_agreements, n_disagreements, breakdown).
+
+    A single call to classify_units() gets all the data we need; this helper
+    also computes the counts and breakdown so callers don't have to.
+
+    Args:
+        all_units: List of AlignmentUnit objects.
+        coder_ids: All coder IDs in the project.
+
+    Returns:
+        Tuple of (disagreements, n_agreements, n_disagreements, DisagreementBreakdownOut).
+    """
     disagreements = classify_units(all_units, coder_ids)
     n_agreements = sum(1 for d in disagreements if d.disagreement_type == "agreement")
     n_disagreements = len(disagreements) - n_agreements
@@ -96,6 +145,18 @@ def _classify_disagreements_summary(all_units: list, coder_ids: list[str]) -> tu
 
 
 def _resolution_to_out(r, db: Session = None) -> ICRResolutionOut:
+    """Convert an IcrResolution ORM object to the public output schema.
+
+    Enriches the record with span_text (extracted from document) and
+    resolved_by_name (looked up from users table) when db is provided.
+
+    Args:
+        r: IcrResolution ORM object.
+        db: Optional DB session for enrichment queries. If None, skips enrichment.
+
+    Returns:
+        ICRResolutionOut with all fields populated.
+    """
     span_text: Optional[str] = None
     resolved_by_name: Optional[str] = None
     if db is not None:
@@ -103,6 +164,7 @@ def _resolution_to_out(r, db: Session = None) -> ICRResolutionOut:
             doc_text = repo.get_document_text(db, r.document_id)
             if doc_text:
                 raw = doc_text[r.span_start:r.span_end]
+                # Cap at 200 chars to avoid huge payloads in the list view
                 span_text = raw[:200] + "…" if len(raw) > 200 else raw
         if r.resolved_by:
             users = repo.get_users_by_ids(db, [r.resolved_by])
@@ -132,7 +194,19 @@ def _build_all_units(
 ) -> tuple[list[AlignmentUnit], dict[str, str], dict[str, str]]:
     """
     Return (all_units, doc_title_map, doc_text_map) by iterating all project documents.
-    Segments from all coders are fetched and computed per document.
+
+    Segments from all coders are fetched and alignment-computed per document,
+    then merged into a single flat list. This is the foundational data structure
+    for all ICR metric computations.
+
+    Args:
+        db: Active SQLAlchemy session.
+        project_id: Project to build units for.
+        coder_ids: All coder user IDs to include.
+
+    Returns:
+        Tuple of (all_units, doc_title_map, doc_text_map) where the maps are
+        keyed by document_id.
     """
     documents = repo.list_documents_for_project(db, project_id)
     doc_title_map: dict[str, str] = {d.id: d.title for d in documents}
@@ -157,6 +231,18 @@ def _build_all_units(
 # ── Public service functions ───────────────────────────────────────────────────
 
 def get_icr_overview(db: Session, project_id: str) -> ICROverviewOut:
+    """Compute full project-level ICR overview.
+
+    Returns empty metrics with "insufficient data" interpretation if the project
+    has fewer than 2 coders — can't compute reliability with one person.
+
+    Args:
+        db: Active SQLAlchemy session.
+        project_id: Project to compute ICR for.
+
+    Returns:
+        ICROverviewOut with all metrics populated.
+    """
     members = repo.list_members_for_project(db, project_id)
     coder_ids = [m.user_id for m in members]
     users = repo.get_users_by_ids(db, coder_ids)
@@ -171,7 +257,7 @@ def get_icr_overview(db: Session, project_id: str) -> ICROverviewOut:
     ]
 
     if len(coder_ids) < 2:
-        # Not enough coders yet — return empty metrics
+        # Not enough coders yet — return zeros so the UI can show a helpful message
         empty_metric = MetricOut(score=None, interpretation="insufficient data", n_units=0)
         return ICROverviewOut(
             n_coders=len(coder_ids),
@@ -214,6 +300,18 @@ def get_icr_overview(db: Session, project_id: str) -> ICROverviewOut:
 
 
 def get_per_code_metrics(db: Session, project_id: str) -> list[PerCodeMetricOut]:
+    """Compute Krippendorff's alpha for each code individually.
+
+    Sorted best (highest alpha) to worst so the most problematic codes
+    appear at the bottom of the list.
+
+    Args:
+        db: Active SQLAlchemy session.
+        project_id: Project to compute per-code metrics for.
+
+    Returns:
+        List of PerCodeMetricOut, sorted by alpha descending (None values last).
+    """
     members = repo.list_members_for_project(db, project_id)
     coder_ids = [m.user_id for m in members]
     codes = repo.get_codes_for_project(db, project_id)
@@ -242,11 +340,21 @@ def get_per_code_metrics(db: Session, project_id: str) -> list[PerCodeMetricOut]
             n_units=item["n_units"],
         ))
 
+    # Sort: None last, then by alpha descending (best agreement first)
     result.sort(key=lambda x: (x.alpha is None, -(x.alpha or 0)))
     return result
 
 
 def get_agreement_matrix(db: Session, project_id: str) -> AgreementMatrixOut:
+    """Build the code confusion matrix for the project.
+
+    Args:
+        db: Active SQLAlchemy session.
+        project_id: Project to compute the matrix for.
+
+    Returns:
+        AgreementMatrixOut with dense n×n matrix.
+    """
     members = repo.list_members_for_project(db, project_id)
     coder_ids = [m.user_id for m in members]
     codes = repo.get_codes_for_project(db, project_id)
@@ -259,7 +367,7 @@ def get_agreement_matrix(db: Session, project_id: str) -> AgreementMatrixOut:
     code_ids = [c.id for c in codes]
     matrix_dict = build_agreement_matrix(all_units, coder_ids, code_ids)
 
-    # Build dense matrix indexed by code position
+    # Convert sparse dict to dense indexed matrix
     n = len(codes)
     idx_map = {cid: i for i, cid in enumerate(code_ids)}
     matrix: list[list[int]] = [[0] * n for _ in range(n)]
@@ -284,6 +392,20 @@ def get_disagreements(
     offset: int = 0,
     limit: int = 20,
 ) -> DisagreementListOut:
+    """Return a paginated list of disagreements, excluding already-resolved ones.
+
+    Args:
+        db: Active SQLAlchemy session.
+        project_id: Project to query.
+        document_id: Optional filter to one document.
+        code_id: Optional filter to disagreements involving a specific code.
+        disagreement_type: Optional filter by type string.
+        offset: Pagination start index.
+        limit: Max items to return.
+
+    Returns:
+        DisagreementListOut with paginated items and total pre-pagination count.
+    """
     members = repo.list_members_for_project(db, project_id)
     coder_ids = [m.user_id for m in members]
     users = repo.get_users_by_ids(db, coder_ids)
@@ -296,7 +418,7 @@ def get_disagreements(
     all_units, doc_title_map, doc_text_map = _build_all_units(db, project_id, coder_ids)
     all_disagreements, _, _, _ = _classify_disagreements_summary(all_units, coder_ids)
 
-    # Filter out pure agreements (unless type_filter explicitly asks for them)
+    # Strip pure agreement units from the default view — they're not actionable
     if disagreement_type != "agreement":
         filtered = [d for d in all_disagreements if d.disagreement_type != "agreement"]
     else:
@@ -309,20 +431,20 @@ def get_disagreements(
         document_id=document_id,
     )
 
-    # Look up resolutions for these units; filter out resolved ones
+    # Look up all resolutions and hide already-resolved disagreements
     all_resolutions = repo.list_resolutions(db, project_id, document_id=document_id)
     res_map: dict[str, tuple[str, str]] = {}   # key -> (resolution_id, status)
     for res in all_resolutions:
         key = f"{res.document_id}:{res.span_start}:{res.span_end}"
         res_map[key] = (res.id, res.status)
 
-    # Hide resolved disagreements from the list
+    # Filter out resolved disagreements — they've been dealt with
     filtered = [
         d for d in filtered
         if res_map.get(f"{d.document_id}:{d.span_start}:{d.span_end}", (None, None))[1] != "resolved"
     ]
 
-    # Paginate
+    # Paginate after filtering so total reflects the unresolved count
     total = len(filtered)
     page = filtered[offset: offset + limit]
 
@@ -345,7 +467,7 @@ def get_disagreements(
         lookup_key = f"{d.document_id}:{d.span_start}:{d.span_end}"
         res_entry = res_map.get(lookup_key)
 
-        # Extract span text from document content
+        # Extract span text for display — cap at 200 chars
         doc_text = doc_text_map.get(d.document_id, "")
         span_text: Optional[str] = None
         if doc_text:
@@ -381,7 +503,20 @@ def analyze_disagreement_llm(
     unit_id: str,
     document_id: str,
 ) -> dict:
-    """Ask the LLM to explain a disagreement and suggest a resolution."""
+    """Ask the LLM to explain a disagreement and suggest a resolution.
+
+    Rebuilds the alignment units for the specified document, finds the target
+    unit, and sends the disagreement details to the LLM for analysis.
+
+    Args:
+        db: Active SQLAlchemy session.
+        project_id: Project context for loading members and codes.
+        unit_id: The specific alignment unit to analyse.
+        document_id: Document containing the disagreement.
+
+    Returns:
+        Dict with "analysis" text and "unit_id", or {"error": ...} if not found.
+    """
     members = repo.list_members_for_project(db, project_id)
     coder_ids = [m.user_id for m in members]
     users = repo.get_users_by_ids(db, coder_ids)
@@ -416,6 +551,7 @@ def analyze_disagreement_llm(
 
     try:
         result = call_llm(messages)
+        # Try "analysis" key first, then "explanation", then fall back to JSON dump
         analysis = result.get("analysis") or result.get("explanation") or json.dumps(result)
         return {"analysis": analysis, "unit_id": unit_id}
     except Exception as exc:
@@ -429,6 +565,17 @@ def create_resolution(
     data,
     user_id: str,
 ) -> ICRResolutionOut:
+    """Create a new resolution record and return it as a response schema.
+
+    Args:
+        db: Active SQLAlchemy session.
+        project_id: Project the resolution belongs to.
+        data: ICRResolutionCreate schema with resolution details.
+        user_id: Who is creating the resolution.
+
+    Returns:
+        ICRResolutionOut with span_text and resolver name enriched.
+    """
     res = repo.create_resolution(
         db=db,
         project_id=project_id,
@@ -450,6 +597,21 @@ def update_resolution(
     data,
     user_id: str,
 ) -> ICRResolutionOut:
+    """Update a resolution and return the updated record.
+
+    Args:
+        db: Active SQLAlchemy session.
+        project_id: Project context for ownership check.
+        resolution_id: UUID of the resolution to update.
+        data: ICRResolutionUpdate schema with fields to change.
+        user_id: Who is making the update.
+
+    Returns:
+        ICRResolutionOut with updated fields.
+
+    Raises:
+        HTTPException: 404 if resolution not found or doesn't belong to this project.
+    """
     res = repo.get_resolution(db, resolution_id)
     if not res or res.project_id != project_id:
         from fastapi import HTTPException
@@ -472,5 +634,16 @@ def list_resolutions(
     document_id: Optional[str] = None,
     status: Optional[str] = None,
 ) -> list[ICRResolutionOut]:
+    """Return all resolutions for a project, enriched with span text and resolver name.
+
+    Args:
+        db: Active SQLAlchemy session.
+        project_id: Project to list resolutions for.
+        document_id: Optional filter to one document.
+        status: Optional filter by resolution status.
+
+    Returns:
+        List of ICRResolutionOut, newest first.
+    """
     results = repo.list_resolutions(db, project_id, document_id=document_id, status=status)
     return [_resolution_to_out(r, db) for r in results]

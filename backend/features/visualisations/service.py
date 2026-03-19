@@ -1,6 +1,10 @@
 """Visualisations service: overview, facet explorer, consistency aggregation.
 
 Extracted from routers/vis.py — pure data transformation, no HTTP concerns.
+
+All functions are user-scoped: they only return data for the currently
+authenticated user's coding work, not the whole team's. This means each
+researcher sees their own consistency trends and facets.
 """
 import math
 from sqlalchemy.orm import Session
@@ -11,11 +15,33 @@ from infrastructure.llm.client import call_llm
 
 
 def _safe_avg(lst: list[float]) -> float | None:
+    """Average a list of floats, returning None if empty.
+
+    Avoids ZeroDivisionError for codes with no scores yet.
+
+    Args:
+        lst: List of float values to average.
+
+    Returns:
+        Rounded average to 3 decimal places, or None for empty input.
+    """
     return round(sum(lst) / len(lst), 3) if lst else None
 
 
 def _compute_metrics_over_time(scores: list) -> list[dict]:
-    """Build multi-metric time-series from consistency score records."""
+    """Build multi-metric time-series from consistency score records.
+
+    Groups scores by day (UTC) and computes average consistency and average
+    centroid similarity per day. Pseudo-centroid scores are excluded from the
+    centroid series since they're computed differently and would skew the trend.
+
+    Args:
+        scores: List of ConsistencyScore ORM objects, in chronological order.
+
+    Returns:
+        List of dicts with date, avg_consistency, and avg_centroid_sim keys.
+        Sorted ascending by date.
+    """
     metrics_by_date: dict[str, dict[str, list[float]]] = {}
     for s in scores:
         d = s.created_at.strftime("%Y-%m-%d")
@@ -36,7 +62,19 @@ def _compute_metrics_over_time(scores: list) -> list[dict]:
 
 
 def _compute_variable_codes(codes: list, scored: list) -> list[dict]:
-    """Return codes sorted by std dev of LLM consistency scores (most variable first)."""
+    """Return codes sorted by std dev of LLM consistency scores (most variable first).
+
+    High variability on a code suggests the researcher's coding decisions for
+    that code are inconsistent over time — a useful signal to highlight.
+
+    Args:
+        codes: List of Code ORM objects for the project.
+        scored: ConsistencyScore records that have a non-null llm_consistency_score.
+
+    Returns:
+        List of dicts with code_name and variability_score, sorted descending.
+        Only codes with at least 2 scores are included.
+    """
     scores_by_code: dict[str, list[float]] = {}
     for s in scored:
         scores_by_code.setdefault(s.code_id, []).append(s.llm_consistency_score)
@@ -52,10 +90,24 @@ def _compute_variable_codes(codes: list, scored: list) -> list[dict]:
 
 
 def _compute_temporal_drift_by_code(scores: list, codes: list) -> list[dict]:
-    """Return per-code avg LOGOS temporal drift, sorted descending."""
+    """Return per-code avg LOGOS temporal drift, sorted descending.
+
+    Temporal drift measures how much a code's centroid shifts over time —
+    high drift suggests the researcher's interpretation of the code is evolving.
+
+    Args:
+        scores: List of ConsistencyScore ORM objects.
+        codes: List of Code ORM objects for the project.
+
+    Returns:
+        List of dicts with code_name and avg_drift, sorted descending.
+        Requires at least 2 non-pseudo-centroid scores per code.
+    """
     code_name_map = {c.id: c.label for c in codes}
     drift_by_code: dict[str, list[float]] = {}
     for s in scores:
+        # Exclude pseudo-centroid scores — they use estimated centroids and
+        # would artificially inflate drift readings
         if s.temporal_drift is not None and not s.is_pseudo_centroid:
             drift_by_code.setdefault(s.code_id, []).append(s.temporal_drift)
     top_temporal_drift = []
@@ -68,7 +120,17 @@ def _compute_temporal_drift_by_code(scores: list, codes: list) -> list[dict]:
 
 
 def get_overview(db: Session, project_id: str, user_id: str) -> dict:
-    """Tab 1: User-level summary stats + multi-metric time-series."""
+    """Tab 1: User-level summary stats + multi-metric time-series.
+
+    Args:
+        db: Active SQLAlchemy session.
+        project_id: Project to summarise.
+        user_id: Filter all stats to this user's coding.
+
+    Returns:
+        Dict with total_segments, total_codes, avg scores, score_over_time,
+        metrics_over_time, top_variable_codes, and top_temporal_drift_codes.
+    """
     total_segments = (
         db.query(func.count(CodedSegment.id))
         .join(Code, CodedSegment.code_id == Code.id)
@@ -98,7 +160,7 @@ def get_overview(db: Session, project_id: str, user_id: str) -> dict:
     codes = db.query(Code).filter(Code.project_id == project_id).all()
     metrics_over_time = _compute_metrics_over_time(scores)
 
-    # Legacy series (backward compat)
+    # Legacy series kept for backward compatibility with older frontend versions
     score_trend = [
         {"date": e["date"], "avg_score": e["avg_consistency"]}
         for e in metrics_over_time
@@ -118,7 +180,20 @@ def get_overview(db: Session, project_id: str, user_id: str) -> dict:
 
 
 def get_facets(db: Session, project_id: str, user_id: str, code_id: str | None = None) -> dict:
-    """Tab 2: Facet explorer — scatter data per facet with similarity stats (user-scoped)."""
+    """Tab 2: Facet explorer — scatter data per facet with similarity stats (user-scoped).
+
+    Returns one entry per active facet, including the 2D t-SNE coordinates for
+    all segment assignments and per-facet similarity statistics.
+
+    Args:
+        db: Active SQLAlchemy session.
+        project_id: Project to query.
+        user_id: Scope results to this user's facets and segments.
+        code_id: Optional — filter to a single code's facets.
+
+    Returns:
+        Dict with "facets" list, each containing segments, avg_similarity, etc.
+    """
     query = db.query(Facet).filter(Facet.project_id == project_id, Facet.user_id == user_id, Facet.is_active == True)
     if code_id:
         query = query.filter(Facet.code_id == code_id)
@@ -131,7 +206,7 @@ def get_facets(db: Session, project_id: str, user_id: str, code_id: str | None =
     code_ids = list({f.code_id for f in facets})
 
     codes_map = {c.id: c for c in db.query(Code).filter(Code.id.in_(code_ids)).all()}
-    # Only fetch assignments for segments belonging to the current user
+    # Only include assignments for the current user's segments — not other coders'
     assignments = (
         db.query(FacetAssignment)
         .join(CodedSegment, FacetAssignment.segment_id == CodedSegment.id)
@@ -152,6 +227,7 @@ def get_facets(db: Session, project_id: str, user_id: str, code_id: str | None =
         similarity_scores: list[float] = []
         for asgn in asgns_by_facet.get(facet.id, []):
             seg = segs_map.get(asgn.segment_id)
+            # Only include segments that have been projected to 2D
             if seg and seg.tsne_x is not None:
                 segments_data.append({
                     "segment_id": seg.id,
@@ -181,7 +257,17 @@ def get_facets(db: Session, project_id: str, user_id: str, code_id: str | None =
 
 
 def get_consistency(db: Session, project_id: str, user_id: str, code_id: str | None = None) -> dict:
-    """Tab 3: Box plots + timeline, enriched with Stage 1 metrics and reflection data (user-scoped)."""
+    """Tab 3: Box plots + timeline, enriched with Stage 1 metrics and reflection data (user-scoped).
+
+    Args:
+        db: Active SQLAlchemy session.
+        project_id: Project to query.
+        user_id: Scope results to this user's scoring history.
+        code_id: Optional — filter to a single code.
+
+    Returns:
+        Dict with scores_by_code (box plot data) and timeline (scatter data).
+    """
     codes = db.query(Code).filter(Code.project_id == project_id).all()
     if code_id:
         codes = [c for c in codes if c.id == code_id]
@@ -231,7 +317,20 @@ def get_consistency(db: Session, project_id: str, user_id: str, code_id: str | N
 
 
 def get_code_overlap(db: Session, project_id: str, user_id: str) -> dict:
-    """Tab 4: Pairwise cosine similarity matrix between code centroids."""
+    """Tab 4: Pairwise cosine similarity matrix between code centroids.
+
+    A high similarity score between two codes suggests they may be overlapping
+    or poorly differentiated in the codebook. The threshold of 0.85 is used
+    by the frontend to highlight concerning pairs.
+
+    Args:
+        db: Active SQLAlchemy session.
+        project_id: Project to compute overlap for.
+        user_id: Used to scope the ChromaDB collection.
+
+    Returns:
+        Dict with matrix (keyed by code label), code_labels, and threshold.
+    """
     from features.scoring.code_overlap import compute_code_overlap_matrix
 
     codes = db.query(Code).filter(Code.project_id == project_id).all()
@@ -252,6 +351,14 @@ def compute_cooccurrence(db: Session, project_id: str, user_id: str) -> dict:
     Diagonal = total usage count of that code (segments coded with it, counting
     each span once even if the code appears multiple times on that span).
     Off-diagonal = number of spans where both codes were applied simultaneously.
+
+    Args:
+        db: Active SQLAlchemy session.
+        project_id: Project to compute co-occurrence for.
+        user_id: Scope to this user's segments.
+
+    Returns:
+        Dict matching CodeCooccurrenceOut shape.
     """
     codes = (
         db.query(Code)
@@ -275,7 +382,8 @@ def compute_cooccurrence(db: Session, project_id: str, user_id: str) -> dict:
         .all()
     )
 
-    # Group by exact span → set of code labels at that span
+    # Group by exact span → set of code labels at that span.
+    # Using (doc_id, start, end) as the span key to handle multi-document projects.
     from collections import defaultdict
     span_codes: dict[tuple, set[str]] = defaultdict(set)
     for doc_id, start, end, code_id in rows:
@@ -287,16 +395,16 @@ def compute_cooccurrence(db: Session, project_id: str, user_id: str) -> dict:
     matrix = [[0] * n for _ in range(n)]
 
     for labels_at_span in span_codes.values():
-        label_list = sorted(labels_at_span)  # stable order
+        label_list = sorted(labels_at_span)  # stable order for symmetric matrix
         for i_label in label_list:
             idx_i = label_to_idx[i_label]
-            matrix[idx_i][idx_i] += 1  # diagonal = total usage
+            matrix[idx_i][idx_i] += 1  # diagonal = total usage count
             for j_label in label_list:
                 if i_label != j_label:
                     idx_j = label_to_idx[j_label]
                     matrix[idx_i][idx_j] += 1
 
-    # Flattened co_occurrence_counts (upper triangle only, excluding diagonal)
+    # Flattened co_occurrence_counts for the upper triangle only (no diagonal, no duplicates)
     flat: dict[str, int] = {}
     for i in range(n):
         for j in range(i + 1, n):
@@ -318,6 +426,14 @@ def explain_facet(db: Session, facet: Facet, code: Code | None) -> dict:
     Fetches the top representative segments by similarity score so the LLM can
     reference actual coded text when explaining why segments cluster together and
     why the suggested label was chosen.
+
+    Args:
+        db: Active SQLAlchemy session.
+        facet: The Facet ORM object to explain.
+        code: The parent Code ORM object (may be None if code was deleted).
+
+    Returns:
+        Dict with explanation text, facet_label, and code_name.
     """
     code_label = code.label if code else "Unknown code"
     code_def = (code.definition or "No definition provided") if code else "No definition provided"

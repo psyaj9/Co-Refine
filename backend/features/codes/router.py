@@ -1,6 +1,19 @@
+"""Codes router: HTTP endpoints for the researcher's codebook.
+
+Prefix: /api/codes
+
+Endpoints:
+  POST   /                    Create a new code in a project
+  GET    /                    List codes
+  PATCH  /{code_id}           Partial update: label, definition, and/or colour
+  DELETE /{code_id}           Delete code + all its segments + vector embeddings
+  GET    /{code_id}/segments  List all segments the current user has applied this code to
+"""
+
 import uuid
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+
 from core.database import get_db
 from core.models import Code, User
 from features.codes.schemas import CodeCreate, CodeOut, CodeUpdate, SegmentOut
@@ -20,19 +33,22 @@ from infrastructure.auth.dependencies import get_current_user
 
 router = APIRouter(prefix="/api/codes", tags=["codes"])
 
-
+# Helper functions
 def _require_member(db: Session, project_id: str, user_id: str) -> None:
+    """Raise 403 if the user isn't a member of the project."""
     if not get_membership(db, project_id, user_id):
         raise HTTPException(status_code=403, detail="Access denied")
 
 
 def _code_to_out(code: Code, count: int = 0) -> CodeOut:
+    """Map a Code ORM object to the response schema."""
     return CodeOut(
         id=code.id, label=code.label, definition=code.definition,
         colour=code.colour, created_by=code.created_by,
         project_id=code.project_id, segment_count=count,
     )
 
+# API endpoints
 
 @router.post("/", response_model=CodeOut)
 def create_code_endpoint(
@@ -127,7 +143,7 @@ def update_code_endpoint(
     update_code(db)
     db.refresh(code)
     counts = segment_counts(db, [code.id], user_id=current_user.id)
-
+    
     return _code_to_out(code, counts.get(code.id, 0))
 
 
@@ -160,13 +176,17 @@ def get_code_segments(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    """Return every segment the current user has applied this code to.
+
+    Used by the expanded code detail panel to show all instances in context.
+    """
     code = get_code_by_id(db, code_id)
 
     if not code:
         raise HTTPException(status_code=404, detail="Code not found")
 
     rows = get_segments_for_code(db, code_id, current_user.id)
-    
+
     return [
         SegmentOut(
             id=s.id, document_id=s.document_id, text=s.text,

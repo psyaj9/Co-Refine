@@ -1,3 +1,11 @@
+"""
+Project ORM model.
+
+A project is the top-level container for a qualitative coding study. 
+Everything else belongs to a project. 
+Researchers typically create one project per study or per dataset they are analysing.
+"""
+
 from sqlalchemy import Column, String, DateTime, JSON, ForeignKey
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone

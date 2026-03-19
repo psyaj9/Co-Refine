@@ -1,3 +1,8 @@
+"""
+Chat service
+
+Context assembly and streaming LLM response logic.
+"""
 import uuid
 from typing import Generator
 
@@ -15,6 +20,19 @@ logger = get_logger(__name__)
 
 
 def build_codebook(db: Session, project_id: str) -> list[dict]:
+    """Assemble a structured codebook for use in the chat system prompt.
+
+    Combines code labels, user definitions, AI-inferred definitions, lenses,
+    and segment counts.
+
+    Args:
+        db: Active SQLAlchemy session.
+        project_id: Project whose codes to include.
+
+    Returns:
+        List of dicts, one per code, with label/user_definition/ai_definition/lens/segment_count.
+        Empty list if the project has no codes.
+    """
     codes = db.query(Code).filter(Code.project_id == project_id).all()
 
     if not codes:
@@ -53,16 +71,35 @@ def build_codebook(db: Session, project_id: str) -> list[dict]:
 
 
 def retrieve_segments(user_id: str, query: str) -> list[dict]:
+    """Fetch semantically similar coded segments for use as RAG context.
+
+
+    Args:
+        user_id: Used to scope the ChromaDB collection to this user's segments.
+        query: The user's chat message, used as the search query.
+
+    Returns:
+        List of segment dicts (text, code, similarity) or empty list on failure.
+    """
     try:
         from infrastructure.vector_store.store import find_similar_segments
         return find_similar_segments(user_id=user_id, query_text=query, top_k=8)
-    
+
     except Exception as e:
         logger.warning("Segment retrieval failed", extra={"error": str(e)})
         return []
 
 
 def get_conversation_history_dicts(db: Session, conversation_id: str) -> list[dict]:
+    """Load conversation history as a list of role/content dicts for the LLM.
+
+    Args:
+        db: Active SQLAlchemy session.
+        conversation_id: Conversation to load.
+
+    Returns:
+        List of {"role": ..., "content": ...} dicts.
+    """
     from features.chat.repository import get_conversation_messages
 
     messages = get_conversation_messages(db, conversation_id)
@@ -74,7 +111,15 @@ def stream_chat_response(
     messages: list[dict],
     model: str | None = None,
 ) -> Generator[str, None, None]:
-    
+    """Call LLM in streaming mode and yield tokens one at a time.
+
+    Args:
+        messages: Full messages list (system + history + user message).
+        model: Override the default deployment.
+
+    Yields:
+        Individual token strings from the stream.
+    """
     client = get_client()
     response = client.chat.completions.create(
         model=model or settings.azure_deployment_fast,
@@ -101,6 +146,20 @@ def stream_response_background(
     retrieved_segments: list[dict],
     conversation_history: list[dict],
 ) -> None:
+    """Run the full LLM streaming loop and persist the assistant reply.
+
+
+    The assistant message is only written if we actually got a response
+
+    Args:
+        conversation_id: Used to tag WS events so the frontend can route them.
+        project_id: Used when persisting the assistant message.
+        user_id: Used to identify the WS connection and scope the message.
+        user_message: The raw text of what the user asked.
+        codebook: Assembled codebook context.
+        retrieved_segments: RAG results.
+        conversation_history: Prior turns in this conversation.
+    """
     from core.database import SessionLocal
 
     messages = build_chat_messages(
@@ -156,6 +215,6 @@ def stream_response_background(
             )
             db.add(assistant_msg)
             db.commit()
-            
+
         finally:
             db.close()

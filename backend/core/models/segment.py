@@ -1,3 +1,13 @@
+"""
+CodedSegment ORM model.
+
+A coded segment is a span of text within a document that a researcher has tagged with a code. 
+Defined by character offsets (start_index, end_index) into the document's full_text. 
+Offsets are how segments survive document edits.
+
+The tsne_x/tsne_y fields are populated by the facet clustering pipeline after each audit, and are used to render the 2D scatter plot in the Visualisations tab.
+"""
+
 from sqlalchemy import Column, String, Text, Integer, Float, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
@@ -15,6 +25,7 @@ class CodedSegment(Base):
     end_index = Column(Integer, nullable=False)
     code_id = Column(String, ForeignKey("codes.id"), nullable=False)
     user_id = Column(String, nullable=False)
+
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     tsne_x = Column(Float, nullable=True)

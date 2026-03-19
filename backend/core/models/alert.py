@@ -1,3 +1,14 @@
+"""
+AgentAlert ORM model.
+
+Agent alerts are the primary output of the audit pipeline. After an LLM agent audits
+a coded segment, it produces an alert describing what it found.
+
+The payload column stores the full structured result as JSON because alert types have
+different structures. 
+The alert_type field tells the frontend which React component to render for it.
+"""
+
 from sqlalchemy import Column, String, DateTime, Boolean, JSON, ForeignKey
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
@@ -15,5 +26,4 @@ class AgentAlert(Base):
     payload = Column(JSON, nullable=False)
     is_read = Column(Boolean, default=False)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-
     segment = relationship("CodedSegment", back_populates="alerts")

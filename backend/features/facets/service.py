@@ -1,3 +1,15 @@
+"""
+Facets service — KMeans clustering + t-SNE projection + AI label suggestion.
+
+When a researcher codes enough segments under a code, we automatically discover sub-themes (facets) by clustering their embeddings.
+t-SNE reduces the high-dimensional embedding space to 2D for the scatter plot
+in UI. 
+An LLM then suggests labels for each cluster based
+on the most representative segment texts.
+
+This runs as a side-effect of the audit pipeline, after each segment is audited,
+the orchestrator calls run_facet_analysis to keep the facets up to date.
+"""
 import json
 import uuid
 import numpy as np
@@ -22,12 +34,27 @@ from features.facets.repository import (
 
 logger = get_logger(__name__)
 
+# Minimum segments needed before clustering
 MIN_SEGMENTS_FOR_CLUSTERING = 4
+
+# Cluster count bounds, auto-select K via silhouette.
 MAX_FACETS = 4
 MIN_FACETS = 2
 
 
 def _compute_optimal_k(embeddings: np.ndarray) -> int:
+    """Select the best number of clusters via silhouette score.
+
+    Tries each K from MIN_FACETS to min(MAX_FACETS, n-1) and picks the one
+    with the highest average silhouette
+    This is a measure of how well spread and cohesive the clusters are.
+
+    Args:
+        embeddings: 2D numpy array of shape (n_segments, embedding_dim).
+
+    Returns:
+        The optimal K value.
+    """
     n = len(embeddings)
     best_k = MIN_FACETS
     best_score = -1.0
@@ -35,7 +62,7 @@ def _compute_optimal_k(embeddings: np.ndarray) -> int:
 
     if max_k < MIN_FACETS:
         return MIN_FACETS
-    
+
     for k in range(MIN_FACETS, max_k + 1):
         km = KMeans(n_clusters=k, random_state=42, n_init="auto")
         labels = km.fit_predict(embeddings)
@@ -49,25 +76,45 @@ def _compute_optimal_k(embeddings: np.ndarray) -> int:
 
 
 def _compute_tsne(embeddings: np.ndarray) -> np.ndarray:
+    """Project embeddings to 2D using t-SNE.
+
+    t-SNE perplexity must be less than n_samples, so we clamp it. For very
+    small datasets (< 5 segments), t-SNE can be numerically unstable, so we
+    fall back to PCA which is always stable.
+
+    Args:
+        embeddings: 2D numpy array of shape (n_segments, embedding_dim).
+
+    Returns:
+        2D numpy array of shape (n_segments, 2).
+    """
     n = len(embeddings)
     perplexity = min(30, max(2, n - 1))
 
     try:
         reducer = TSNE(n_components=2, perplexity=perplexity, random_state=42)
         return reducer.fit_transform(embeddings)
-    
+
     except Exception:
         reducer = PCA(n_components=2)
         return reducer.fit_transform(embeddings)
 
 
 def _get_embeddings_by_ids(user_id: str, ids: list[str]) -> dict[str, list[float]]:
+    """Fetch raw embedding vectors from ChromaDB for a list of segment IDs.
 
+    Args:
+        user_id: ChromaDB collection scoped per-user.
+        ids: Segment IDs to retrieve embeddings for.
+
+    Returns:
+        Dict mapping segment_id → embedding vector. Missing IDs are omitted.
+    """
     try:
         collection = get_collection(user_id)
         result = collection.get(ids=ids, include=["embeddings"])
         return {doc_id: emb for doc_id, emb in zip(result["ids"], result["embeddings"])}
-    
+
     except Exception as e:
         logger.warning("Failed to retrieve embeddings from vector store", extra={"error": str(e)})
         return {}
@@ -79,6 +126,26 @@ def run_facet_analysis(
     code_id: str,
     project_id: str,
 ) -> dict:
+    """Run the full facet discovery pipeline for a code.
+
+    Steps:
+    1. Load segments and their embeddings.
+    2. Auto-select K via silhouette score.
+    3. KMeans cluster.
+    4. t-SNE project to 2D.
+    5. Soft-delete old facets, create new ones.
+    6. Write FacetAssignment + tsne_x/y for each segment.
+    7. AI label suggestion asynchronously done.
+
+    Args:
+        db: Active SQLAlchemy session.
+        user_id: User whose coding work to cluster.
+        code_id: The code to cluster segments for.
+        project_id: Parent project.
+
+    Returns:
+        Status dict with "status", and on success: "code_id", "facet_count", "segment_count".
+    """
     segments = get_segments_for_code(db, code_id, user_id)
 
     if len(segments) < MIN_SEGMENTS_FOR_CLUSTERING:
@@ -123,6 +190,7 @@ def run_facet_analysis(
 
     for i, seg in enumerate(valid_segments):
         cluster_idx = int(labels[i])
+
         seg.tsne_x = float(coords_2d[i, 0])
         seg.tsne_y = float(coords_2d[i, 1])
 
@@ -148,6 +216,16 @@ def run_facet_analysis(
 
 
 def suggest_facet_labels(db: Session, code_id: str, facets: list[Facet]) -> None:
+    """Ask the LLM to suggest descriptive labels for newly created facets.
+
+    Builds a prompt with the top 5 most representative segment texts per facet
+    and asks the LLM to name each cluster.
+
+    Args:
+        db: Active SQLAlchemy session.
+        code_id: The parent code.
+        facets: The newly created Facet ORM objects to label.
+    """
     if not facets:
         return
 
@@ -201,6 +279,6 @@ def suggest_facet_labels(db: Session, code_id: str, facets: list[Facet]) -> None
 
         db.commit()
         logger.info(f"Facet labels AI-suggested code_id={code_id} count={len(label_map)}")
-        
+
     except Exception as exc:
         logger.warning(f"Facet label suggestion failed — keeping generic labels code_id={code_id} error={exc}")

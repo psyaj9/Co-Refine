@@ -1,9 +1,13 @@
+"""Codes feature DTOs: request bodies and response payloads for the codebook API."""
+
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
 
 
 class CodeCreate(BaseModel):
+    """Payload for creating a new code."""
+
     label: str
     definition: Optional[str] = None
     colour: Optional[str] = "#FFEB3B"
@@ -12,6 +16,8 @@ class CodeCreate(BaseModel):
 
 
 class CodeOut(BaseModel):
+    """Single code as returned to the frontend."""
+
     id: str
     label: str
     definition: Optional[str] = None
@@ -28,6 +34,8 @@ class CodeUpdate(BaseModel):
 
 
 class SegmentOut(BaseModel):
+    """A coded segment returned from GET /codes/{code_id}/segments."""
+
     id: str
     document_id: str
     text: str

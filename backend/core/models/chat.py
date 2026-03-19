@@ -1,3 +1,17 @@
+"""
+ChatMessage ORM model.
+
+Stores the message history for the AI research assistant chat feature. 
+Messages are grouped into conversations so researchers can have multiple separate chat threads within a project.
+
+The role column follows the OpenAI convention: 
+
+"user" for researcher messages
+"assistant" for AI responses
+
+This makes it easy to reconstruct the message list for the LLM context window without any transformation.
+"""
+
 from sqlalchemy import Column, String, Text, DateTime, ForeignKey
 from datetime import datetime, timezone
 

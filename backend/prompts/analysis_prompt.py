@@ -1,3 +1,17 @@
+"""
+Analysis prompt builder — generates the prompt for code-level segment analysis.
+
+This prompt asks the LLM to infer what operational definition a researcher is
+implicitly using based on their actual coding patterns. It optionally compares
+that inference against the researcher's stated definition to surface drift or
+divergence.
+
+Used by features/audit/ when a segment reaches the threshold for analysis.
+"""
+
+# The main analysis template. Uses .format() placeholders so it stays readable
+# while still being parameterised. Note the doubled {{ }} for literal braces
+# in the JSON schema block.
 ANALYSIS_PROMPT_TEMPLATE = """
 Role: You are an expert Qualitative Researcher specialising in thematic analysis and codebook development.
 
@@ -28,9 +42,25 @@ def build_analysis_prompt(
     quotes: list[str],
     user_definition: str | None = None,
 ) -> str:
+    """Build the analysis prompt string for a given code and its segments.
+
+    If the researcher provided a definition, it becomes the baseline for
+    comparison. Without one, the LLM infers the definition entirely from
+    the coding patterns.
+
+    Args:
+        code_label: The label of the code being analysed (e.g. "Grief").
+        quotes: List of text segments coded under this code.
+        user_definition: The researcher's own definition, if provided.
+
+    Returns:
+        A formatted prompt string ready to send to the LLM.
+    """
     formatted_quotes = "\n".join([f'- "{q}"' for q in quotes])
 
     if user_definition:
+        # Give the LLM the researcher's stated definition as a reference point
+        # so it can comment on alignment and divergence specifically
         user_definition_section = (
             f"The researcher's own definition for this code:\n"
             f'"{user_definition}"\n\n'

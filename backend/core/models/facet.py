@@ -1,3 +1,17 @@
+"""
+Facet and FacetAssignment ORM models.
+
+Facets are sub-clusters within a single code, discovered automatically by KMeans
+clustering on the embedding vectors of that code's segments. 
+They represent different ways of usage within a code — e.g. a "Trust" code might have one facet for
+institutional trust and another for interpersonal trust.
+
+FacetAssignment links each segment to the facet it was assigned to by the clustering algorithm, with a similarity score. 
+The is_dominant flag identifies the primary facet for the segment.
+
+These models support the Facet Explorer tab in the Visualisations panel.
+"""
+
 from sqlalchemy import Column, String, Text, Integer, Float, Boolean, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
@@ -17,6 +31,7 @@ class Facet(Base):
     label_source = Column(String, default="auto")
     centroid_json = Column(Text, nullable=False)
     segment_count = Column(Integer, default=0)
+
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     is_active = Column(Boolean, default=True)
@@ -34,6 +49,7 @@ class FacetAssignment(Base):
     segment_id = Column(String, ForeignKey("coded_segments.id"), nullable=False)
     facet_id = Column(String, ForeignKey("facets.id"), nullable=False)
     similarity_score = Column(Float, nullable=False)
+
     is_dominant = Column(Boolean, default=True)
     assigned_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 

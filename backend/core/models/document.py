@@ -1,3 +1,10 @@
+"""
+Document ORM model.
+
+A document is a piece of text that researchers upload into a project and then apply codes to it. 
+The full_text is the text version used for indexing and segment extraction, html_content preserves formatting for display.
+"""
+
 from sqlalchemy import Column, String, Text, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
@@ -15,6 +22,7 @@ class Document(Base):
     doc_type = Column(String, default="transcript")
     html_content = Column(Text, nullable=True)
     original_filename = Column(String, nullable=True)
+
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     project = relationship("Project", back_populates="documents")

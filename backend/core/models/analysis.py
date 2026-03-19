@@ -1,3 +1,14 @@
+"""
+AnalysisResult ORM model.
+
+An analysis result is an LLM-generated summary of a code. 
+This is automatically triggered when a code accumulates enough segments (controlled by auto_analysis_threshold in settings).
+
+The `lens` field is the AI's interpretation of the code's theoretical or analytical angle;
+`definition` is a proposed plain-English definition and `reasoning` is the chain-of-thought
+the model used. All three together give researchers something to react to and refine.
+"""
+
 from sqlalchemy import Column, String, Text, Integer, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone

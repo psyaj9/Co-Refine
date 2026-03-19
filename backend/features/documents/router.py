@@ -1,5 +1,17 @@
+"""Documents router: HTTP endpoints for document upload and management.
+
+Prefix: /api/documents
+
+Endpoints:
+  POST   /upload          Upload a file (.txt, .docx, .pdf) and extract text
+  GET    /                List documents
+  GET    /{doc_id}        Fetch a single document including full text
+  DELETE /{doc_id}        Delete a document + its segments + vector embeddings
+"""
+
 from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException
 from sqlalchemy.orm import Session
+
 from core.database import get_db
 from core.models import User
 from features.documents.schemas import DocumentOut, DocumentUploadResponse
@@ -21,6 +33,7 @@ router = APIRouter(prefix="/api/documents", tags=["documents"])
 
 
 def _require_member(db: Session, project_id: str, user_id: str) -> None:
+    """Raise 403 if the user not a project member."""
     if not get_membership(db, project_id, user_id):
         raise HTTPException(status_code=403, detail="Access denied")
 
@@ -39,7 +52,7 @@ async def upload_document(
 
     if not text:
         raise HTTPException(status_code=400, detail="Could not extract text from file.")
-    
+
     text = normalise_text(text)
     html = extract_html(file.filename or "", content)
     doc_title = title or (file.filename or "Untitled").rsplit(".", 1)[0]
@@ -102,8 +115,8 @@ def delete_document_endpoint(
 
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
-    
+
     cleanup_document_vectors(db, doc_id, current_user.id)
     delete_document(db, doc)
-    
+
     return {"status": "deleted"}

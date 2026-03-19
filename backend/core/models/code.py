@@ -1,3 +1,12 @@
+"""
+Code ORM model.
+
+A code is a researcher defined label applied to text segments during qualitative analysis.
+Codes belong to a project and can have a short label and a longer definition
+that clarifies the code's intended meaning. 
+The definition is what the LLM auditor uses to assess whether a segment was coded consistently.
+"""
+
 from sqlalchemy import Column, String, Text, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone

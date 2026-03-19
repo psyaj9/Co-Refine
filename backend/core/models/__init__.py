@@ -1,3 +1,8 @@
+"""
+ORM model registry, imports all models here so SQLAlchemy's metadata is fully populated.
+This file doesn't define any models itself, but importing it ensures that all the individual model modules are imported and registered with SQLAlchemy.
+"""
+
 from core.models.user import User
 from core.models.project_member import ProjectMember
 from core.models.project import Project

@@ -1,3 +1,13 @@
+"""
+EditEvent ORM model.
+
+An edit event is an immutable audit log entry recording every meaningful change a
+researcher makes during a coding session.
+This includes creating/deleting segments, updating code definitions and renaming codes. 
+The history is surfaced in the Edit History panel so researchers can review and reflect on how their codebook evolved.
+
+"""
+
 from sqlalchemy import Column, String, Text, DateTime, JSON, ForeignKey
 from datetime import datetime, timezone
 
@@ -18,4 +28,5 @@ class EditEvent(Base):
     new_value = Column(Text, nullable=True)
     metadata_json = Column(JSON, nullable=True)
     user_id = Column(String, nullable=False)
+
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
