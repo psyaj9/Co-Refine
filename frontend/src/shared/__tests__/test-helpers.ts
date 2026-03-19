@@ -190,7 +190,6 @@ export function defaultStoreState() {
     setHistorySelectedEventId: vi.fn(),
     loadEditHistory: vi.fn().mockResolvedValue(undefined),
     loadProjectSettings: vi.fn().mockResolvedValue(undefined),
-    updateProjectSettings: vi.fn().mockResolvedValue(undefined),
   };
 }
 

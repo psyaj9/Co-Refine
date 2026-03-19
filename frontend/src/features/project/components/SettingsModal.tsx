@@ -126,10 +126,10 @@ export default function SettingsModal({ open, onClose }: Props) {
           </button>
           <button
             onClick={handleSave}
-            disabled={settings.localPerspectives.length === 0 || settings.saving || !settings.isDirty}
+            disabled={settings.saving || !settings.isDirty}
             className={cn(
               "px-3 py-1.5 text-xs rounded font-medium transition-colors",
-              settings.localPerspectives.length === 0 || !settings.isDirty
+              !settings.isDirty
                 ? "bg-surface-200 text-surface-400 cursor-not-allowed"
                 : "bg-brand-600 text-white hover:bg-brand-700",
             )}

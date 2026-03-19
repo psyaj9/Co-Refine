@@ -349,7 +349,7 @@ export async function fetchProjectSettings(projectId: string) {
   );
 }
 
-export async function updateProjectSettings(projectId: string, patch: { enabled_perspectives?: string[]; thresholds?: Record<string, number> }) {
+export async function updateProjectSettings(projectId: string, patch: { thresholds?: Record<string, number> }) {
   return json<ProjectSettings>(
     await apiFetch(`${BASE}/projects/${projectId}/settings`, {
       method: "PUT",

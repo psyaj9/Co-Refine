@@ -1,11 +1,9 @@
 """Code overlap matrix — pairwise centroid similarity between codes.
 
 High cosine similarity between two code centroids (>0.85) suggests that the
-codes may be covering the same conceptual ground, which is useful feedback
-for researchers who might be inadvertently duplicating codes.
+codes may be covering the same concept.
 
-The matrix is computed and sent to the frontend at the end of a batch audit
-so the researcher gets a global view of code distinctiveness.
+The matrix is computed and sent to the frontend.
 """
 from __future__ import annotations
 

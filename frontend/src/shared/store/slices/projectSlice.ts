@@ -12,7 +12,6 @@ export interface ProjectSlice {
 
   projectSettings: ProjectSettings | null;
   loadProjectSettings: () => Promise<void>;
-  updateProjectSettings: (perspectives: string[]) => Promise<void>;
 }
 
 export const createProjectSlice = (
@@ -94,16 +93,4 @@ export const createProjectSlice = (
     }
   },
 
-  updateProjectSettings: async (perspectives: string[]) => {
-    const { activeProjectId } = get();
-    if (!activeProjectId) return;
-    try {
-      const data = await api.updateProjectSettings(activeProjectId, {
-        enabled_perspectives: perspectives,
-      });
-      set({ projectSettings: data });
-    } catch (e) {
-      console.error("Failed to update project settings:", e);
-    }
-  },
 });

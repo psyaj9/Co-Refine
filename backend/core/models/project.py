@@ -19,7 +19,6 @@ class Project(Base):
     id = Column(String, primary_key=True)
     name = Column(String, nullable=False)
     user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
-    enabled_perspectives = Column(JSON, default=lambda: ["self_consistency"])
     thresholds_json = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 

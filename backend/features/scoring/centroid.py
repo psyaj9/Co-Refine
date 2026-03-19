@@ -2,15 +2,11 @@
 
 Literature: Thematic-LM approach — code centroid = mean embedding.
 
-A code's centroid is the L2-normalised mean of all its segment embeddings.
-It acts as a reference point for measuring how well a new segment fits an
-existing code. Higher cosine similarity → the new segment is more typical
-of the code's established usage.
+Code centroid = L2-normalised mean of all its segment embeddings.
+Acts as a reference point for measuring how well a new segment fits an
+existing code. 
+Higher cosine similarity → the new segment is more typical of the code's existing usage.
 
-Cold-start problem: when a code has very few (or zero) segments, there isn't
-enough data to compute a meaningful centroid. In that case we fall back to
-embedding the code's written definition instead and flag it as a "pseudo"
-centroid so downstream consumers can weight it appropriately.
 """
 from __future__ import annotations
 import math

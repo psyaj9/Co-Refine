@@ -4,15 +4,13 @@ import type { ThresholdDefinition } from "@/shared/types";
 import * as api from "@/shared/api/client";
 
 /**
- * Encapsulates the load/save/dirty logic for project settings.
- * Returns local state for perspectives & thresholds plus save/reset helpers.
+ * Encapsulates the load/save/dirty logic for project threshold settings.
  */
 export function useProjectSettings(open: boolean) {
   const projectSettings = useStore((s) => s.projectSettings);
   const loadSettings = useStore((s) => s.loadProjectSettings);
   const activeProjectId = useStore((s) => s.activeProjectId);
 
-  const [localPerspectives, setLocalPerspectives] = useState<string[]>([]);
   const [localThresholds, setLocalThresholds] = useState<Record<string, number>>({});
   const [thresholdDefs, setThresholdDefs] = useState<ThresholdDefinition[]>([]);
   const [saving, setSaving] = useState(false);
@@ -28,33 +26,12 @@ export function useProjectSettings(open: boolean) {
   // Sync local state when server data arrives
   useEffect(() => {
     if (projectSettings) {
-      setLocalPerspectives([...projectSettings.enabled_perspectives]);
       setLocalThresholds({ ...projectSettings.thresholds });
     }
   }, [projectSettings]);
 
-  const available = projectSettings?.available_perspectives
-    ?? Object.keys(PERSPECTIVE_META).map((id) => ({
-      id,
-      label: PERSPECTIVE_META[id].label,
-      description: PERSPECTIVE_META[id].description,
-    }));
-
-  // Dirty checks
-  const perspectivesDirty = projectSettings != null &&
-    JSON.stringify([...localPerspectives].sort()) !==
-    JSON.stringify([...projectSettings.enabled_perspectives].sort());
-
-  const thresholdsDirty = projectSettings != null &&
+  const isDirty = projectSettings != null &&
     JSON.stringify(localThresholds) !== JSON.stringify(projectSettings.thresholds);
-
-  const isDirty = perspectivesDirty || thresholdsDirty;
-
-  const togglePerspective = useCallback((key: string) => {
-    setLocalPerspectives((prev) =>
-      prev.includes(key) ? prev.filter((p) => p !== key) : [...prev, key],
-    );
-  }, []);
 
   const setThreshold = useCallback((key: string, value: number) => {
     setLocalThresholds((prev) => ({ ...prev, [key]: value }));
@@ -66,50 +43,26 @@ export function useProjectSettings(open: boolean) {
   }, [thresholdDefs]);
 
   const save = useCallback(async () => {
-    if (localPerspectives.length === 0) return;
+    if (!isDirty) return;
     setSaving(true);
-
-    const patch: { enabled_perspectives?: string[]; thresholds?: Record<string, number> } = {};
-    if (perspectivesDirty) patch.enabled_perspectives = localPerspectives;
-    if (thresholdsDirty) patch.thresholds = localThresholds;
-
-    if (patch.enabled_perspectives || patch.thresholds) {
-      const { activeProjectId } = useStore.getState();
-      if (activeProjectId) {
-        try {
-          const data = await api.updateProjectSettings(activeProjectId, patch);
-          useStore.setState({ projectSettings: data });
-        } catch (e) {
-          console.error("Failed to save settings:", e);
-        }
+    if (activeProjectId) {
+      try {
+        const data = await api.updateProjectSettings(activeProjectId, { thresholds: localThresholds });
+        useStore.setState({ projectSettings: data });
+      } catch (e) {
+        console.error("Failed to save settings:", e);
       }
     }
     setSaving(false);
-  }, [localPerspectives, localThresholds, perspectivesDirty, thresholdsDirty]);
+  }, [localThresholds, isDirty, activeProjectId]);
 
   return {
-    available,
-    localPerspectives,
     localThresholds,
     thresholdDefs,
     saving,
     isDirty,
-    togglePerspective,
     setThreshold,
     resetThreshold,
     save,
   };
 }
-
-// ── Static perspective metadata ─────────────────────────────────────
-
-const PERSPECTIVE_META: Record<
-  string,
-  { label: string; description: string }
-> = {
-  self_consistency: {
-    label: "Self-Consistency",
-    description:
-      "Checks whether you are applying this code consistently with your own past coding decisions. Detects drift and definition mismatches.",
-  },
-};

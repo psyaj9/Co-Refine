@@ -31,12 +31,6 @@ def _migrate_add_columns() -> None:
                     "ALTER TABLE projects ADD COLUMN user_id VARCHAR(36) REFERENCES users(id)"
                 ))
 
-        if "enabled_perspectives" not in cols:
-            with engine.begin() as conn:
-                conn.execute(text(
-                    "ALTER TABLE projects ADD COLUMN enabled_perspectives JSON DEFAULT '[]'"
-                ))
-
         if "thresholds_json" not in cols:
             with engine.begin() as conn:
                 conn.execute(text(

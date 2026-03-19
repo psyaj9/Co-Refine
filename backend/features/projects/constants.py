@@ -1,16 +1,8 @@
-"""Project domain constants: perspectives + threshold definitions.
+"""Project domain constants: threshold definitions.
 
-Threshold definitions drive both the settings UI and the default values used when a project has not overridden them. 
+Threshold definitions drive both the settings UI and the default values used when a project has not overridden them.
 Keeping these here means the frontend can request them and render the settings panel dynamically.
 """
-
-AVAILABLE_PERSPECTIVES = [
-    {
-        "id": "self_consistency",
-        "label": "Self-Consistency",
-        "description": "Did you apply this code consistently with your own past decisions?",
-    },
-]
 
 # Threshold keys that are user-configurable.
 THRESHOLD_DEFINITIONS: list[dict] = [

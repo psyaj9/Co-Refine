@@ -149,15 +149,7 @@ export interface DeterministicScores {
 }
 
 
-export interface Perspective {
-  id: string;
-  label: string;
-  description: string;
-}
-
 export interface ProjectSettings {
-  enabled_perspectives: string[];
-  available_perspectives: Perspective[];
   thresholds: Record<string, number>;
 }
 

@@ -1,11 +1,6 @@
 import { useStore } from "@/shared/store";
-import { FileText, Hash, FolderOpen, Loader2, Eye, Users } from "lucide-react";
+import { FileText, Hash, FolderOpen, Loader2 } from "lucide-react";
 import { AGENT_LABELS, AUDIT_STAGE_LABELS } from "@/shared/lib/constants";
-
-const PERSPECTIVE_LABELS: Record<string, { short: string; icon: typeof Eye }> = {
-  self_consistency: { short: "Self-Consistency", icon: Eye },
-  inter_rater: { short: "Inter-Rater", icon: Users },
-};
 
 export default function StatusBar() {
   const activeProjectId = useStore((s) => s.activeProjectId);
@@ -15,7 +10,6 @@ export default function StatusBar() {
   const segments = useStore((s) => s.segments);
   const agentsRunning = useStore((s) => s.agentsRunning);
   const alerts = useStore((s) => s.alerts);
-  const projectSettings = useStore((s) => s.projectSettings);
   const auditStage = useStore((s) => s.auditStage);
 
   const activeProject = projects.find((p) => p.id === activeProjectId);
@@ -45,22 +39,6 @@ export default function StatusBar() {
             <span>
               {segments.length} segment{segments.length !== 1 ? "s" : ""}
             </span>
-            {/* Active perspectives indicator */}
-            {projectSettings && (
-              <span className="flex items-center gap-1 border-l pl-2 ml-1 panel-border" title="Active AI perspectives">
-                {projectSettings.enabled_perspectives.map((p) => {
-                  const meta = PERSPECTIVE_LABELS[p];
-                  if (!meta) return null;
-                  const Icon = meta.icon;
-                  return (
-                    <span key={p} className="flex items-center gap-0.5" title={meta.short}>
-                      <Icon size={10} aria-hidden="true" />
-                      <span className="hidden sm:inline">{meta.short}</span>
-                    </span>
-                  );
-                })}
-              </span>
-            )}
           </>
         ) : (
           <span>No project selected</span>
