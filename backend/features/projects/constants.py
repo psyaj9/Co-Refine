@@ -1,14 +1,7 @@
 """Project domain constants: perspectives + threshold definitions.
 
-Perspectives are the different lenses the audit pipeline can evaluate coding
-decisions through. Right now only self-consistency is implemented, but the
-structure is designed to support adding more (e.g. inter-rater, theoretical
-grounding) without changing the settings schema.
-
-Threshold definitions drive both the settings UI (sliders, labels, descriptions)
-and the default values used when a project hasn't overridden them. Keeping these
-here (rather than scattered in config) means the frontend can request them and
-render the settings panel dynamically.
+Threshold definitions drive both the settings UI and the default values used when a project has not overridden them. 
+Keeping these here means the frontend can request them and render the settings panel dynamically.
 """
 
 AVAILABLE_PERSPECTIVES = [
@@ -19,9 +12,7 @@ AVAILABLE_PERSPECTIVES = [
     },
 ]
 
-# Threshold keys that are user-configurable, with their defaults + metadata.
-# The 'key' must match the corresponding field name in core/config.py (Settings)
-# so that get_merged_thresholds() can fall back to the global config default.
+# Threshold keys that are user-configurable.
 THRESHOLD_DEFINITIONS: list[dict] = [
     {
         "key": "min_segments_for_consistency",

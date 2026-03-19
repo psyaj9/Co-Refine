@@ -67,14 +67,12 @@ Co-Refine helps research teams improve coding quality with less manual overhead:
 ├── backend/                  # FastAPI app, feature routers, services, DB models
 ├── frontend/                 # React SPA, feature slices, shared store/api
 ├── docs/                     # Additional technical documentation
-├── CLAUDE.md                 # Project architecture and engineering conventions
 └── README.md
 ```
 
 Key references:
 
 - System architecture: [docs/SYSTEM_DOCUMENTATION.md](docs/SYSTEM_DOCUMENTATION.md)
-- Project conventions: [CLAUDE.md](CLAUDE.md)
 - Backend dependencies: [backend/requirements.txt](backend/requirements.txt)
 - Frontend scripts/dependencies: [frontend/package.json](frontend/package.json)
 
@@ -188,7 +186,6 @@ npm run test:e2e
 ## Where To Get Help
 
 - Technical deep dive: [docs/SYSTEM_DOCUMENTATION.md](docs/SYSTEM_DOCUMENTATION.md)
-- Architecture conventions: [CLAUDE.md](CLAUDE.md)
 - Endpoint behavior and data types: see [backend/features](backend/features) (especially each feature's `router.py` and `schemas.py` files)
 - Bug reports and feature requests: open an issue in this repository with reproduction steps and logs
 
@@ -202,5 +199,3 @@ This repository is maintained by the Co-Refine project owner and contributors su
 2. Keep changes scoped to one concern.
 3. Run relevant tests before opening a PR.
 4. Include a clear summary of behavior changes and any migration/setup impact.
-
-For substantial architectural work, follow the conventions in [CLAUDE.md](CLAUDE.md) to stay aligned with feature boundaries and coding standards.
