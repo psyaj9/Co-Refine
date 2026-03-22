@@ -28,6 +28,9 @@ export interface UiSlice {
   overlayCoderIds: string[];
   toggleOverlayCoder: (userId: string) => void;
   clearOverlayCoders: () => void;
+
+  hideAlerts: boolean;
+  setHideAlerts: (v: boolean) => void;
 }
 
 export const createUiSlice = (set: (partial: any) => void): UiSlice => ({
@@ -66,4 +69,7 @@ export const createUiSlice = (set: (partial: any) => void): UiSlice => ({
         : [...s.overlayCoderIds, userId],
     })),
   clearOverlayCoders: () => set({ overlayCoderIds: [] }),
+
+  hideAlerts: false,
+  setHideAlerts: (v) => set({ hideAlerts: v }),
 });

@@ -27,9 +27,20 @@ export default function AlertsTab(): React.ReactElement {
   const applySuggestedCode = useStore((s) => s.applySuggestedCode);
   const keepMyCode = useStore((s) => s.keepMyCode);
   const codes = useStore((s) => s.codes);
+  const hideAlerts = useStore((s) => s.hideAlerts);
 
   const visibleAlerts = alerts.filter((a) => !HIDDEN_ALERT_TYPES.has(a.type));
   const analysisStatus = deriveAnalysisStatus(alerts);
+
+  if (hideAlerts) {
+    return (
+      <div className="p-4" role="status">
+        <p className="text-xs text-surface-400 dark:text-surface-500 italic text-center mt-8">
+          AI alerts are hidden. You can re-enable them in Settings.
+        </p>
+      </div>
+    );
+  }
 
   if (visibleAlerts.length === 0 && !agentsRunning) {
     return (
