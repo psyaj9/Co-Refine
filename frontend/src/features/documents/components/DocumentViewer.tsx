@@ -62,11 +62,6 @@ export default function DocumentViewer() {
     return () => cancelAnimationFrame(rafId);
   }, [scrollToSegmentId, annotatedHtml]);
 
-  const lineCount = useMemo(() => {
-    if (!doc) return 0;
-    return doc.full_text.split("\n").length;
-  }, [doc]);
-
   if (!doc) return null;
 
   return (
@@ -88,17 +83,6 @@ export default function DocumentViewer() {
 
       <div className="flex-1 min-h-0 overflow-auto thin-scrollbar">
         <div className="flex min-h-full">
-          <div
-            className="flex-shrink-0 pt-4 pb-4 select-none border-r panel-border bg-surface-50/50 dark:bg-surface-900/50"
-            aria-hidden="true"
-          >
-            {Array.from({ length: lineCount }, (_, i) => (
-              <div key={i} className="line-number leading-relaxed text-xs h-[1.625rem]">
-                {i + 1}
-              </div>
-            ))}
-          </div>
-
           <div className="flex-1 min-w-0">
             <div
               ref={textRef}

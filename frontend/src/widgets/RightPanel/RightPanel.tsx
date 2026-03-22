@@ -2,7 +2,7 @@ import * as Tabs from "@radix-ui/react-tabs";
 import { useStore } from "@/shared/store";
 import { AlertTriangle, MessageCircle, PanelRightClose } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
-import { AlertsTab, HIDDEN_ALERT_TYPES } from "@/features/audit";
+import { AlertsTab } from "@/features/audit";
 import { ChatTab } from "@/features/chat";
 import type { RightPanelTab } from "@/shared/types";
 
@@ -18,11 +18,6 @@ const TAB_META: {
 export default function RightPanel({ onCollapse }: { onCollapse?: () => void }) {
   const rightPanelTab = useStore((s) => s.rightPanelTab);
   const setRightPanelTab = useStore((s) => s.setRightPanelTab);
-  const alerts = useStore((s) => s.alerts);
-
-  // Shared with AlertsTab — badge count must match the rendered card count
-  const visibleAlertCount = alerts.filter((a) => !HIDDEN_ALERT_TYPES.has(a.type)).length;
-
   return (
     <Tabs.Root
       value={rightPanelTab}
@@ -56,14 +51,6 @@ export default function RightPanel({ onCollapse }: { onCollapse?: () => void }) 
           >
             <Icon size={11} aria-hidden="true" />
             <span className="truncate">{label}</span>
-            {id === "alerts" && visibleAlertCount > 0 && (
-              <span
-                className="absolute -top-0.5 right-1 w-3.5 h-3.5 rounded-full bg-red-500 text-white text-[8px] flex items-center justify-center font-bold"
-                aria-label={`${visibleAlertCount} unread alert${visibleAlertCount !== 1 ? "s" : ""}`}
-              >
-                {visibleAlertCount > 9 ? "9+" : visibleAlertCount}
-              </span>
-            )}
           </Tabs.Trigger>
         ))}
       </Tabs.List>

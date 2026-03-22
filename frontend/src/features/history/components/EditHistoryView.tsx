@@ -34,11 +34,6 @@ export default function EditHistoryView() {
     return buildHistoryAnnotatedText(doc.full_text, selectedEvent);
   }, [doc, selectedEvent]);
 
-  const lineCount = useMemo(
-    () => (doc ? doc.full_text.split("\n").length : 0),
-    [doc],
-  );
-
   useEffect(() => {
     if (!selectedEvent || !textRef.current) return;
     const raf = requestAnimationFrame(() => {
@@ -83,20 +78,6 @@ export default function EditHistoryView() {
         {doc ? (
           <div className="flex-1 min-h-0 overflow-auto thin-scrollbar">
             <div className="flex min-h-full">
-              <div
-                className="flex-shrink-0 pt-4 pb-4 select-none border-r panel-border bg-surface-50/50 dark:bg-surface-900/50"
-                aria-hidden
-              >
-                {Array.from({ length: lineCount }, (_, i) => (
-                  <div
-                    key={i}
-                    className="line-number leading-relaxed text-xs h-[1.625rem]"
-                  >
-                    {i + 1}
-                  </div>
-                ))}
-              </div>
-
               <div className="flex-1 min-w-0">
                 <div
                   ref={textRef}
